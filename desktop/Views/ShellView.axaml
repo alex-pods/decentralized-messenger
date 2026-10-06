@@ -1,0 +1,240 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             x:Class="MessengerDesktop.Views.ShellView"
+             x:Name="Root"
+             Background="#0e1218">
+  <Grid RowDefinitions="Auto,*">
+    <Border Grid.Row="0" Background="#121820" Padding="16,12">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+        <StackPanel>
+          <TextBlock Text="{Binding Header}" FontSize="16" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding Status}" FontSize="12" Opacity="0.6"/>
+        </StackPanel>
+        <Button Grid.Column="1" Content="Участники" Command="{Binding ShowMembersCommand}" Margin="8,0,0,0"
+                IsVisible="{Binding HasChat}"/>
+        <Button Grid.Column="2" Content="Настройки" Command="{Binding ShowSettingsCommand}" Margin="8,0,0,0"/>
+        <Button Grid.Column="3" Content="Выйти" Command="{Binding LogoutCommand}" Margin="8,0,0,0"/>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="300,*">
+      <Border Grid.Column="0" Background="#121820" BorderBrush="#243044" BorderThickness="0,0,1,0">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="12">
+            <Button Content="Личный чат" Command="{Binding ShowDirectCommand}"/>
+            <Button Content="Группа" Command="{Binding ShowGroupCommand}"/>
+          </StackPanel>
+          <ListBox ItemsSource="{Binding Chats}" SelectedItem="{Binding SelectedChat}"
+                   Background="Transparent" BorderThickness="0">
+            <ListBox.Styles>
+              <Style Selector="ListBoxItem">
+                <Setter Property="Padding" Value="4,2"/>
+                <Setter Property="Margin" Value="8,0"/>
+                <Setter Property="CornerRadius" Value="8"/>
+              </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="*,Auto" Margin="8,6">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Kind}" FontSize="11" Opacity="0.5"/>
+                    <TextBlock Text="{Binding Preview}" FontSize="12" Opacity="0.7"
+                               TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                  </StackPanel>
+                  <Ellipse Grid.Column="1" Width="8" Height="8" Fill="#4c8dff" VerticalAlignment="Center"
+                           IsVisible="{Binding Unread}"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <Border Grid.Row="0" Padding="16,12" BorderBrush="#243044" BorderThickness="0,0,0,1">
+          <TextBlock Text="{Binding ChatTitle}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+        </Border>
+
+        <Border Grid.Row="1" Padding="16,8,16,0">
+          <Button Content="Раньше" Command="{Binding LoadOlderCommand}" HorizontalAlignment="Center"
+                  IsVisible="{Binding HasMore}"/>
+        </Border>
+
+        <Panel Grid.Row="2">
+          <TextBlock Text="Выберите чат слева или начните новый"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.55"
+                     IsVisible="{Binding HasChat, Converter={StaticResource Not}}"/>
+          <ListBox x:Name="Log" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
+                   Background="Transparent" BorderThickness="0"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   IsVisible="{Binding HasChat}">
+            <ListBox.Styles>
+              <Style Selector="ListBoxItem">
+                <Setter Property="Padding" Value="16,2"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+              </Style>
+              <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+              </Style>
+              <Style Selector="TextBlock.deleted">
+                <Setter Property="FontStyle" Value="Italic"/>
+                <Setter Property="Opacity" Value="0.7"/>
+              </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border HorizontalAlignment="{Binding Mine, Converter={StaticResource Align}}"
+                        Background="{Binding Mine, Converter={StaticResource Bubble}}"
+                        MaxWidth="520" Padding="12,8" CornerRadius="14" Margin="0,3">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding SenderName}" FontSize="11" Opacity="0.65"
+                               IsVisible="{Binding ShowSender}"/>
+                    <TextBlock Text="{Binding Reply}" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
+                               IsVisible="{Binding HasReply}"/>
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Classes.deleted="{Binding IsDeleted}"/>
+                    <TextBlock Text="{Binding Meta}" FontSize="11" Opacity="0.55" HorizontalAlignment="Right"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Panel>
+
+        <Border Grid.Row="3" Padding="16,8,16,0" IsVisible="{Binding HasMessageActions}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding SelectionHint}" VerticalAlignment="Center" Opacity="0.65" Margin="0,0,8,0"/>
+            <Button Content="Ответить" Command="{Binding ReplyCommand}"/>
+            <Button Content="Изменить" Command="{Binding BeginEditCommand}" IsVisible="{Binding CanEdit}"/>
+            <Button Content="Удалить у себя" Command="{Binding DeleteForMeCommand}"/>
+            <Button Content="Удалить у всех" Command="{Binding DeleteForEveryoneCommand}"
+                    IsVisible="{Binding CanDeleteEveryone}"/>
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Row="4" Padding="16" IsVisible="{Binding HasChat}">
+          <StackPanel Spacing="8">
+            <Border Background="#1a2436" CornerRadius="8" Padding="10,6"
+                    IsVisible="{Binding HasComposeHint}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{Binding ComposeHint}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                <Button Grid.Column="1" Content="×" Command="{Binding CancelComposeCommand}" Padding="8,2"/>
+              </Grid>
+            </Border>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}"
+                       AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" MaxHeight="120"
+                       Watermark="Сообщение  ·  Ctrl+Enter или ⌘+Enter — отправить">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}"/>
+                  <KeyBinding Gesture="Meta+Enter" Command="{Binding SendCommand}"/>
+                </TextBox.KeyBindings>
+              </TextBox>
+              <Button Grid.Column="1" Content="Отправить" Command="{Binding SendCommand}"
+                      Margin="8,0,0,0" VerticalAlignment="Bottom"
+                      IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+            </Grid>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <Border Grid.RowSpan="2" Background="#C0080b10" IsVisible="{Binding OverlayOpen}">
+      <Border Width="480" MaxHeight="640" Padding="20" CornerRadius="16" Background="#161c27"
+              HorizontalAlignment="Center" VerticalAlignment="Center">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+            <TextBlock Text="{Binding OverlayTitle}" FontSize="20" FontWeight="SemiBold"/>
+            <Button Grid.Column="1" Content="Закрыть" Command="{Binding CloseOverlayCommand}"/>
+          </Grid>
+
+          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12"
+                      IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=settings}">
+            <TextBlock Text="Имя" FontSize="12" Opacity="0.7"/>
+            <TextBox Text="{Binding DisplayName}"/>
+            <TextBlock Text="О себе" FontSize="12" Opacity="0.7"/>
+            <TextBox Text="{Binding Bio}" AcceptsReturn="True" MinHeight="72" TextWrapping="Wrap"/>
+            <CheckBox Content="Сохранять текст моих сообщений на сервере" IsChecked="{Binding SaveHistory}"/>
+            <TextBlock Opacity="0.55" FontSize="12" TextWrapping="Wrap"
+                       Text="Если выключить, текст уходит только тем, кто сейчас онлайн. В истории останется заглушка."/>
+            <Button Content="Сохранить" Command="{Binding SaveSettingsCommand}" HorizontalAlignment="Left"/>
+          </StackPanel>
+
+          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8"
+                      IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}">
+            <TextBlock Text="Название" FontSize="12" Opacity="0.7"/>
+            <TextBox Text="{Binding GroupTitle}" Watermark="1–64 символа"/>
+            <ItemsControl ItemsSource="{Binding GroupDraft}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                    <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Content="убрать" Padding="8,2"
+                            Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}"
+                            CommandParameter="{Binding}"/>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Content="Создать группу" Command="{Binding CreateGroupCommand}" HorizontalAlignment="Left"/>
+          </StackPanel>
+
+          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0"
+                      IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}">
+            <Button Content="Скрыть чат у себя" Command="{Binding HideChatCommand}"/>
+            <Button Content="Выйти из группы" Command="{Binding LeaveChatCommand}" IsVisible="{Binding IsGroup}"/>
+          </StackPanel>
+
+          <DockPanel LastChildFill="True" IsVisible="{Binding ShowPeopleSearch}">
+            <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Text="{Binding SearchQuery}" Watermark="Тег или имя"/>
+                <Button Grid.Column="1" Content="Найти" Command="{Binding SearchCommand}" Margin="8,0,0,0"/>
+              </Grid>
+              <ListBox ItemsSource="{Binding SearchResults}" MaxHeight="160" Background="Transparent">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Button Content="{Binding Label}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Background="Transparent"
+                            Command="{Binding DataContext.PickUserCommand, ElementName=Root}"
+                            CommandParameter="{Binding}"/>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+
+            <ListBox ItemsSource="{Binding Members}" Background="Transparent" MaxHeight="220"
+                     IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,6" Spacing="4">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding RoleLabel}" FontSize="12" Opacity="0.65"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Button Content="Исключить" Padding="8,4" IsVisible="{Binding CanKick}"
+                              Command="{Binding DataContext.KickCommand, ElementName=Root}" CommandParameter="{Binding}"/>
+                      <Button Content="{Binding PromoteLabel}" Padding="8,4" IsVisible="{Binding CanPromote}"
+                              Command="{Binding DataContext.ToggleAdminCommand, ElementName=Root}" CommandParameter="{Binding}"/>
+                      <Button Content="Сделать владельцем" Padding="8,4" IsVisible="{Binding CanTransfer}"
+                              Command="{Binding DataContext.TransferCommand, ElementName=Root}" CommandParameter="{Binding}"/>
+                    </StackPanel>
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+        </DockPanel>
+      </Border>
+    </Border>
+
+    <Border Grid.RowSpan="2" VerticalAlignment="Bottom" Margin="16" Padding="12,8" CornerRadius="8"
+            Background="#3a1d1d" IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
+            IsHitTestVisible="True">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="{Binding Error}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+        <Button Grid.Column="1" Content="×" Command="{Binding DismissErrorCommand}" Margin="8,0,0,0" Padding="8,2"/>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

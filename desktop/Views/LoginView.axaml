@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             x:Class="MessengerDesktop.Views.LoginView"
+             Background="#0e1218">
+  <Border Width="420" Padding="28" CornerRadius="16" Background="#161c27"
+          HorizontalAlignment="Center" VerticalAlignment="Center">
+    <StackPanel Spacing="12">
+      <TextBlock Text="Мессенджер" FontSize="28" FontWeight="SemiBold"/>
+      <TextBlock Text="Вход в аккаунт на вашем сервере" Opacity="0.7"/>
+
+      <TextBlock Text="Сервер" FontSize="12" Opacity="0.7" Margin="0,8,0,0"/>
+      <TextBox Text="{Binding Server}" Watermark="http://127.0.0.1:5080/messenger"/>
+
+      <TextBlock Text="Логин" FontSize="12" Opacity="0.7"/>
+      <TextBox Text="{Binding Login}" Watermark="3–16 символов"/>
+
+      <TextBlock Text="Пароль" FontSize="12" Opacity="0.7"/>
+      <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="минимум 8 символов"/>
+
+      <TextBlock Text="{Binding Error}" Foreground="#ff8b8b" TextWrapping="Wrap"
+                 IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+
+      <Grid ColumnDefinitions="*,*" Margin="0,8,0,0">
+        <Button Grid.Column="0" Content="Войти" Command="{Binding SignInCommand}" Margin="0,0,6,0"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+        <Button Grid.Column="1" Content="Регистрация" Command="{Binding SignUpCommand}" Margin="6,0,0,0"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+      </Grid>
+      <TextBlock Opacity="0.55" FontSize="12" TextWrapping="Wrap"
+                 Text="Регистрация создаёт аккаунт и сразу входит. Сессия сохранится на этом компьютере."/>
+    </StackPanel>
+  </Border>
+</UserControl>

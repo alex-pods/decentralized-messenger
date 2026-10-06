@@ -1,0 +1,32 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MessengerDesktop"
+             xmlns:views="using:MessengerDesktop.Views"
+             xmlns:conv="using:MessengerDesktop"
+             x:Class="MessengerDesktop.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <conv:InverseBoolConverter x:Key="Not"/>
+    <conv:EqConverter x:Key="Eq"/>
+    <conv:MineAlignConverter x:Key="Align"/>
+    <conv:MineBrushConverter x:Key="Bubble"/>
+  </Application.Resources>
+  <Application.DataTemplates>
+    <DataTemplate DataType="vm:LoginViewModel">
+      <views:LoginView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:ShellViewModel">
+      <views:ShellView/>
+    </DataTemplate>
+  </Application.DataTemplates>
+  <Application.Styles>
+    <FluentTheme/>
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="12,8"/>
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="CornerRadius" Value="8"/>
+    </Style>
+  </Application.Styles>
+</Application>

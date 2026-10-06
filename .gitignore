@@ -426,3 +426,12 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# Локальные артефакты бэкенда
+*.db
+*.db-wal
+*.db-shm
+localfiles/
+publish.tar.gz
+local_run.log
+swagger_local.json

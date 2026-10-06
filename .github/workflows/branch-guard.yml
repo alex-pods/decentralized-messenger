@@ -8,10 +8,10 @@ jobs:
   branch-name:
     runs-on: ubuntu-latest
     steps:
-      - name: Ветка PR должна называться feature-XXXX
+      - name: Ветка PR должна называться feature-*
         run: |
           echo "head ref: ${GITHUB_HEAD_REF}"
-          if [[ ! "${GITHUB_HEAD_REF}" =~ ^feature-[0-9]{4}$ ]]; then
-            echo "::error::Имя ветки PR должно соответствовать шаблону feature-XXXX (4 цифры). Получено: '${GITHUB_HEAD_REF}'. Мердж в dev/main мимо feature-веток запрещён."
+          if [[ ! "${GITHUB_HEAD_REF}" =~ ^feature-[a-zA-Z0-9._-]+$ ]]; then
+            echo "::error::Имя ветки PR должно начинаться с 'feature-' (например feature-backend). Получено: '${GITHUB_HEAD_REF}'. Мердж в dev/main мимо feature-веток запрещён."
             exit 1
           fi

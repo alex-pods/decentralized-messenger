@@ -9,7 +9,8 @@
     <conv:InverseBoolConverter x:Key="Not"/>
     <conv:EqConverter x:Key="Eq"/>
     <conv:MineAlignConverter x:Key="Align"/>
-    <conv:MineBrushConverter x:Key="Bubble"/>
+    <conv:AvatarBrushConverter x:Key="AvatarBrush"/>
+    <conv:InitialConverter x:Key="Initial"/>
   </Application.Resources>
   <Application.DataTemplates>
     <DataTemplate DataType="vm:LoginViewModel">
@@ -20,13 +21,11 @@
     </DataTemplate>
   </Application.DataTemplates>
   <Application.Styles>
-    <FluentTheme/>
-    <Style Selector="Button">
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="Padding" Value="12,8"/>
-    </Style>
-    <Style Selector="TextBox">
-      <Setter Property="CornerRadius" Value="8"/>
-    </Style>
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#FF8B6CFF"/>
+      </FluentTheme.Palettes>
+    </FluentTheme>
+    <StyleInclude Source="avares://MessengerDesktop/Styles/Glass.axaml"/>
   </Application.Styles>
 </Application>

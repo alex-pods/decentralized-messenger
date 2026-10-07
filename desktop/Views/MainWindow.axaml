@@ -2,9 +2,81 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="MessengerDesktop.Views.MainWindow"
         Title="Мессенджер"
-        Width="1100" Height="740"
-        MinWidth="860" MinHeight="560"
-        Background="#0e1218"
+        Width="1180" Height="780"
+        MinWidth="880" MinHeight="580"
+        Background="#08080F"
         WindowStartupLocation="CenterScreen">
-  <ContentControl Content="{Binding}"/>
+  <Window.Styles>
+    <Style Selector="Ellipse.drift-a">
+      <Style.Animations>
+        <Animation Duration="0:0:26" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0"/><Setter Property="TranslateTransform.Y" Value="0"/><Setter Property="ScaleTransform.ScaleX" Value="1"/><Setter Property="ScaleTransform.ScaleY" Value="1"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="160"/><Setter Property="TranslateTransform.Y" Value="110"/><Setter Property="ScaleTransform.ScaleX" Value="1.18"/><Setter Property="ScaleTransform.ScaleY" Value="1.18"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="Ellipse.drift-b">
+      <Style.Animations>
+        <Animation Duration="0:0:32" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0"/><Setter Property="TranslateTransform.Y" Value="0"/><Setter Property="ScaleTransform.ScaleX" Value="1.1"/><Setter Property="ScaleTransform.ScaleY" Value="1.1"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="-180"/><Setter Property="TranslateTransform.Y" Value="-90"/><Setter Property="ScaleTransform.ScaleX" Value="0.92"/><Setter Property="ScaleTransform.ScaleY" Value="0.92"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="Ellipse.drift-c">
+      <Style.Animations>
+        <Animation Duration="0:0:38" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0"/><Setter Property="TranslateTransform.Y" Value="0"/><Setter Property="ScaleTransform.ScaleX" Value="0.95"/><Setter Property="ScaleTransform.ScaleY" Value="0.95"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="120"/><Setter Property="TranslateTransform.Y" Value="-140"/><Setter Property="ScaleTransform.ScaleX" Value="1.2"/><Setter Property="ScaleTransform.ScaleY" Value="1.2"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+  </Window.Styles>
+
+  <Panel>
+    <!-- Aurora: soft colour fields drifting behind the glass -->
+    <Panel IsHitTestVisible="False" ClipToBounds="True">
+      <Ellipse Classes="drift-a" Width="820" Height="820" Margin="-300,-340,0,0"
+               HorizontalAlignment="Left" VerticalAlignment="Top">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#997C3AED"/>
+            <GradientStop Offset="0.55" Color="#2E7C3AED"/>
+            <GradientStop Offset="1" Color="#007C3AED"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+      <Ellipse Classes="drift-b" Width="900" Height="900" Margin="0,0,-340,-380"
+               HorizontalAlignment="Right" VerticalAlignment="Bottom">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#8C2563EB"/>
+            <GradientStop Offset="0.55" Color="#262563EB"/>
+            <GradientStop Offset="1" Color="#002563EB"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+      <Ellipse Classes="drift-c" Width="640" Height="640" Margin="-160,0,0,-300"
+               HorizontalAlignment="Left" VerticalAlignment="Bottom">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#73DB2777"/>
+            <GradientStop Offset="0.55" Color="#1FDB2777"/>
+            <GradientStop Offset="1" Color="#00DB2777"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+      <Ellipse Classes="drift-a" Width="560" Height="560" Margin="0,-260,-120,0"
+               HorizontalAlignment="Right" VerticalAlignment="Top">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#590EA5E9"/>
+            <GradientStop Offset="0.6" Color="#140EA5E9"/>
+            <GradientStop Offset="1" Color="#000EA5E9"/>
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+    </Panel>
+    <ContentControl Content="{Binding}"/>
+  </Panel>
 </Window>

@@ -18,7 +18,14 @@ public partial class App : Application
             var nav = new Navigator(window);
             desktop.MainWindow = window;
             window.DataContext = new LoginViewModel(nav);
-            _ = RestoreSession(nav, window);
+            if (Preview.Server != null)
+                _ = Preview.Run(window, nav).ContinueWith(t =>
+                {
+                    Console.Error.WriteLine("PREVIEW FAIL " + t.Exception);
+                    Environment.Exit(1);
+                }, TaskContinuationOptions.OnlyOnFaulted);
+            else
+                _ = RestoreSession(nav, window);
         }
         base.OnFrameworkInitializationCompleted();
     }

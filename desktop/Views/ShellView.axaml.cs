@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 
 namespace MessengerDesktop.Views;
 
@@ -25,4 +26,6 @@ public partial class ShellView : UserControl
         if (this.FindControl<ListBox>("Log") is { } list)
             list.ScrollIntoView(_vm.Messages[^1]);
     }
+
+    void OnDragAreaPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);
 }

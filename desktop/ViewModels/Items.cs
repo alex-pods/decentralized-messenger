@@ -8,6 +8,7 @@ public partial class ChatItem : ObservableObject
     public string Type { get; init; } = "";
     public string Title { get; init; } = "";
     public string Kind { get; init; } = "";
+    public bool IsGroup => Type == "group";
     [ObservableProperty] private string _preview = "";
     [ObservableProperty] private bool _unread;
 }

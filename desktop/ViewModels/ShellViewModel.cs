@@ -635,7 +635,7 @@ public partial class ShellViewModel : ObservableObject
             Id = c.Id,
             Type = c.Type,
             Title = title,
-            Kind = c.Type == "group" ? "группа" : "личный",
+            Kind = c.Type == "group" ? "Группа" : "Личный чат",
             Preview = c.LastMessage is null ? "Нет сообщений" : Preview(c.LastMessage)
         };
     }

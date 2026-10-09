@@ -4,10 +4,12 @@ using LocalBackend.Models;
 
 namespace LocalBackend.Db;
 
-public sealed class MessengerDbContext(DbContextOptions<MessengerDbContext> options) : DbContext(options)
+public sealed class MessengerDbContext(
+    DbContextOptions<MessengerDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Chat> Chats => Set<Chat>();
+    public DbSet<ChatMember> ChatMembers => Set<ChatMember>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<MessageReaction> Reactions => Set<MessageReaction>();
@@ -36,8 +38,19 @@ public sealed class MessengerDbContext(DbContextOptions<MessengerDbContext> opti
         // ── Chats ───────────────────────────────────────────
         b.Entity<Chat>(e =>
         {
-            e.ToTable("Chats");
+            e.ToTable("Chats", t =>
+            {
+                t.HasCheckConstraint("CK_Chats_Type", "\"Type\" IN ('direct', 'group')");
+                t.HasCheckConstraint("CK_Chats_Peer",
+                    "(\"Type\" = 'direct' AND \"PeerUserId\" IS NOT NULL) OR " +
+                    "(\"Type\" = 'group' AND \"PeerUserId\" IS NULL)");
+                t.HasCheckConstraint("CK_Chats_Title",
+                    "\"Type\" = 'direct' OR (\"Title\" IS NOT NULL AND " +
+                    "length(trim(\"Title\")) > 0 AND length(\"Title\") <= 64)");
+            });
             e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Type).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(64);
 
             e.HasOne(x => x.Peer).WithMany()
                 .HasForeignKey(x => x.PeerUserId)
@@ -45,6 +58,37 @@ public sealed class MessengerDbContext(DbContextOptions<MessengerDbContext> opti
 
             e.HasIndex(x => x.PeerUserId).IsUnique();      // с одним собеседником — один чат
             e.HasIndex(x => x.LastMessageAt);              // сортировка списка чатов
+        });
+
+        // ── GroupChat ────────────────────────────────────────
+        b.Entity<ChatMember>(e =>
+        {
+            e.ToTable("ChatMembers", t =>
+                t.HasCheckConstraint(
+                    "CK_ChatMembers_Role",
+                    "\"Role\" IN ('member', 'admin', 'owner')"));
+
+            e.HasKey(x => new { x.ChatId, x.UserId });
+
+            e.Property(x => x.Role)
+                .HasMaxLength(16)
+                .IsRequired();
+
+            e.HasOne(x => x.Chat)
+                .WithMany(c => c.Members)
+                .HasForeignKey(x => x.ChatId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasIndex(x => x.UserId);
+
+            e.HasIndex(x => x.ChatId)
+                .IsUnique()
+                .HasFilter("\"Role\" = 'owner'");
         });
 
         // ── Messages ────────────────────────────────────────

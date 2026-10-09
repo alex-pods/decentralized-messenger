@@ -6,10 +6,18 @@ namespace LocalBackend.Models;
 /// </summary>
 public class Chat
 {
-    /// <summary>Id чата на сервере (общий для обоих участников).</summary>
+    // Серверный Id чата
     public long Id { get; set; }
-    public long PeerUserId { get; set; }
-    public User Peer { get; set; } = null!;
+
+    // "direct" - личный чат, "group" - группа
+    public string Type { get; set; } = "direct";
+
+    // Название группы. Для личного чата — null.
+    public string? Title { get; set; }
+
+    // Собеседник личного чата. Для группы — null.
+    public long? PeerUserId { get; set; }
+    public User? Peer { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -24,4 +32,5 @@ public class Chat
     public string? DraftText { get; set; }
 
     public List<Message> Messages { get; set; } = [];
+    public List<ChatMember> Members { get; set; } = [];
 }

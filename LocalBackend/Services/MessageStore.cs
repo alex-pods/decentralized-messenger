@@ -6,10 +6,9 @@ using LocalBackend.Models;
 namespace LocalBackend.Services;
 
 /// <summary>
-/// Основные сценарии работы с локальной БД. Каждый метод — одна транзакция (SaveChanges),
-/// поэтому «сообщение + запись в outbox» никогда не рассинхронизируются.
+/// Операции локального хранения. Связанные записи сообщения и outbox сохраняются атомарно.
 /// </summary>
-public sealed class MessageStore(IDbContextFactory<MessengerDbContext> factory) : IMessageStore
+public sealed partial class MessageStore(IDbContextFactory<MessengerDbContext> factory) : IMessageStore
 {
     // ═════════════ Пользователи и чаты ═════════════
 
@@ -43,9 +42,16 @@ public sealed class MessageStore(IDbContextFactory<MessengerDbContext> factory) 
 
     public async Task<Chat> GetOrCreateChatAsync(long serverChatId, long peerUserId, CancellationToken ct = default)
     {
+        if (serverChatId <= 0 || peerUserId <= 0)
+            throw new ArgumentException("IDs чата и собеседника должны быть положительными.");
         await using var db = await factory.CreateDbContextAsync(ct);
         var chat = await db.Chats.FindAsync([serverChatId], ct);
-        if (chat is not null) return chat;
+        if (chat is not null)
+        {
+            if (chat.Type != "direct" || chat.PeerUserId != peerUserId)
+                throw new InvalidOperationException("Этот ID уже принадлежит другому чату.");
+            return chat;
+        }
 
         chat = new Chat { Id = serverChatId, PeerUserId = peerUserId, CreatedAt = DateTime.UtcNow };
         db.Chats.Add(chat);
@@ -124,6 +130,7 @@ public sealed class MessageStore(IDbContextFactory<MessengerDbContext> factory) 
     public async Task MarkSentAsync(Guid clientId, long serverId, DateTime serverSentAt, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         var message = await db.Messages.FirstOrDefaultAsync(m => m.ClientId == clientId, ct);
         if (message is null) return;   // удалили локально, пока отправлялось
 
@@ -136,6 +143,7 @@ public sealed class MessageStore(IDbContextFactory<MessengerDbContext> factory) 
             .ExecuteDeleteAsync(ct);
 
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
 
     public async Task MarkSendFailedAsync(long messageId, CancellationToken ct = default)

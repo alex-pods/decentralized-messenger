@@ -8,6 +8,11 @@ public interface IMessageStore
     Task UpsertUserAsync(User incoming, CancellationToken ct = default);
     Task<Chat> GetOrCreateChatAsync(long serverChatId, long peerUserId, CancellationToken ct = default);
     Task<List<Chat>> GetChatListAsync(bool archived = false, CancellationToken ct = default);
+    Task<Chat> UpsertChatAsync(ChatInfo incoming, CancellationToken ct = default);
+    Task<List<ChatMember>> GetMembersAsync(long chatId, CancellationToken ct = default);
+    Task ReplaceMembersAsync(long chatId, IReadOnlyList<ChatMemberInfo> members, CancellationToken ct = default);
+    Task UpsertMemberAsync(long chatId, ChatMemberInfo member, CancellationToken ct = default);
+    Task RemoveMemberAsync(long chatId, long userId, CancellationToken ct = default);
 
     Task<Message> EnqueueOutgoingAsync(
         long chatId, long currentUserId, string text,

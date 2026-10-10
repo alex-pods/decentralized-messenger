@@ -52,7 +52,8 @@ public record ReadIn(
 public record SendMessageIn(
     [property: JsonPropertyName("text")] string? Text,
     [property: JsonPropertyName("reply_to_id")] long? ReplyToId,
-    [property: JsonPropertyName("user_session_token")] string? UserSessionToken);
+    [property: JsonPropertyName("user_session_token")] string? UserSessionToken,
+    [property: JsonPropertyName("client_id")] Guid? ClientId = null);
 
 public record EditMessageIn(
     [property: JsonPropertyName("text")] string Text,
@@ -77,7 +78,8 @@ public record ChatIdOut(
     [property: JsonPropertyName("chat_id")] long ChatId);
 
 public record MessageIdOut(
-    [property: JsonPropertyName("message_id")] long MessageId);
+    [property: JsonPropertyName("message_id")] long MessageId,
+    [property: JsonPropertyName("sent_at")] string? SentAt = null);
 
 public record AttachmentOut(
     [property: JsonPropertyName("id")] long Id,
@@ -122,14 +124,17 @@ public record MessageOut(
     [property: JsonPropertyName("read_at")] string? ReadAt,
     [property: JsonPropertyName("deleted_at")] string? DeletedAt,
     [property: JsonPropertyName("attachments")] List<AttachmentOut> Attachments,
-    [property: JsonPropertyName("reactions")] List<ReactionOut> Reactions);
+    [property: JsonPropertyName("reactions")] List<ReactionOut> Reactions,
+    [property: JsonPropertyName("client_id")] string? ClientId = null);
 
 public record MemberOut(
     [property: JsonPropertyName("id")] long Id,
     [property: JsonPropertyName("tag")] string Tag,
     [property: JsonPropertyName("display_name")] string DisplayName,
     [property: JsonPropertyName("role")] string Role,
-    [property: JsonPropertyName("joined_at")] string JoinedAt);
+    [property: JsonPropertyName("joined_at")] string JoinedAt,
+    [property: JsonPropertyName("last_read_message_id")] long? LastReadMessageId = null,
+    [property: JsonPropertyName("read_at")] string? ReadAt = null);
 
 public record DirectChatOut(
     [property: JsonPropertyName("id")] long Id,

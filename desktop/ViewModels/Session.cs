@@ -19,6 +19,7 @@ public static class SessionStore
     {
         public string Server { get; set; } = "";
         public string Token { get; set; } = "";
+        public ProfileDto? Profile { get; set; }
     }
 
     public static Saved? Load()
@@ -34,10 +35,12 @@ public static class SessionStore
         catch { return null; }
     }
 
-    public static void Save(string server, string token)
+    public static void Save(string server, string token, ProfileDto? profile = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(new Saved { Server = server, Token = token }));
+        var temporary = FilePath + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(new Saved { Server = server, Token = token, Profile = profile }));
+        File.Move(temporary, FilePath, overwrite: true);
     }
 
     public static void Clear()

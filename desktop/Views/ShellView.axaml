@@ -178,6 +178,7 @@
                 </ListBox.ItemTemplate>
               </ListBox>
 
+              <Button Classes="toolbar" Content="Повторить отправку" Command="{Binding RetryPendingCommand}" IsVisible="{Binding HasPending}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,12,12,0" />
               <Button HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0"
                       Command="{Binding LoadOlderCommand}" IsVisible="{Binding HasMore}">
                 <StackPanel Orientation="Horizontal" Spacing="6">

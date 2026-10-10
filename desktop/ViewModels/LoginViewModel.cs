@@ -61,8 +61,11 @@ public partial class LoginViewModel : ObservableObject
                 await api.Register(login, password);
             await api.Login(login, password);
             var me = await api.GetMe();
-            SessionStore.Save(api.ServerBase, api.Token!);
-            _nav.Go(new ShellViewModel(_nav, api, me));
+            var core = await DesktopBootstrap.OpenAsync(api, me);
+
+            SessionStore.Save(api.ServerBase, api.Token!, me);
+
+            _nav.Go(new ShellViewModel(_nav, api, me, core));
         }
         catch (Exception ex)
         {

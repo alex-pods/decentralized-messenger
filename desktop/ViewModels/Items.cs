@@ -15,6 +15,7 @@ public partial class ChatItem : ObservableObject
 
 public partial class MessageItem : ObservableObject
 {
+    public long LocalId { get; init; }
     public long Id { get; init; }
     public long SenderId { get; init; }
     public string SenderName { get; init; } = "";

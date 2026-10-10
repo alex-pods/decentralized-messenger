@@ -30,26 +30,69 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    static async Task RestoreSession(Navigator nav, Avalonia.Controls.Window window)
+    static async Task RestoreSession(
+    Navigator nav,
+    Avalonia.Controls.Window window)
     {
         var saved = SessionStore.Load();
-        if (saved == null) return;
-        var api = new MessengerClient(saved.Server, saved.Token);
+
+        if (saved is null ||
+            window.DataContext is not LoginViewModel login)
+        {
+            return;
+        }
+
+        login.Busy = true;
+        MessengerClient? pendingClient = null;
+
         try
         {
-            var me = await api.GetMe();
+            var api = new MessengerClient(saved.Server, saved.Token);
+            pendingClient = api;
+
+            ProfileDto me;
+            try
+            {
+                me = await api.GetMe();
+                SessionStore.Save(api.ServerBase, api.Token!, me);
+            }
+            catch (Exception ex) when (saved.Profile is { Id: > 0 } &&
+                (ex is HttpRequestException or TaskCanceledException || ex is ApiException { Status: >= 500 }))
+            {
+                me = saved.Profile!;
+            }
+            var core = await DesktopBootstrap.OpenAsync(api, me);
+
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (window.DataContext is LoginViewModel)
-                    nav.Go(new ShellViewModel(nav, api, me));
-                else
-                    api.Dispose();
+                if (!ReferenceEquals(window.DataContext, login))
+                    return;
+
+                nav.Go(new ShellViewModel(nav, api, me, core));
+
+                // Клиент теперь принадлежит ShellViewModel.
+                pendingClient = null;
             });
         }
-        catch
+        catch (Exception ex)
         {
-            api.Dispose();
-            SessionStore.Clear();
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!ReferenceEquals(window.DataContext, login))
+                    return;
+
+                if (ex is ApiException { Status: 401 })
+                    SessionStore.Clear();
+
+                login.Error = LoginViewModel.Friendly(ex);
+            });
+        }
+        finally
+        {
+            pendingClient?.Dispose();
+
+            await Dispatcher.UIThread.InvokeAsync(
+                () => login.Busy = false);
         }
     }
 }

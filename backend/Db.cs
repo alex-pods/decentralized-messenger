@@ -123,6 +123,10 @@ public static class Db
               PRIMARY KEY(chat_id, user_id)
             );
             """);
+        if (!c.Query<string>("SELECT name FROM pragma_table_info('messages')").Contains("client_id"))
+            c.Execute("ALTER TABLE messages ADD COLUMN client_id TEXT");
+        c.Execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client ON messages(sender_id, client_id) WHERE client_id IS NOT NULL");
+
         // миграции существующей БД (идемпотентны)
         foreach (var sql in new[]
                  {
@@ -217,6 +221,7 @@ public class DirectChatRow
 
 public class MessageRow
 {
+    public string? Client_Id { get; set; }
     public long Id { get; set; }
     public long Chat_Id { get; set; }
     public long Sender_Id { get; set; }

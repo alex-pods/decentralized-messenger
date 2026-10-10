@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Messenger.Core;
+using Messenger.Core.Models;
 
 namespace MessengerDesktop;
 
@@ -10,12 +12,17 @@ public partial class ShellViewModel : ObservableObject
     private readonly Navigator _nav;
     private readonly MessengerClient _api;
     private readonly LiveConnection _live;
+    private readonly MessengerSession _core;
     private readonly Dictionary<long, string> _names = new();
     private ProfileDto _me;
     private string _myRole = "";
     private int _openGen;
     private bool _suppress;
     private bool _closed;
+    private readonly CancellationTokenSource _stop = new();
+    private bool _refreshing;
+    private bool _refreshAgain;
+    private int _messageLimit = 50;
 
     public event Action? ScrollToEnd;
 
@@ -67,6 +74,7 @@ public partial class ShellViewModel : ObservableObject
     private string _overlay = "";
 
     public bool IsGroup => SelectedChat?.Type == "group";
+    public bool HasPending => Messages.Any(m => m.Id < 0);
     public bool HasChat => SelectedChat != null;
     public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";
     public bool OverlayOpen => Overlay.Length > 0;
@@ -79,18 +87,23 @@ public partial class ShellViewModel : ObservableObject
         "settings" => "Настройки",
         _ => ""
     };
-    public bool HasMessageActions => SelectedMessage != null;
-    public bool CanEdit => SelectedMessage is { Mine: true, IsDeleted: false, IsNotStored: false };
+    public bool HasMessageActions => SelectedMessage is { Id: > 0 };
+    public bool CanEdit => SelectedMessage is { Id: > 0, Mine: true, IsDeleted: false, IsNotStored: false };
     public bool CanDeleteEveryone =>
-        SelectedMessage is { IsDeleted: false } && (SelectedMessage.Mine || _myRole is "owner" or "admin");
+        SelectedMessage is { Id: > 0, IsDeleted: false } && (SelectedMessage.Mine || _myRole is "owner" or "admin");
     public string SelectionHint => SelectedMessage is null ? "" : "Выбрано сообщение";
     public bool HasComposeHint => ComposeHint != null;
     public string? ComposeHint => Editing != null
         ? "Редактирование сообщения"
         : ReplyTo != null ? "Ответ: " + Trim(ReplyTo.Text, 60) : null;
 
-    public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me)
+    public ShellViewModel(
+    Navigator nav,
+    MessengerClient api,
+    ProfileDto me,
+    MessengerSession core)
     {
+        _core = core;
         _nav = nav;
         _api = api;
         _me = me;
@@ -99,11 +112,16 @@ public partial class ShellViewModel : ObservableObject
         DisplayName = me.DisplayName;
         Bio = me.Bio ?? "";
         _live = new LiveConnection(api);
-        _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));
-        _live.State += s => Dispatcher.UIThread.Post(() => Status = s);
-        _live.SessionRevoked += () => Dispatcher.UIThread.Post(() => ForceLogout("Сессия завершена. Войдите снова."));
-        _ = _live.RunAsync();
-        _ = ReloadChats();
+        _live.Event += e => _ = ApplyLive(e);
+        _live.State += state => Dispatcher.UIThread.Post(() => { if (!_closed) Status = state; });
+        _live.SessionRevoked += Revoke;
+        _core.SessionRevoked += Revoke;
+        _core.Status += state => Dispatcher.UIThread.Post(() => { if (!_closed) Status = state; });
+        _core.Changed += () => Dispatcher.UIThread.Post(() => { if (!_closed) _ = RefreshLocal(); });
+        _nav.Window.Closed += WindowClosed;
+        _ = Task.Run(() => _live.RunAsync());
+        _ = RefreshLocal();
+        _ = Task.Run(() => _core.RunAsync(_stop.Token));
     }
 
     partial void OnSelectedChatChanged(ChatItem? value)
@@ -114,6 +132,7 @@ public partial class ShellViewModel : ObservableObject
         Editing = null;
         if (value == null)
         {
+            ++_openGen;
             Messages.Clear();
             HasMore = false;
             return;
@@ -124,42 +143,74 @@ public partial class ShellViewModel : ObservableObject
 
     async Task OpenChat(ChatItem chat)
     {
-        var gen = ++_openGen;
+        ++_openGen;
+        _messageLimit = 50;
         try
         {
-            Error = null;
-            var members = await _api.GetMembers(chat.Id);
-            var messages = await _api.GetMessages(chat.Id, 50);
-            if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
-            await Ui(() => Fill(chat, members, messages, replace: true));
+            await RefreshLocal();
             _live.Follow(chat.Id);
-            if (messages.Count > 0)
-            {
-                try { await _api.MarkRead(chat.Id, messages[^1].Id); }
-                catch { /* прочтение не блокирует чат */ }
-            }
+            await _core.MarkReadAsync(chat.Id, _stop.Token);
             RequestScroll();
         }
-        catch (Exception ex)
-        {
-            if (gen == _openGen) Error = LoginViewModel.Friendly(ex);
-        }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     async Task ReloadMessages()
     {
-        var chat = SelectedChat;
-        if (chat == null) return;
-        var gen = _openGen;
-        var members = await _api.GetMembers(chat.Id);
-        var messages = await _api.GetMessages(chat.Id, 50);
-        if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
-        await Ui(() => Fill(chat, members, messages, replace: true));
-        if (messages.Count > 0)
+        if (SelectedChat is not { } chat) return;
+        await _core.SyncAsync(chat.Id, _stop.Token);
+        await RefreshLocal();
+    }
+
+    // Database changes are coalesced on the UI thread. A late read cannot replace a different open chat.
+    async Task RefreshLocal()
+    {
+        if (_closed) return;
+        if (_refreshing) { _refreshAgain = true; return; }
+        _refreshing = true;
+        try
         {
-            try { await _api.MarkRead(chat.Id, messages[^1].Id); } catch { }
+            do
+            {
+                _refreshAgain = false;
+                var gen = _openGen;
+                var selected = SelectedChat?.Id;
+                var list = await _core.GetChatsAsync(_stop.Token);
+                var members = selected is { } id ? await _core.GetMembersAsync(id, _stop.Token) : new List<MemberDto>();
+                var messages = selected is { } mid ? await _core.GetMessagesAsync(mid, _messageLimit, _stop.Token) : new List<MessageDto>();
+                if (_closed) return;
+                if (gen != _openGen) { _refreshAgain = true; continue; }
+                _suppress = true;
+                try
+                {
+                    Chats.Clear();
+                    foreach (var c in list)
+                    {
+                        if (c.OtherUser != null) _names[c.OtherUser.Id] = c.OtherUser.DisplayName;
+                        var item = MapChat(c);
+                        item.Unread = c.Unread && item.Id != selected;
+                        Chats.Add(item);
+                        _live.Follow(item.Id);
+                    }
+                    SelectedChat = selected is { } sid ? Chats.FirstOrDefault(c => c.Id == sid) : null;
+                }
+                finally { _suppress = false; }
+                if (SelectedChat is { } open)
+                {
+                    Fill(open, members, messages, replace: true);
+                    if (Overlay == "members") FillMembersPanel(members);
+                    await _core.MarkReadAsync(open.Id, _stop.Token);
+                }
+                else
+                {
+                    Messages.Clear(); HasMore = false; SelectedMessage = null;
+                    if (Overlay == "members") { Overlay = ""; Members.Clear(); }
+                }
+            } while (_refreshAgain && !_closed);
         }
-        RequestScroll();
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+        catch (Exception ex) { ShowError(ex); }
+        finally { _refreshing = false; }
     }
 
     void Fill(ChatItem chat, List<MemberDto> members, List<MessageDto> messages, bool replace)
@@ -170,59 +221,38 @@ public partial class ShellViewModel : ObservableObject
         OnPropertyChanged(nameof(CanDeleteEveryone));
         if (!replace) return;
         var texts = messages.ToDictionary(m => m.Id, Body);
+        var lastId = Messages.LastOrDefault()?.LocalId;
+        var selectedId = SelectedMessage?.LocalId;
         Messages.Clear();
         foreach (var m in messages) Messages.Add(ToItem(m, texts));
-        HasMore = messages.Count >= 50;
+        SelectedMessage = Messages.FirstOrDefault(m => m.LocalId == selectedId);
+        HasMore = messages.Count >= _messageLimit;
+        OnPropertyChanged(nameof(HasPending));
+        if (lastId != Messages.LastOrDefault()?.LocalId) RequestScroll();
         chat.Preview = messages.Count == 0 ? "Нет сообщений" : Preview(messages[^1]);
     }
 
     [RelayCommand]
     async Task ReloadChats()
     {
-        try
-        {
-            var selected = SelectedChat?.Id;
-            var unread = Chats.Where(c => c.Unread).Select(c => c.Id).ToHashSet();
-            var list = await _api.GetChats();
-            await Ui(() =>
-            {
-                _suppress = true;
-                Chats.Clear();
-                foreach (var c in list)
-                {
-                    if (c.OtherUser != null) _names[c.OtherUser.Id] = c.OtherUser.DisplayName;
-                    var item = MapChat(c);
-                    item.Unread = unread.Contains(item.Id) && item.Id != selected;
-                    Chats.Add(item);
-                    _live.Follow(item.Id);
-                }
-                _suppress = false;
-                SelectedChat = selected is { } sid ? Chats.FirstOrDefault(c => c.Id == sid) : null;
-            });
-        }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        try { await _core.SyncAsync(ct: _stop.Token); await RefreshLocal(); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
     async Task LoadOlder()
     {
-        var chat = SelectedChat;
-        if (chat == null || Messages.Count == 0 || !HasMore || Busy) return;
-        Busy = true;
-        try
-        {
-            var page = await _api.GetMessages(chat.Id, 50, Messages[0].Id);
-            await Ui(() =>
-            {
-                var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-                foreach (var m in page) texts[m.Id] = Body(m);
-                for (var i = 0; i < page.Count; i++)
-                    Messages.Insert(i, ToItem(page[i], texts));
-                HasMore = page.Count >= 50;
-            });
-        }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
-        finally { Busy = false; }
+        if (SelectedChat == null || !HasMore || Busy) return;
+        _messageLimit += 50;
+        await RefreshLocal();
+    }
+
+    [RelayCommand]
+    async Task RetryPending()
+    {
+        if (SelectedChat is not { } chat) return;
+        try { Error = null; await _core.RetryAsync(chat.Id, _stop.Token); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -240,27 +270,29 @@ public partial class ShellViewModel : ObservableObject
             {
                 await _api.EditMessage(ed.Id, text);
                 Editing = null;
+                await _core.SyncAsync(chat.Id, _stop.Token);
             }
             else
             {
-                await _api.SendMessage(chat.Id, text, ReplyTo?.Id);
+                await _core.QueueMessageAsync(chat.Id, text, ReplyTo?.LocalId, _stop.Token);
                 ReplyTo = null;
             }
-            Draft = "";
-            await ReloadMessages();
+            if (SelectedChat?.Id == chat.Id && Draft.Trim() == text) Draft = "";
+            await RefreshLocal();
+            RequestScroll();
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
         finally { Busy = false; }
     }
 
-    [RelayCommand] void Reply() { if (SelectedMessage != null) { Editing = null; ReplyTo = SelectedMessage; } }
+    [RelayCommand] void Reply() { if (SelectedMessage is { Id: > 0, IsDeleted: false }) { Editing = null; ReplyTo = SelectedMessage; } }
     [RelayCommand] void BeginEdit() { if (CanEdit && SelectedMessage != null) { ReplyTo = null; Editing = SelectedMessage; Draft = SelectedMessage.Text; } }
     [RelayCommand] void CancelCompose() { ReplyTo = null; Editing = null; }
 
     [RelayCommand]
     async Task DeleteForMe()
     {
-        if (SelectedMessage == null) return;
+        if (SelectedMessage is not { Id: > 0 }) return;
         await Delete(SelectedMessage.Id, false);
     }
 
@@ -282,7 +314,7 @@ public partial class ShellViewModel : ObservableObject
             SelectedMessage = null;
             await ReloadMessages();
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
         finally { Busy = false; }
     }
 
@@ -296,7 +328,8 @@ public partial class ShellViewModel : ObservableObject
         if (SelectedChat == null) return;
         ResetSearch();
         Overlay = "members";
-        await LoadMembersPanel();
+        try { await LoadMembersPanel(); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -307,6 +340,8 @@ public partial class ShellViewModel : ObservableObject
         {
             var settings = await _api.GetSettings();
             var me = await _api.GetMe();
+            await _core.UpdateProfileAsync(DesktopBootstrap.MapProfile(me));
+            SessionStore.Save(_api.ServerBase, _api.Token!, me);
             await Ui(() =>
             {
                 _me = me;
@@ -317,7 +352,7 @@ public partial class ShellViewModel : ObservableObject
                 Bio = me.Bio ?? "";
             });
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -336,7 +371,7 @@ public partial class ShellViewModel : ObservableObject
                 if (users.Count == 0) Error = "Никого не нашли";
             });
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -364,7 +399,7 @@ public partial class ShellViewModel : ObservableObject
                 await LoadMembersPanel();
             }
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -383,38 +418,42 @@ public partial class ShellViewModel : ObservableObject
             await ReloadChats();
             await Ui(() => SelectedChat = Chats.FirstOrDefault(c => c.Id == id));
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     async Task LoadMembersPanel()
     {
         var chat = SelectedChat;
         if (chat == null) return;
-        var members = await _api.GetMembers(chat.Id);
+        try { await _core.SyncAsync(chat.Id, _stop.Token); }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException) { Error = "Нет связи. Показан сохранённый состав группы."; }
+        var members = await _core.GetMembersAsync(chat.Id, _stop.Token);
+        await Ui(() => FillMembersPanel(members));
+    }
+
+    void FillMembersPanel(List<MemberDto> members)
+    {
         var myRole = members.FirstOrDefault(m => m.Id == _me.Id)?.Role ?? "";
         _myRole = myRole;
         var owner = myRole == "owner";
         var staff = myRole is "owner" or "admin";
-        await Ui(() =>
+        Members.Clear();
+        foreach (var m in members)
         {
-            Members.Clear();
-            foreach (var m in members)
+            _names[m.Id] = m.DisplayName;
+            Members.Add(new MemberRow
             {
-                _names[m.Id] = m.DisplayName;
-                Members.Add(new MemberRow
-                {
-                    Id = m.Id,
-                    Title = $"{m.DisplayName}  @{m.Tag}",
-                    Role = m.Role,
-                    RoleLabel = m.Role switch { "owner" => "владелец", "admin" => "админ", _ => "участник" },
-                    PromoteLabel = m.Role == "admin" ? "Снять админа" : "Сделать админом",
-                    CanKick = staff && m.Id != _me.Id && m.Role != "owner" && (m.Role != "admin" || owner),
-                    CanPromote = owner && m.Id != _me.Id && m.Role != "owner",
-                    CanTransfer = owner && m.Id != _me.Id
-                });
-            }
-            OnPropertyChanged(nameof(CanDeleteEveryone));
-        });
+                Id = m.Id,
+                Title = $"{m.DisplayName}  @{m.Tag}",
+                Role = m.Role,
+                RoleLabel = m.Role switch { "owner" => "владелец", "admin" => "админ", _ => "участник" },
+                PromoteLabel = m.Role == "admin" ? "Снять админа" : "Сделать админом",
+                CanKick = staff && m.Id != _me.Id && m.Role != "owner" && (m.Role != "admin" || owner),
+                CanPromote = owner && m.Id != _me.Id && m.Role != "owner",
+                CanTransfer = owner && m.Id != _me.Id
+            });
+        }
+        OnPropertyChanged(nameof(CanDeleteEveryone));
     }
 
     [RelayCommand]
@@ -422,7 +461,7 @@ public partial class ShellViewModel : ObservableObject
     {
         if (SelectedChat == null) return;
         try { await _api.RemoveMember(SelectedChat.Id, row.Id); await LoadMembersPanel(); }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -434,7 +473,7 @@ public partial class ShellViewModel : ObservableObject
             await _api.SetRole(SelectedChat.Id, row.Id, row.Role == "admin" ? "member" : "admin");
             await LoadMembersPanel();
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -442,7 +481,7 @@ public partial class ShellViewModel : ObservableObject
     {
         if (SelectedChat == null) return;
         try { await _api.TransferOwner(SelectedChat.Id, row.Id); await LoadMembersPanel(); }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -453,10 +492,11 @@ public partial class ShellViewModel : ObservableObject
         try
         {
             await _api.Leave(chat.Id);
+            await _core.HideChatAsync(chat.Id, _stop.Token);
             Overlay = "";
             await Ui(() => { _suppress = true; Chats.Remove(chat); SelectedChat = null; _suppress = false; Messages.Clear(); });
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -467,10 +507,11 @@ public partial class ShellViewModel : ObservableObject
         try
         {
             await _api.HideChat(chat.Id);
+            await _core.HideChatAsync(chat.Id, _stop.Token);
             Overlay = "";
             await Ui(() => { _suppress = true; Chats.Remove(chat); SelectedChat = null; _suppress = false; Messages.Clear(); });
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -485,6 +526,8 @@ public partial class ShellViewModel : ObservableObject
             await _api.UpdateSettings(SaveHistory);
             await _api.UpdateProfile(name, Bio);
             var me = await _api.GetMe();
+            await _core.UpdateProfileAsync(DesktopBootstrap.MapProfile(me));
+            SessionStore.Save(_api.ServerBase, _api.Token!, me);
             await Ui(() =>
             {
                 _me = me;
@@ -493,7 +536,7 @@ public partial class ShellViewModel : ObservableObject
                 Overlay = "";
             });
         }
-        catch (Exception ex) { Error = LoginViewModel.Friendly(ex); }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     [RelayCommand]
@@ -508,121 +551,37 @@ public partial class ShellViewModel : ObservableObject
     void ForceLogout(string? error)
     {
         if (_closed) return;
-        _closed = true;
-        _live.Dispose();
-        _api.Dispose();
+        Close();
         SessionStore.Clear();
         _nav.Go(new LoginViewModel(_nav, _api.ServerBase, error));
     }
 
-    void Apply(WsEventDto e)
+    void Revoke() => Dispatcher.UIThread.Post(() => ForceLogout("Сессия завершена. Войдите снова."));
+
+    void WindowClosed(object? sender, EventArgs e) => Close();
+
+    public void Close()
     {
-        switch (e.Type)
-        {
-            case "message" when e.Message != null:
-                Incoming(e.ChatId, e.Message, unread: e.Message.SenderId != _me.Id);
-                break;
-            case "message_edited" when e.Message != null:
-                Incoming(e.ChatId, e.Message, unread: false);
-                break;
-            case "message_deleted":
-                if (e.ForEveryone == false && e.ChatId == SelectedChat?.Id && e.MessageId is { } hid)
-                {
-                    var gone = Messages.FirstOrDefault(m => m.Id == hid);
-                    if (gone != null) Messages.Remove(gone);
-                    TouchPreview();
-                }
-                else if (e.Message != null)
-                    Incoming(e.ChatId, e.Message, unread: false);
-                else
-                    _ = ReloadChats();
-                break;
-            case "chat_created":
-            case "chat_hidden":
-            case "chat_deleted":
-                _ = ReloadChats();
-                break;
-            case "member_removed":
-            case "member_left":
-                if (e.UserId == _me.Id && e.ChatId is { } left)
-                    DropChat(left);
-                else if (e.ChatId == SelectedChat?.Id && Overlay == "members")
-                    _ = LoadMembersPanel();
-                break;
-            case "member_added":
-            case "member_role_changed":
-            case "owner_changed":
-                if (e.ChatId == SelectedChat?.Id && Overlay == "members")
-                    _ = LoadMembersPanel();
-                break;
-            case "read":
-                if (SelectedChat is { } open && e.ChatId == open.Id && open.Type != "group"
-                    && e.UserId != _me.Id && e.LastReadMessageId is { } upto)
-                {
-                    foreach (var m in Messages)
-                    {
-                        if (!m.Mine || m.Id > upto || m.Meta.Contains("прочитано")) continue;
-                        m.Meta = m.Meta.Replace(" · доставлено", "") + " · прочитано";
-                    }
-                }
-                break;
-        }
+        if (_closed) return;
+        _closed = true;
+        _nav.Window.Closed -= WindowClosed;
+        _stop.Cancel();
+        _live.Dispose();
+        _api.Dispose();
     }
 
-    void Incoming(long? chatId, MessageDto message, bool unread)
+    void ShowError(Exception ex)
     {
-        var chat = Chats.FirstOrDefault(c => c.Id == chatId);
-        if (chat == null)
-        {
-            _ = ReloadChats();
-            return;
-        }
-        chat.Preview = Preview(message);
-        if (unread && SelectedChat?.Id != chat.Id) chat.Unread = true;
-        if (SelectedChat?.Id != chat.Id) return;
-        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-        texts[message.Id] = Body(message);
-        var existing = Messages.FirstOrDefault(m => m.Id == message.Id);
-        if (existing == null)
-        {
-            var item = ToItem(message, texts);
-            var idx = 0;
-            while (idx < Messages.Count && Messages[idx].Id < item.Id) idx++;
-            Messages.Insert(idx, item);
-            if (idx == Messages.Count - 1) RequestScroll();
-            if (unread) _ = _api.MarkRead(chat.Id, message.Id);
-        }
-        else
-        {
-            var fresh = ToItem(message, texts);
-            existing.Text = fresh.Text;
-            existing.Meta = fresh.Meta;
-            existing.Reply = fresh.Reply;
-            existing.IsDeleted = fresh.IsDeleted;
-            existing.IsNotStored = fresh.IsNotStored;
-        }
+        if (_closed) return;
+        if (ex is ApiException { Status: 401 }) ForceLogout("Сессия завершена. Войдите снова.");
+        else Error = LoginViewModel.Friendly(ex);
     }
 
-    void DropChat(long id)
+    async Task ApplyLive(WsEventDto e)
     {
-        var chat = Chats.FirstOrDefault(c => c.Id == id);
-        if (chat == null) return;
-        _suppress = true;
-        Chats.Remove(chat);
-        if (SelectedChat?.Id == id)
-        {
-            SelectedChat = null;
-            Messages.Clear();
-            Overlay = "";
-        }
-        _suppress = false;
-    }
-
-    void TouchPreview()
-    {
-        if (SelectedChat == null) return;
-        var last = Messages.LastOrDefault();
-        SelectedChat.Preview = last == null ? "Нет сообщений" : $"{last.SenderName}: {last.Text}";
+        try { await _core.ApplyAsync(e, _stop.Token); }
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+        catch (Exception ex) { await Ui(() => ShowError(ex)); }
     }
 
     ChatItem MapChat(ChatDto c)
@@ -646,14 +605,17 @@ public partial class ShellViewModel : ObservableObject
         if (m.ReplyToId is { } rid)
             reply = texts.TryGetValue(rid, out var t) ? "↩ " + Trim(t, 80) : "↩ ответ";
         var meta = FormatTime(m.SentAt);
+        if (m.SyncState == MessageSyncState.Pending) meta += " · в очереди";
+        if (m.SyncState == MessageSyncState.Failed) meta += " · не отправлено";
         if (m.EditedAt != null) meta += " · изменено";
         if (m.SenderId == _me.Id && m.ReadAt != null) meta += " · прочитано";
         else if (m.SenderId == _me.Id && m.DeliveredAt != null) meta += " · доставлено";
         return new MessageItem
         {
             Id = m.Id,
+            LocalId = m.LocalId,
             SenderId = m.SenderId,
-            SenderName = NameOf(m.SenderId),
+            SenderName = m.SenderId == _me.Id ? "Вы" : m.LocalSenderName ?? NameOf(m.SenderId),
             Mine = m.SenderId == _me.Id,
             Text = Body(m),
             Meta = meta,
@@ -665,7 +627,7 @@ public partial class ShellViewModel : ObservableObject
 
     string Preview(MessageDto m)
     {
-        var who = m.SenderId == _me.Id ? "Вы" : NameOf(m.SenderId);
+        var who = m.SenderId == _me.Id ? "Вы" : m.LocalSenderName ?? NameOf(m.SenderId);
         return $"{who}: {Body(m)}";
     }
 

@@ -20,9 +20,10 @@ public static class Preview
         await Task.Delay(1500);
         await Shot(window, "login");
 
-        var vm = await Dispatcher.UIThread.InvokeAsync(() =>
+        var vm = await Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            var shell = new ShellViewModel(nav, api, me);
+            var core = await DesktopBootstrap.OpenAsync(api, me);
+            var shell = new ShellViewModel(nav, api, me, core);
             nav.Go(shell);
             return shell;
         });

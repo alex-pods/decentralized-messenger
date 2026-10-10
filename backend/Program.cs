@@ -296,7 +296,7 @@ MessageOut MsgOut(IDbConnection c, MessageRow m, List<MemberRow>? members = null
         m.Sent_At, m.Delivered_At, m.Edited_At,
         AggregateReadAt(m.Id, m.Sender_Id, members), m.Deleted_At,
         atts.Select(a => new AttachmentOut(a.Id, a.Message_Id, a.File_Name, a.File_Type, a.File_Size_Bytes)).ToList(),
-        reacts);
+        reacts, m.Client_Id);
 }
 
 ChatRow ChatById(IDbConnection c, long id) =>
@@ -324,7 +324,7 @@ static List<MemberRow> MembersOf(IDbConnection c, long chatId) =>
         """, new { c = chatId }).ToList();
 
 static List<MemberOut> MembersOut(IDbConnection c, long chatId) =>
-    MembersOf(c, chatId).Select(m => new MemberOut(m.User_Id, m.Tag!, m.Display_Name!, m.Role, m.Joined_At)).ToList();
+    MembersOf(c, chatId).Select(m => new MemberOut(m.User_Id, m.Tag!, m.Display_Name!, m.Role, m.Joined_At, m.Last_Read_Message_Id, m.Read_At)).ToList();
 
 static long[] MemberIds(IDbConnection c, long chatId) =>
     c.Query<long>("SELECT user_id FROM chat_members WHERE chat_id=@c ORDER BY joined_at", new { c = chatId })
@@ -866,6 +866,7 @@ app.MapGet("/chats/{chat_id:long}/messages", (HttpContext ctx, long chat_id) =>
 app.MapPost("/chats/{chat_id:long}/messages", async (HttpContext ctx, long chat_id, [FromBody] SendMessageIn r) =>
 {
     var me = RequireUser(ctx, r.UserSessionToken);
+    if (r.ClientId == Guid.Empty) return Err(400, "client_id must not be empty");
     var text = r.Text ?? "";
     if (text.Trim().Length < 1) return Err(400, "text must not be empty");
     if (text.Length > 4096) return Err(400, "text too long (max 4096)");
@@ -874,6 +875,17 @@ app.MapPost("/chats/{chat_id:long}/messages", async (HttpContext ctx, long chat_
     {
         var chat = ChatById(c, chat_id);
         RequireMember(c, chat.Id, me.Id);
+        if (r.ClientId is { } clientId)
+        {
+            var prior = c.QueryFirstOrDefault<MessageRow>(
+                "SELECT * FROM messages WHERE sender_id=@u AND client_id=@key",
+                new { u = me.Id, key = clientId.ToString("D") });
+            if (prior is not null)
+            {
+                if (prior.Chat_Id != chat.Id) return Err(409, "client_id belongs to another chat");
+                return Results.Json(new MessageIdOut(prior.Id, prior.Sent_At));
+            }
+        }
         if (r.ReplyToId is { } rid)
         {
             var target = c.QueryFirstOrDefault<MessageRow>("SELECT * FROM messages WHERE id=@i", new { i = rid });
@@ -884,9 +896,9 @@ app.MapPost("/chats/{chat_id:long}/messages", async (HttpContext ctx, long chat_
         var saveHistory = c.ExecuteScalar<long>(
             "SELECT save_history FROM user_settings WHERE user_id=@u", new { u = me.Id }) == 1;
         var id = c.ExecuteScalar<long>(
-            "INSERT INTO messages(chat_id, sender_id, reply_to_id, text, sent_at) VALUES(@c, @s, @r, @t, @sa); " +
+            "INSERT INTO messages(chat_id, sender_id, reply_to_id, text, sent_at, client_id) VALUES(@c, @s, @r, @t, @sa, @key); " +
             "SELECT last_insert_rowid()",
-            new { c = chat.Id, s = me.Id, r = r.ReplyToId, t = saveHistory ? text : "", sa = Util.NowIso() });
+            new { c = chat.Id, s = me.Id, r = r.ReplyToId, t = saveHistory ? text : "", sa = Util.NowIso(), key = r.ClientId?.ToString("D") });
         var members = MembersOf(c, chat.Id);
         var memberIds = members.Select(m => m.User_Id).ToArray();
         var delivered = await hub.PublishToChat(chat.Id, memberIds, me.Id,
@@ -898,11 +910,12 @@ app.MapPost("/chats/{chat_id:long}/messages", async (HttpContext ctx, long chat_
             });
         if (delivered > 0)
             c.Execute("UPDATE messages SET delivered_at=@d WHERE id=@i", new { d = Util.NowIso(), i = id });
-        return Results.Json(new MessageIdOut(id), statusCode: 201);
+        return Results.Json(new MessageIdOut(id, c.ExecuteScalar<string>("SELECT sent_at FROM messages WHERE id=@id", new { id })), statusCode: 201);
     });
 }).WithTags("Messages").WithName("sendMessage").WithSummary("Отправить сообщение")
 .WithDescription("text 1..4096, reply_to_id? (положительный id сообщения ЭТОГО чата; ответ на заглушку удалённого " +
-                 "разрешён). 201 -> message_id. Настройка save_history ОТПРАВИТЕЛЯ: при false текст не сохраняется " +
+                 "разрешён). client_id? — UUID клиента: повтор для того же отправителя и чата возвращает прежний результат (200); " +
+                 "новая отправка — 201. Ответ: message_id, sent_at. Настройка save_history ОТПРАВИТЕЛЯ: при false текст не сохраняется " +
                  "(заглушка с content_state=not_stored), но онлайн-получатели получают полный текст в WS-событии. " +
                  "Событие message — подписанным (follow).")
 .Produces<MessageIdOut>(201);

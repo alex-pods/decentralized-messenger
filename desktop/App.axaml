@@ -1,0 +1,31 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MessengerDesktop"
+             xmlns:views="using:MessengerDesktop.Views"
+             xmlns:conv="using:MessengerDesktop"
+             x:Class="MessengerDesktop.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <conv:InverseBoolConverter x:Key="Not"/>
+    <conv:EqConverter x:Key="Eq"/>
+    <conv:MineAlignConverter x:Key="Align"/>
+    <conv:AvatarBrushConverter x:Key="AvatarBrush"/>
+    <conv:InitialConverter x:Key="Initial"/>
+  </Application.Resources>
+  <Application.DataTemplates>
+    <DataTemplate DataType="vm:LoginViewModel">
+      <views:LoginView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:ShellViewModel">
+      <views:ShellView/>
+    </DataTemplate>
+  </Application.DataTemplates>
+  <Application.Styles>
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#FF8B6CFF"/>
+      </FluentTheme.Palettes>
+    </FluentTheme>
+    <StyleInclude Source="avares://MessengerDesktop/Styles/Glass.axaml"/>
+  </Application.Styles>
+</Application>

@@ -125,6 +125,7 @@ public static class Db
                      "ALTER TABLE chat_members ADD COLUMN last_read_message_id INTEGER",
                      "ALTER TABLE chat_members ADD COLUMN read_at TEXT",
                      "ALTER TABLE messages ADD COLUMN client_ref TEXT",
+                     "ALTER TABLE messages ADD COLUMN client_ref_payload TEXT",
                  })
             try { c.Execute(sql); }
             catch (SqliteException) { /* колонка уже есть */ }
@@ -237,6 +238,7 @@ public class MessageRow
     public string? Read_At { get; set; }
     public string? Deleted_At { get; set; }
     public string? Client_Ref { get; set; }
+    public string? Client_Ref_Payload { get; set; }
 }
 
 public class AttachmentRow

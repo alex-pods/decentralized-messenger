@@ -396,6 +396,68 @@ if DB_FILE:
     st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "ответ на legacy", "reply_to_id": legacy_id}, token=B)
     check("ответ на legacy разрешён", st == 201, f"{st}")
 
+# ---------- аудит 2026-10-13: идемпотентность после правки ----------
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "idem-оригинал", "client_ref": "fix1-" + SUF}, token=A)
+IDM = b.get("message_id")
+st, b, _ = api("PATCH", f"/messages/{IDM}", {"text": "idem-после-правки"}, token=A)
+check("edit идемпотентного 204", st == 204, f"{st}")
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "idem-оригинал", "client_ref": "fix1-" + SUF}, token=A)
+check("повтор ИСХОДНОГО запроса после правки -> 200 тот же id", st == 200 and b.get("message_id") == IDM, f"{st} {b}")
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "idem-после-правки", "client_ref": "fix1-" + SUF}, token=A)
+check("повтор с отредактированным текстом -> 409 (сравнение с исходником)", st == 409 and b.get("code") == "client_ref_conflict", f"{st} {b}")
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "idem-оригинал", "reply_to_id": M1, "client_ref": "fix1-" + SUF}, token=A)
+check("тот же ref с другим reply_to_id -> 409", st == 409, f"{st}")
+api("DELETE", f"/messages/{IDM}", {"for_everyone": True}, token=A)
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "idem-оригинал", "client_ref": "fix1-" + SUF}, token=A)
+check("повтор после удаления для всех -> 200 тот же id (ключ занят)", st == 200 and b.get("message_id") == IDM, f"{st} {b}")
+
+# ---------- аудит: after_id синхронизация пропущенного ----------
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "sync-a"}, token=A)
+SA = b.get("message_id")
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "sync-b"}, token=B)
+SB = b.get("message_id")
+st, b, _ = api("POST", f"/chats/{DM}/messages", {"text": "sync-c"}, token=A)
+SC = b.get("message_id")
+st, page, _ = api("GET", f"/chats/{DM}/messages?after_id={SA}&limit=2", token=B)
+check("after_id: сообщения НОВЕЕ курсора по возрастанию",
+      [m["id"] for m in page] == [SB, SC] and [m["text"] for m in page] == ["sync-b", "sync-c"], page)
+st, page, _ = api("GET", f"/chats/{DM}/messages?after_id={SB}", token=B)
+check("after_id до пустой страницы", [m["id"] for m in page] == [SC], page)
+st, b, _ = api("GET", f"/chats/{DM}/messages?after_id=abc", token=B)
+check("after_id=abc -> 400 телом", st == 400 and is_err(b), f"{st} {b}")
+st, b, _ = api("GET", f"/chats/{DM}/messages?after_id=0", token=B)
+check("after_id=0 -> 400", st == 400, f"{st}")
+
+# ---------- аудит: read-событие монотонно ----------
+code, wsr = ws_connect(f"/messenger/ws?user_session_token={B}")
+ws_recv(wsr)
+ws_send(wsr, {"action": "follow", "chat_id": DM}); ws_recv(wsr)
+st, b, _ = api("POST", f"/chats/{DM}/read", {"message_id": SC}, token=B)
+ev = ws_recv(wsr)
+check("read событие: курсор вперёд", ev.get("type") == "read" and ev.get("last_read_message_id") == SC, ev)
+st, b, _ = api("POST", f"/chats/{DM}/read", {"message_id": M1}, token=B)
+check("read старее курсора: события-отката НЕТ", ws_nothing(wsr, 1.5), "пришло")
+try: wsr.close()
+except Exception: pass
+
+# ---------- аудит: спека ----------
+hist_op = opspec("/chats/{chat_id}/messages", "get")
+params = {p["name"] for p in hist_op.get("parameters", [])}
+check("spec: у истории есть limit/before_id/after_id", {"limit", "before_id", "after_id"} <= params, params)
+no_summary = [p for p in spec["paths"] for m in spec["paths"][p]
+              if not spec["paths"][p][m].get("summary")]
+check("spec: summary есть у всех операций", not no_summary, no_summary[:4])
+send415 = "415" in opspec("/chats/{chat_id}/messages", "post").get("responses", {})
+check("spec: 415 описан у отправки", send415, "")
+smi2 = spec["components"]["schemas"]["SendMessageIn"]
+check("spec: text не nullable (вход)", smi2["properties"]["text"].get("nullable") is not True, "")
+st, b, _ = api("POST", f"/chats/{DM}/messages", raw_body=json.dumps({"text": "спуф", "sender_id": B_ID, "unsupported": 1}).encode(), token=A)
+check("лишние/спуф-поля тела -> 400 (строгий контракт)", st == 400 and is_err(b), f"{st} {b}")
+cgi2 = spec["components"]["schemas"]["CreateGroupIn"]
+check("spec: member_ids без uniqueItems (дубли нормализуются)", cgi2["properties"]["member_ids"].get("uniqueItems") is not True, "")
+chats200 = json.dumps(opspec("/chats", "get").get("responses", {}).get("200", {}))
+check("spec: GET /chats имеет схему oneOf карточек", "DirectChatOut" in chats200 and "GroupChatOut" in chats200, chats200[:80])
+
 # ---------- rate limit ----------
 codes = [api("POST", "/auth/login", {"login": "rl" + SUF, "password": "x" * 12})[0] for _ in range(35)]
 st, _, h = api("POST", "/auth/login", {"login": "rl" + SUF, "password": "x" * 12})

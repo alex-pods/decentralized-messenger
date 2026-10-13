@@ -15,6 +15,9 @@ builder.WebHost.ConfigureKestrel(o =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
+// строгий контракт: неизвестные поля JSON-тел отклоняются (400), как и заявлено в схемах
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow);
 builder.Services.AddSwaggerGen(SwaggerSetup.Configure);
 builder.Services.AddSingleton<Hub>();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));

@@ -18,24 +18,35 @@ public static class MessageEndpoints
         app.MapGet("/chats/{chat_id:long}/messages", (HttpContext ctx, long chat_id) =>
         {
             var me = Accounts.RequireUser(ctx);
-            var (limit, before, err) = Paging.Parse(ctx);
+            var (limit, before, after, err) = Paging.Parse(ctx);
             if (err is not null) return err;
             return Db.Read<IResult>(c =>
             {
                 var chat = Chats.ById(c, chat_id);
                 Chats.RequireMember(c, chat.Id, me.Id);
-                var rows = c.Query<MessageRow>(
-                    """
-                    SELECT * FROM messages WHERE chat_id=@c
-                       AND (@b IS NULL OR id < @b)
-                       AND id NOT IN (SELECT message_id FROM message_hidden WHERE user_id=@u)
-                       ORDER BY id DESC LIMIT @l
-                    """, new { c = chat.Id, b = before, u = me.Id, l = limit ?? 50 }).Reverse().ToList();
+                // after_id — синхронизация после переподключения: сообщения НОВЕЕ курсора, по возрастанию;
+                // без after_id — обычная постраничная выдача от новых к старым (внутри страницы по возрастанию)
+                var rows = (after is null
+                        ? c.Query<MessageRow>(
+                            """
+                            SELECT * FROM messages WHERE chat_id=@c
+                               AND (@b IS NULL OR id < @b)
+                               AND id NOT IN (SELECT message_id FROM message_hidden WHERE user_id=@u)
+                               ORDER BY id DESC LIMIT @l
+                            """, new { c = chat.Id, b = before, u = me.Id, l = limit ?? 50 }).Reverse().ToList()
+                        : c.Query<MessageRow>(
+                            """
+                            SELECT * FROM messages WHERE chat_id=@c
+                               AND id > @a
+                               AND (@b IS NULL OR id < @b)
+                               AND id NOT IN (SELECT message_id FROM message_hidden WHERE user_id=@u)
+                               ORDER BY id ASC LIMIT @l
+                            """, new { c = chat.Id, a = after, b = before, u = me.Id, l = limit ?? 50 }).ToList());
                 return Results.Json(Messages.ToDtoList(c, rows, Chats.MembersOf(c, chat.Id)));
             });
         })
         .WithTags("Messages").WithName("getHistory").WithSummary("История сообщений")
-        .WithDescription("Страница до limit (1..100, default 50) сообщений с id СТРОГО меньше before_id, " +
+        .WithDescription("Постраничная выдача: до limit (1..100, default 50) сообщений с id СТРОГО меньше before_id, " +
                          "внутри страницы от старых к новым; без before_id — начиная с самых последних. " +
                          "Некорректные limit/before_id → 400. Удалённые для всех — заглушки (content_state=deleted, " +
                          "text=null, без вложений/реакций). Скрытые «у себя» не возвращаются. " +
@@ -101,10 +112,17 @@ public static class MessageEndpoints
                     "SELECT * FROM messages WHERE id=@i", new { i = r.MessageId });
                 if (msg is null || msg.Chat_Id != chat.Id)
                     return Errors.Err(404, "message_id не найден в этом чате");
+                var beforeCursor = c.ExecuteScalar<long?>(
+                    "SELECT last_read_message_id FROM chat_members WHERE chat_id=@c AND user_id=@u",
+                    new { c = chat.Id, u = me.Id });
                 Messages.MarkRead(c, chat.Id, me.Id, r.MessageId);
-                await ChatEndpoints.SafePublish(() => hub.PublishToChat(chat.Id,
-                    Chats.MemberIds(c, chat.Id), me.Id,
-                    new WsEvent("read", chat.Id) { UserId = me.Id, LastReadMessageId = r.MessageId }));
+                var effective = c.ExecuteScalar<long>(
+                    "SELECT COALESCE(last_read_message_id, 0) FROM chat_members WHERE chat_id=@c AND user_id=@u",
+                    new { c = chat.Id, u = me.Id });
+                if (effective != (beforeCursor ?? 0)) // курсор монотонен: без движения события нет
+                    await ChatEndpoints.SafePublish(() => hub.PublishToChat(chat.Id,
+                        Chats.MemberIds(c, chat.Id), me.Id,
+                        new WsEvent("read", chat.Id) { UserId = me.Id, LastReadMessageId = effective }));
                 return Results.NoContent();
             });
         })

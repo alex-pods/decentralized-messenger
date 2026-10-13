@@ -27,29 +27,44 @@ public static class Messages
             throw new HttpException(400, "reply_to_id: сообщение из другого чата");
     }
 
+    /// <summary>Неизменяемый отпечаток запроса создания: правки сообщения его не меняют,
+    /// поэтому повтор исходного запроса остаётся идемпотентным и после PATCH.</summary>
+    public static string RefPayload(long chatId, string text, long? replyToId) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"{chatId}|{replyToId ?? 0}|{text}"))).ToLowerInvariant();
+
     /// <summary>Идемпотентная отправка. client_ref уникален в рамках отправителя:
-    /// повтор с тем же текстом возвращает прежний message_id (Created=false),
-    /// повтор с другим содержимым — 409 client_ref_conflict.</summary>
+    /// повтор с тем же отпечатком исходного запроса (chat, text, reply_to_id) возвращает
+    /// прежний message_id — независимо от последующих правок и удаления; иная пара
+    /// (client_ref, содержимое) — 409 client_ref_conflict.</summary>
     public static (long MessageId, bool Created, MessageRow Row) Send(
         IDbConnection c, long chatId, long senderId, string text, long? replyToId, string? clientRef)
     {
         if (clientRef is not null)
         {
+            var payload = RefPayload(chatId, text, replyToId);
             var prev = c.QueryFirstOrDefault<MessageRow>(
                 "SELECT * FROM messages WHERE sender_id=@s AND client_ref=@r", new { s = senderId, r = clientRef });
             if (prev is not null)
             {
-                if (prev.Chat_Id == chatId && prev.Text == text && prev.Reply_To_Id == replyToId && prev.Deleted_At is null)
-                    return (prev.Id, false, prev);
+                if (prev.Client_Ref_Payload == payload || (prev.Client_Ref_Payload is null &&
+                    prev.Chat_Id == chatId && prev.Reply_To_Id == replyToId &&
+                    (prev.Deleted_At is not null || prev.Text == text)))
+                    return (prev.Id, false, prev); // legacy-строки без отпечатка сверяем по содержимому
                 throw new HttpException(409,
                     "client_ref уже использован с другим содержимым", "client_ref_conflict");
             }
+            var id = c.ExecuteScalar<long>(
+                "INSERT INTO messages(chat_id, sender_id, reply_to_id, text, sent_at, client_ref, client_ref_payload) " +
+                "VALUES(@c, @s, @r, @t, @sa, @ref, @fp); SELECT last_insert_rowid()",
+                new { c = chatId, s = senderId, r = replyToId, t = text, sa = Util.NowIso(), @ref = clientRef, fp = payload });
+            return (id, true, ById(c, id));
         }
-        var id = c.ExecuteScalar<long>(
-            "INSERT INTO messages(chat_id, sender_id, reply_to_id, text, sent_at, client_ref) " +
-            "VALUES(@c, @s, @r, @t, @sa, @ref); SELECT last_insert_rowid()",
-            new { c = chatId, s = senderId, r = replyToId, t = text, sa = Util.NowIso(), @ref = clientRef });
-        return (id, true, ById(c, id));
+        var idNoRef = c.ExecuteScalar<long>(
+            "INSERT INTO messages(chat_id, sender_id, reply_to_id, text, sent_at) " +
+            "VALUES(@c, @s, @r, @t, @sa); SELECT last_insert_rowid()",
+            new { c = chatId, s = senderId, r = replyToId, t = text, sa = Util.NowIso() });
+        return (idNoRef, true, ById(c, idNoRef));
     }
 
     /// <summary>Курсор прочтения получателя (не уменьшается).</summary>

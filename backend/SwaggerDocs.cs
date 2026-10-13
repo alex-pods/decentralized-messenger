@@ -4,11 +4,39 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace MessengerBackend;
 
-/// <summary>
-/// Приводит swagger.json к реальному контракту: security на защищённых ручках
-/// (Bearer ИЛИ X-Session-Token как альтернативы), ErrorResponse на кодах ошибок,
-/// multipart-тела для файловых POST, бинарные ответы для скачивания.
-/// </summary>
+/// <summary>Конфигурация Swagger: единый Bearer для REST + фильтры контракта.</summary>
+public static class SwaggerSetup
+{
+    public static void Configure(SwaggerGenOptions o)
+    {
+        o.SwaggerDoc("v1", new()
+        {
+            Title = "Messenger Backend API",
+            Version = "4.0.0 (MVP: обычные чаты через сервер)",
+            Description = "Обычные личные и групповые чаты с сохранением истории на сервере. " +
+                          "Регистрация/вход/выход, профили и аватары, поиск, участники и роли (member/admin/owner), " +
+                          "сообщения и ответы, идемпотентная отправка (client_ref), редактирование, удаление " +
+                          "у себя и у всех, реакции, вложения, история с курсорной пагинацией, прочтения, " +
+                          "WebSocket follow(chat_id).\n\n" +
+                          "REST-авторизация — только Authorization: Bearer <user_session_token>. " +
+                          "WebSocket — query-параметр user_session_token. Протокол WS: GET /ws/protocol.\n\n" +
+                          "Архитектурно заложено расширение режимом секретных чатов (без хранения содержимого) " +
+                          "и собственными узлами; в этой версии они не реализованы и не объявлены."
+        });
+        o.OperationFilter<AuthAndErrorsOperationFilter>();
+        o.SchemaFilter<DtoSchemaFilter>();
+        o.AddSecurityDefinition("SessionBearer", new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "user_session_token",
+            Description = "Authorization: Bearer <user_session_token> — единственный способ REST-авторизации"
+        });
+    }
+}
+
+/// <summary>Security на защищённых ручках; ErrorResponse-схема на кодах ошибок;
+/// multipart-тела файловых POST; бинарные ответы скачивания.</summary>
 public class AuthAndErrorsOperationFilter : IOperationFilter
 {
     private static readonly string[] PublicPrefixes = ["/auth/register", "/auth/login", "/health", "/ws/protocol"];
@@ -18,14 +46,12 @@ public class AuthAndErrorsOperationFilter : IOperationFilter
         ("/auth/register", "POST", ["400", "409", "429"]),
         ("/auth/login", "POST", ["400", "401", "429"]),
         ("/auth/logout", "POST", ["401"]),
-        ("/users/me/settings", "PATCH", ["400", "401"]),
-        ("/users/me/settings", "GET", ["401"]),
         ("/users/me/avatar", "POST", ["400", "401", "413"]),
         ("/users/me/avatar", "GET", ["401", "404"]),
-        ("/users/", "GET", ["401", "404"]),
         ("/users/me", "PATCH", ["400", "401"]),
         ("/users/me", "GET", ["401"]),
         ("/users/search", "GET", ["400", "401"]),
+        ("/users/", "GET", ["401", "404"]),
         ("/chats/group", "POST", ["400", "401", "404"]),
         ("/chats/{chat_id}/members/{user_id}", "DELETE", ["400", "401", "403", "404"]),
         ("/chats/{chat_id}/members/{user_id}", "PATCH", ["400", "401", "403", "404"]),
@@ -33,7 +59,7 @@ public class AuthAndErrorsOperationFilter : IOperationFilter
         ("/chats/{chat_id}/members", "POST", ["400", "401", "403", "404"]),
         ("/chats/{chat_id}/members", "GET", ["401", "403", "404"]),
         ("/chats/{chat_id}/messages", "GET", ["400", "401", "403", "404"]),
-        ("/chats/{chat_id}/messages", "POST", ["400", "401", "403", "404"]),
+        ("/chats/{chat_id}/messages", "POST", ["400", "401", "403", "404", "409"]),
         ("/chats/{chat_id}/read", "POST", ["400", "401", "403", "404"]),
         ("/chats/{chat_id}/leave", "POST", ["400", "401", "403", "404", "409"]),
         ("/chats/{chat_id}", "GET", ["401", "403", "404"]),
@@ -56,33 +82,14 @@ public class AuthAndErrorsOperationFilter : IOperationFilter
         var method = context.ApiDescription.HttpMethod?.ToUpperInvariant();
         var isPublic = PublicPrefixes.Any(path.StartsWith);
 
-        // security: защищённые ручки — Bearer ИЛИ X-Session-Token (альтернативы); публичные — без security
-        if (isPublic)
+        operation.Security = isPublic ? [] : [new OpenApiSecurityRequirement
         {
-            operation.Security = [];
-        }
-        else
-        {
-            operation.Security =
-            [
-                new OpenApiSecurityRequirement
-                {
-                    [new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "SessionBearer" }
-                    }] = []
-                },
-                new OpenApiSecurityRequirement
-                {
-                    [new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "SessionHeader" }
-                    }] = []
-                },
-            ];
-        }
+            [new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "SessionBearer" }
+            }] = []
+        }];
 
-        // multipart-тела для файловых POST
         if (method == "POST" && (path == "/users/me/avatar" || path.StartsWith("/messages/{message_id}/attachments")))
         {
             var multiple = path.StartsWith("/messages/");
@@ -114,7 +121,6 @@ public class AuthAndErrorsOperationFilter : IOperationFilter
             };
         }
 
-        // бинарные ответы для скачивания
         if (method == "GET" && (path == "/users/{user_id}/avatar" || path.StartsWith("/attachments/")))
         {
             operation.Responses["200"] = new OpenApiResponse
@@ -143,18 +149,7 @@ public class AuthAndErrorsOperationFilter : IOperationFilter
                         {
                             ["application/json"] = new()
                             {
-                                Schema = new OpenApiSchema
-                                {
-                                    Type = "object",
-                                    Required = new HashSet<string> { "code", "error", "trace_id" },
-                                    Properties = new Dictionary<string, OpenApiSchema>
-                                    {
-                                        ["code"] = new() { Type = "string", Description = "Машинный код ошибки" },
-                                        ["error"] = new() { Type = "string", Description = "Человекочитаемое описание" },
-                                        ["details"] = new() { Type = "object", Nullable = true },
-                                        ["trace_id"] = new() { Type = "string", Description = "Идентификатор ошибки для логов" }
-                                    }
-                                }
+                                Schema = ErrorSchema()
                             }
                         }
                     };
@@ -162,23 +157,37 @@ public class AuthAndErrorsOperationFilter : IOperationFilter
         }
     }
 
-    private static string Describe(string code, string path) => code switch
+    static OpenApiSchema ErrorSchema() => new()
+    {
+        Type = "object",
+        Required = new HashSet<string> { "code", "error", "trace_id" },
+        Properties = new Dictionary<string, OpenApiSchema>
+        {
+            ["code"] = new() { Type = "string", Description = "Машинный код ошибки" },
+            ["error"] = new() { Type = "string", Description = "Человекочитаемое описание" },
+            ["details"] = new() { Type = "object", Nullable = true },
+            ["trace_id"] = new() { Type = "string", Description = "Идентификатор ошибки для логов" }
+        }
+    };
+
+    static string Describe(string code, string path) => code switch
     {
         "400" => "Некорректные поля/query или пустой текст",
         "401" => path.StartsWith("/auth/login") ? "Неверный login или password"
-            : "Нет, просрочена или удалена сессия (user_session_token)",
+            : "Нет, просрочена или удалена сессия (Bearer)",
         "403" => "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
         "404" => "Пользователь/чат/сообщение/вложение не найдено",
         "409" => path.StartsWith("/auth/register") ? "Указанный login уже занят"
             : path.EndsWith("/leave") ? "owner_transfer_required: сначала передайте владение"
+            : path.EndsWith("/messages") ? "client_ref_conflict: ключ отправки уже использован с другим содержимым"
             : "Конфликт состояния (message_deleted / content_not_stored)",
         "413" => "Файл превышает допустимый размер",
-        "429" => "Превышен лимит: 30 запросов/мин на IP для POST /auth/* (заголовок Retry-After)",
+        "429" => "Превышен лимит 30 запросов/мин на IP (заголовок Retry-After)",
         _ => "Ошибка"
     };
 }
 
-/// <summary>Required/длины/паттерны/enums для DTO и форматы дат в ответах.</summary>
+/// <summary>Required/длины/паттерны/enums для DTO; date-time для таймстампов ответов.</summary>
 public class DtoSchemaFilter : ISchemaFilter
 {
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
@@ -190,8 +199,7 @@ public class DtoSchemaFilter : ISchemaFilter
             if (schema.Properties.TryGetValue(name, out var s)) tune(s);
         }
 
-        switch (context.SchemaRepository.Schemas.TryGetValue(context.Type.Name, out _)
-                ? context.Type.Name : context.Type.Name)
+        switch (context.Type.Name)
         {
             case "RegisterIn":
             case "LoginIn":
@@ -218,6 +226,7 @@ public class DtoSchemaFilter : ISchemaFilter
             case "SendMessageIn":
                 Prop("text", s => { s.MinLength = 1; s.MaxLength = 4096; });
                 Prop("reply_to_id", s => s.Minimum = 1, required: false);
+                Prop("client_ref", s => { s.MaxLength = 64; }, required: false);
                 break;
             case "EditMessageIn":
                 Prop("text", s => { s.MinLength = 1; s.MaxLength = 4096; });
@@ -228,15 +237,14 @@ public class DtoSchemaFilter : ISchemaFilter
             case "ReactionIn":
                 Prop("emoji", s => { s.MinLength = 1; s.MaxLength = 32; });
                 break;
-            case "SettingsIn":
-                Prop("save_history", s => s.Nullable = false);
-                break;
             case "MessageOut":
-                Prop("content_state", s => s.Enum = [new OpenApiString("stored"), new OpenApiString("not_stored"), new OpenApiString("deleted")], required: true);
-                Prop("text", s => s.Nullable = true, required: true);
+                Prop("content_state", s => s.Enum =
+                    [new OpenApiString("stored"), new OpenApiString("not_stored"), new OpenApiString("deleted")]);
+                Prop("text", s => s.Nullable = true);
                 break;
             case "MemberOut":
-                Prop("role", s => s.Enum = [new OpenApiString("member"), new OpenApiString("admin"), new OpenApiString("owner")]);
+                Prop("role", s => s.Enum =
+                    [new OpenApiString("member"), new OpenApiString("admin"), new OpenApiString("owner")]);
                 break;
             case "DirectChatOut":
                 Prop("type", s => s.Enum = [new OpenApiString("direct")]);
@@ -244,18 +252,10 @@ public class DtoSchemaFilter : ISchemaFilter
             case "GroupChatOut":
                 Prop("type", s => s.Enum = [new OpenApiString("group")]);
                 break;
-            case "ErrorResponse":
-                Prop("code", s => { });
-                Prop("error", s => { });
-                Prop("details", s => { }, required: false);
-                Prop("trace_id", s => { });
-                break;
         }
 
-        // date-time для таймстампов в ответах
-        if (schema.Properties.Count > 0)
-            foreach (var (name, prop) in schema.Properties)
-                if ((name.EndsWith("_at") || name.EndsWith("_date")) && prop.Type == "string")
-                    prop.Format = "date-time";
+        foreach (var (name, prop) in schema.Properties)
+            if ((name.EndsWith("_at") || name.EndsWith("_date")) && prop.Type == "string")
+                prop.Format = "date-time";
     }
 }

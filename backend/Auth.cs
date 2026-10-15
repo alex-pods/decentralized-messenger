@@ -45,7 +45,11 @@ public static class Auth
     }
 }
 
-/// <summary>In-memory лимитер POST /auth/*: 30 запросов/мин с одного IP.</summary>
+/// <summary>
+/// In-memory лимитер POST /auth/*: не больше <c>limit</c> запросов за скользящее окно
+/// с одного IP. Скользящее окно (а не фиксированный сброс раз в минуту): медленная
+/// серия запросов по WAN больше не «проскакивает» лимит из‑за обнуления счётчика.
+/// </summary>
 public sealed class RateLimiter
 {
     private readonly ConcurrentDictionary<string, Bucket> _buckets = new();
@@ -53,19 +57,22 @@ public sealed class RateLimiter
     public bool Allow(string key, int limit, TimeSpan window)
     {
         var now = DateTime.UtcNow;
+        var cutoff = now - window;
         var b = _buckets.GetOrAdd(key, _ => new Bucket());
         lock (b)
         {
-            if (now - b.WindowStart > window) { b.WindowStart = now; b.Count = 0; }
-            b.Count++;
-            return b.Count <= limit;
+            while (b.Hits.Count > 0 && b.Hits.Peek() < cutoff)
+                b.Hits.Dequeue();
+            if (b.Hits.Count >= limit)
+                return false;
+            b.Hits.Enqueue(now);
+            return true;
         }
     }
 
     private sealed class Bucket
     {
-        public DateTime WindowStart { get; set; } = DateTime.UtcNow;
-        public int Count { get; set; }
+        public Queue<DateTime> Hits { get; } = new();
     }
 }
 

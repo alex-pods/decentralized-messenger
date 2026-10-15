@@ -2,7 +2,7 @@ name: backend-ci
 
 on:
   pull_request:
-    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+    paths: ["backend/**", "desktop/**", ".github/workflows/backend-ci.yml"]
   push:
     branches: ["feature-*"]
 
@@ -16,3 +16,5 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Сборка бэкенда
         run: dotnet build backend/MessengerBackend.csproj -c Release --nologo
+      - name: Сборка десктопа
+        run: dotnet build desktop/MessengerDesktop.csproj -c Release --nologo

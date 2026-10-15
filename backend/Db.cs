@@ -59,10 +59,6 @@ public static class Db
               created_at  TEXT NOT NULL,
               expires_at  TEXT NOT NULL
             );
-            CREATE TABLE IF NOT EXISTS user_settings(
-              user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-              save_history INTEGER NOT NULL DEFAULT 1
-            );
             CREATE TABLE IF NOT EXISTS chats(
               id         INTEGER PRIMARY KEY AUTOINCREMENT,
               type       VARCHAR(16) NOT NULL CHECK(type IN ('direct','group')),
@@ -128,9 +124,23 @@ public static class Db
                  {
                      "ALTER TABLE chat_members ADD COLUMN last_read_message_id INTEGER",
                      "ALTER TABLE chat_members ADD COLUMN read_at TEXT",
+                     "ALTER TABLE messages ADD COLUMN client_ref TEXT",
+                     "ALTER TABLE messages ADD COLUMN client_ref_payload TEXT",
                  })
             try { c.Execute(sql); }
             catch (SqliteException) { /* колонка уже есть */ }
+        // save_history удалён из модели: таблица настроек больше не нужна
+        try { c.Execute("DROP TABLE IF EXISTS user_settings"); }
+        catch (SqliteException) { /* нет прав/уже нет */ }
+        // индексы под частые запросы: список чатов по участнику, вложения/реакции сообщения,
+        // идемпотентность отправки (client_ref уникален в рамках отправителя)
+        c.Execute("""
+            CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id);
+            CREATE INDEX IF NOT EXISTS idx_attachments_msg ON attachments(message_id);
+            CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(message_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_sender_ref
+              ON messages(sender_id, client_ref) WHERE client_ref IS NOT NULL;
+            """);
     }
 
     /// <summary>SQLite — один писатель; записи сериализуются, читатели живут параллельно (WAL).</summary>
@@ -227,6 +237,8 @@ public class MessageRow
     public string? Edited_At { get; set; }
     public string? Read_At { get; set; }
     public string? Deleted_At { get; set; }
+    public string? Client_Ref { get; set; }
+    public string? Client_Ref_Payload { get; set; }
 }
 
 public class AttachmentRow

@@ -5,6 +5,7 @@ using System.Text.Json;
 
 namespace MessengerDesktop;
 
+/// <summary>REST-клиент backend v4. Авторизация только через Authorization: Bearer.</summary>
 public sealed class MessengerClient : IDisposable
 {
     public static readonly JsonSerializerOptions Json = new()
@@ -83,15 +84,6 @@ public sealed class MessengerClient : IDisposable
             ["bio"] = bio
         }, ct);
 
-    public async Task<SettingsDto> GetSettings(CancellationToken ct = default) =>
-        await Send<SettingsDto>(HttpMethod.Get, "users/me/settings", null, ct) ?? new SettingsDto { SaveHistory = true };
-
-    public Task UpdateSettings(bool saveHistory, CancellationToken ct = default) =>
-        Send(new HttpMethod("PATCH"), "users/me/settings", new Dictionary<string, object?>
-        {
-            ["save_history"] = saveHistory
-        }, ct);
-
     public async Task<List<ChatDto>> GetChats(CancellationToken ct = default) =>
         await Send<List<ChatDto>>(HttpMethod.Get, "chats", null, ct) ?? new();
 
@@ -147,17 +139,25 @@ public sealed class MessengerClient : IDisposable
             ["role"] = role
         }, ct);
 
-    public async Task<List<MessageDto>> GetMessages(long chatId, int limit = 50, long? beforeId = null, CancellationToken ct = default)
+    /// <summary>
+    /// История: before_id — страница назад; after_id — догон после reconnect (id строго больше курсора, по возрастанию).
+    /// </summary>
+    public async Task<List<MessageDto>> GetMessages(
+        long chatId, int limit = 50, long? beforeId = null, long? afterId = null, CancellationToken ct = default)
     {
         var path = $"chats/{chatId}/messages?limit={limit}";
-        if (beforeId is { } id) path += "&before_id=" + id;
+        if (beforeId is { } before) path += "&before_id=" + before;
+        if (afterId is { } after) path += "&after_id=" + after;
         return await Send<List<MessageDto>>(HttpMethod.Get, path, null, ct) ?? new();
     }
 
-    public async Task<long> SendMessage(long chatId, string text, long? replyToId = null, CancellationToken ct = default)
+    /// <summary>client_ref — идемпотентный ключ отправителя (до 64 символов), обычно Guid без дефисов.</summary>
+    public async Task<long> SendMessage(
+        long chatId, string text, long? replyToId = null, string? clientRef = null, CancellationToken ct = default)
     {
         var body = new Dictionary<string, object?> { ["text"] = text };
         if (replyToId is { } rid) body["reply_to_id"] = rid;
+        if (!string.IsNullOrWhiteSpace(clientRef)) body["client_ref"] = clientRef;
         var dto = await Send<MessageIdDto>(HttpMethod.Post, $"chats/{chatId}/messages", body, ct);
         return dto?.MessageId ?? throw new ApiException(500, "Сервер не вернул message_id");
     }
@@ -188,7 +188,7 @@ public sealed class MessengerClient : IDisposable
         using var res = await _http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
-            throw new ApiException((int)res.StatusCode, Extract(text, res.StatusCode));
+            throw ParseError(text, res.StatusCode);
         if (res.StatusCode == HttpStatusCode.NoContent || string.IsNullOrWhiteSpace(text))
             return default;
         return JsonSerializer.Deserialize<T>(text, Json);
@@ -197,15 +197,17 @@ public sealed class MessengerClient : IDisposable
     public async Task Send(HttpMethod method, string path, object? body, CancellationToken ct) =>
         await Send<object>(method, path, body, ct);
 
-    static string Extract(string body, HttpStatusCode status)
+    static ApiException ParseError(string body, HttpStatusCode status)
     {
         try
         {
             var err = JsonSerializer.Deserialize<ErrorDto>(body, Json);
-            if (!string.IsNullOrWhiteSpace(err?.Error)) return err.Error;
+            if (err != null && (!string.IsNullOrWhiteSpace(err.Error) || !string.IsNullOrWhiteSpace(err.Code)))
+                return new ApiException((int)status, err.Error ?? err.Code ?? $"Ошибка {(int)status}", err.Code);
         }
         catch { /* не JSON */ }
-        return string.IsNullOrWhiteSpace(body) ? $"Ошибка {(int)status}" : body;
+        return new ApiException((int)status,
+            string.IsNullOrWhiteSpace(body) ? $"Ошибка {(int)status}" : body);
     }
 
     public void Dispose() => _http.Dispose();

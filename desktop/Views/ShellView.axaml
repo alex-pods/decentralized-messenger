@@ -43,7 +43,7 @@
                   <TextBlock Text="{Binding Header}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                   <TextBlock Text="{Binding Status}" Classes="caption"/>
                 </StackPanel>
-                <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Настройки" Command="{Binding ShowSettingsCommand}">
+                <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Профиль" Command="{Binding ShowProfileCommand}">
                   <local:Glyph Data="{StaticResource IcSettings}"/>
                 </Button>
                 <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Выйти" Command="{Binding LogoutCommand}">
@@ -266,21 +266,16 @@
           </Grid>
 
           <StackPanel DockPanel.Dock="Top" Spacing="6"
-                      IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=settings}">
+                      IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}">
             <TextBlock Classes="field" Text="Имя"/>
             <TextBox Text="{Binding DisplayName}"/>
             <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>
             <TextBox Text="{Binding Bio}" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap"
                      VerticalContentAlignment="Top"/>
-            <Border Classes="group" Padding="14,12" Margin="0,10,0,0">
-              <StackPanel Spacing="4">
-                <CheckBox Content="Сохранять текст моих сообщений на сервере" IsChecked="{Binding SaveHistory}"/>
-                <TextBlock Classes="caption" TextWrapping="Wrap" Margin="28,0,0,0"
-                           Text="Если выключить, текст уходит только тем, кто сейчас онлайн. В истории останется заглушка."/>
-              </StackPanel>
-            </Border>
+            <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,8,0,0"
+                       Text="Сообщения всегда сохраняются на сервере."/>
             <Button Classes="accent large glow" Content="Сохранить" HorizontalAlignment="Right" Padding="26,0"
-                    Margin="0,14,0,0" Command="{Binding SaveSettingsCommand}"/>
+                    Margin="0,14,0,0" Command="{Binding SaveProfileCommand}"/>
           </StackPanel>
 
           <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12"

@@ -2,7 +2,7 @@
 Чёрный ящик v4: контракт MVP (без save_history, Bearer-only REST, идемпотентная отправка,
 legacy not_stored). Пишется по заданию рефакторинга и swagger.json, код сервера — чёрный ящик.
 """
-import json, socket, base64, os, sqlite3, struct, sys, threading, time, urllib.request, urllib.error, urllib.parse, uuid
+import concurrent.futures, json, socket, base64, os, sqlite3, struct, sys, threading, time, urllib.request, urllib.error, urllib.parse, uuid
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://176.53.160.4/messenger"
 WSHOST = sys.argv[2] if len(sys.argv) > 2 else "176.53.160.4"
@@ -459,10 +459,16 @@ chats200 = json.dumps(opspec("/chats", "get").get("responses", {}).get("200", {}
 check("spec: GET /chats имеет схему oneOf карточек", "DirectChatOut" in chats200 and "GroupChatOut" in chats200, chats200[:80])
 
 # ---------- rate limit ----------
-codes = [api("POST", "/auth/login", {"login": "rl" + SUF, "password": "x" * 12})[0] for _ in range(35)]
+# Параллельный burst: последовательные 35 логинов по WAN растягиваются >1 мин и
+# проскакивали фиксированное окно лимитера (только 401). Одновременные запросы
+# укладываются в окно и на старом, и на скользящем лимитере.
+def _rl_once(_):
+    return api("POST", "/auth/login", {"login": "rl" + SUF, "password": "x" * 12})[0]
+with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
+    codes = list(pool.map(_rl_once, range(40)))
 st, _, h = api("POST", "/auth/login", {"login": "rl" + SUF, "password": "x" * 12})
-check("rate limit 429 + Retry-After", 429 in codes and h.get("Retry-After") is not None,
-      f"{sorted(set(codes))} RA={h.get('Retry-After')}")
+check("rate limit 429 + Retry-After", 429 in codes + [st] and h.get("Retry-After") is not None,
+      f"{sorted(set(codes + [st]))} RA={h.get('Retry-After')}")
 
 print(f"\n===== ИТОГ: {len(PASSED)} passed, {len(FAILED)} failed =====")
 if FAILED:

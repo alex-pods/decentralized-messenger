@@ -48,9 +48,9 @@ public static class Preview
         await Shot(window, "members");
 
         await Dispatcher.UIThread.InvokeAsync(() => vm.CloseOverlayCommand.Execute(null));
-        await Dispatcher.UIThread.InvokeAsync(() => vm.ShowSettingsCommand.Execute(null));
+        await Dispatcher.UIThread.InvokeAsync(() => vm.ShowProfileCommand.Execute(null));
         await Task.Delay(1200);
-        await Shot(window, "settings");
+        await Shot(window, "profile");
 
         Dispatcher.UIThread.Post(() => window.Close());
     }

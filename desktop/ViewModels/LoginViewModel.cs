@@ -72,9 +72,10 @@ public partial class LoginViewModel : ObservableObject
         finally { Busy = false; }
     }
 
+    /// <summary>Текст для UI: у ApiException берём русский error; машинный code — в ApiException.Code.</summary>
     public static string Friendly(Exception ex) => ex switch
     {
-        ApiException a => a.Message,
+        ApiException a => string.IsNullOrWhiteSpace(a.Message) ? (a.Code ?? "Ошибка") : a.Message,
         HttpRequestException => "Нет соединения с сервером",
         TaskCanceledException => "Сервер не ответил",
         _ => ex.Message

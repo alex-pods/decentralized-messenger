@@ -6,6 +6,8 @@ public sealed class ErrorDto
 {
     [JsonPropertyName("code")] public string? Code { get; set; }
     [JsonPropertyName("error")] public string? Error { get; set; }
+    [JsonPropertyName("details")] public object? Details { get; set; }
+    [JsonPropertyName("trace_id")] public string? TraceId { get; set; }
 }
 
 public sealed class TokenDto
@@ -40,11 +42,6 @@ public sealed class ProfileDto
     [JsonPropertyName("bio")] public string? Bio { get; set; }
     [JsonPropertyName("join_date")] public string? JoinDate { get; set; }
     [JsonPropertyName("last_seen_at")] public string? LastSeenAt { get; set; }
-}
-
-public sealed class SettingsDto
-{
-    [JsonPropertyName("save_history")] public bool SaveHistory { get; set; }
 }
 
 public sealed class MessageDto
@@ -97,7 +94,9 @@ public sealed class WsEventDto
     [JsonPropertyName("last_read_message_id")] public long? LastReadMessageId { get; set; }
 }
 
-public sealed class ApiException(int status, string message) : Exception(message)
+/// <summary>Ошибка API v4: разбираем по машинному <see cref="Code"/>, текст <see cref="Exception.Message"/> — русский.</summary>
+public sealed class ApiException(int status, string message, string? code = null) : Exception(message)
 {
     public int Status { get; } = status;
+    public string? Code { get; } = code;
 }

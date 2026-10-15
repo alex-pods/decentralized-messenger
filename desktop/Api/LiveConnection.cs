@@ -6,18 +6,28 @@ namespace MessengerDesktop;
 
 public sealed class SessionRevokedException : Exception;
 
-/// <summary>WebSocket /ws: ping и follow(chat_id), события сервера.</summary>
+/// <summary>
+/// WebSocket /ws: ping и follow(chat_id).
+/// Close 4001/4002 — сессия отозвана/истекла; 4008 — slow consumer (переподключение + догон after_id).
+/// </summary>
 public sealed class LiveConnection : IDisposable
 {
+    public const int CloseSessionRevoked = 4001;
+    public const int CloseSessionExpired = 4002;
+    public const int CloseSlowConsumer = 4008;
+
     private readonly MessengerClient _api;
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _send = new(1, 1);
     private readonly HashSet<long> _followed = new();
     private ClientWebSocket? _ws;
+    private bool _everConnected;
 
     public event Action<WsEventDto>? Event;
     public event Action<string>? State;
     public event Action? SessionRevoked;
+    /// <summary>Сокет снова онлайн и follow восстановлены — клиент должен догнать историю через after_id.</summary>
+    public event Action? Reconnected;
 
     public LiveConnection(MessengerClient api) => _api = api;
 
@@ -49,7 +59,7 @@ public sealed class LiveConnection : IDisposable
             }
             catch
             {
-                /* обрыв — подождём и поднимем сокет снова */
+                /* обрыв / 4008 — подождём и поднимем сокет снова */
             }
             if (ct.IsCancellationRequested) return;
             State?.Invoke("переподключение…");
@@ -70,6 +80,10 @@ public sealed class LiveConnection : IDisposable
             lock (_followed) ids = _followed.ToArray();
             foreach (var id in ids)
                 await SendRaw(ws, new { action = "follow", chat_id = id }, ct);
+
+            if (_everConnected)
+                Reconnected?.Invoke();
+            _everConnected = true;
 
             using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var recv = ReceiveLoop(ws, stop.Token);
@@ -119,7 +133,9 @@ public sealed class LiveConnection : IDisposable
                 if (res.MessageType == WebSocketMessageType.Close)
                 {
                     var code = (int)(ws.CloseStatus ?? 0);
-                    if (code is 4001 or 4002) throw new SessionRevokedException();
+                    if (code is CloseSessionRevoked or CloseSessionExpired)
+                        throw new SessionRevokedException();
+                    // 4008 slow consumer и прочие — обычный reconnect
                     return;
                 }
                 ms.Write(buf, 0, res.Count);

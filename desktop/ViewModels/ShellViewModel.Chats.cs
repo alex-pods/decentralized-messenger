@@ -31,13 +31,18 @@ public partial class ShellViewModel
             await Ui(() =>
             {
                 _suppress = true;
-                Chats.Clear();
+                DisposeItems(Chats);
                 foreach (var c in list)
                 {
                     if (c.OtherUser != null) _names[c.OtherUser.Id] = c.OtherUser.DisplayName;
                     var item = MessageMapper.MapChat(c, _me.Id, NameOf);
                     item.Unread = unread.Contains(item.Id) && item.Id != selected;
                     Chats.Add(item);
+                    if (item.AvatarUserId is { } avatarUserId)
+                        _ = LoadAvatar(avatarUserId, image =>
+                        {
+                            if (Chats.Contains(item)) item.Avatar = CreateAvatar(image);
+                        });
                     _live.Follow(item.Id); // member_added/left приходят только по follow
                 }
                 _suppress = false;
@@ -48,7 +53,14 @@ public partial class ShellViewModel
     }
 
     [RelayCommand] void ShowDirect() { ResetSearch(); Overlay = "direct"; }
-    [RelayCommand] void ShowGroup() { ResetSearch(); GroupDraft.Clear(); GroupTitle = ""; Overlay = "group"; }
+    [RelayCommand]
+    void ShowGroup()
+    {
+        ResetSearch();
+        DisposeItems(GroupDraft, SearchResults);
+        GroupTitle = "";
+        Overlay = "group";
+    }
 
     [RelayCommand]
     async Task Search()
@@ -61,8 +73,15 @@ public partial class ShellViewModel
             var users = await _api.Search(q);
             await Ui(() =>
             {
-                SearchResults.Clear();
-                foreach (var u in users) SearchResults.Add(u);
+                DisposeItems(SearchResults, GroupDraft);
+                foreach (var u in users)
+                {
+                    SearchResults.Add(u);
+                    _ = LoadAvatar(u.Id, image =>
+                    {
+                        if (SearchResults.Contains(u) || GroupDraft.Contains(u)) u.Avatar = CreateAvatar(image);
+                    });
+                }
                 if (users.Count == 0) Error = "Никого не нашли";
             });
         }
@@ -98,7 +117,7 @@ public partial class ShellViewModel
     }
 
     [RelayCommand]
-    void RemoveDraft(UserCardDto user) => GroupDraft.Remove(user);
+    void RemoveDraft(UserCardDto user) => DisposeRemoved(GroupDraft, user, SearchResults);
 
     [RelayCommand]
     async Task CreateGroup()
@@ -128,7 +147,7 @@ public partial class ShellViewModel
             await Ui(() =>
             {
                 _suppress = true;
-                Chats.Remove(chat);
+                DisposeRemoved(Chats, chat);
                 SelectedChat = null;
                 _suppress = false;
                 Messages.Clear();
@@ -149,7 +168,7 @@ public partial class ShellViewModel
             await Ui(() =>
             {
                 _suppress = true;
-                Chats.Remove(chat);
+                DisposeRemoved(Chats, chat);
                 SelectedChat = null;
                 _suppress = false;
                 Messages.Clear();
@@ -163,7 +182,7 @@ public partial class ShellViewModel
         var chat = Chats.FirstOrDefault(c => c.Id == id);
         if (chat == null) return;
         _suppress = true;
-        Chats.Remove(chat);
+        DisposeRemoved(Chats, chat);
         if (SelectedChat?.Id == id)
         {
             SelectedChat = null;

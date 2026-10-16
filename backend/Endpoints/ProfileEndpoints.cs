@@ -12,6 +12,7 @@ public static class ProfileEndpoints
     {
         var filesRoot = AppCtx.FilesRootFromEnv();
         var hub = app.Services.GetRequiredService<Hub>();
+        var logger = app.Services.GetRequiredService<ILogger<Hub>>();
 
         app.MapGet("/users/me", (HttpContext ctx) =>
         {
@@ -101,10 +102,14 @@ public static class ProfileEndpoints
                 SELECT DISTINCT peer.user_id
                 FROM chat_members mine
                 JOIN chat_members peer ON peer.chat_id=mine.chat_id
-                WHERE mine.user_id=@u AND peer.user_id<>@u
-                """, new { u = me.Id }).ToArray());
-            await hub.PublishToUsers(peers,
-                new WsEvent("avatar_changed") { AlwaysDeliver = true, UserId = me.Id });
+                WHERE mine.user_id=@u
+                """, new { u = me.Id }).Append(me.Id).Distinct().ToArray());
+            var changed = new WsEvent("avatar_changed") { AlwaysDeliver = true, UserId = me.Id };
+            _ = Task.Run(async () =>
+            {
+                try { await hub.PublishToUsers(peers, changed); }
+                catch (Exception ex) { logger.LogWarning(ex, "Не удалось разослать событие смены аватара пользователя {UserId}", me.Id); }
+            });
             return result;
         })
         .WithTags("Avatars").WithName("uploadAvatar").WithSummary("Загрузка своего аватара")

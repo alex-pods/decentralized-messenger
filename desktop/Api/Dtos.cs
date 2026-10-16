@@ -28,7 +28,7 @@ public sealed class MessageIdDto
     [JsonPropertyName("message_id")] public long MessageId { get; set; }
 }
 
-public partial class UserCardDto : ObservableObject
+public partial class UserCardDto : ObservableObject, IDisposable
 {
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("tag")] public string Tag { get; set; } = "";
@@ -40,11 +40,17 @@ public partial class UserCardDto : ObservableObject
         get => _avatar;
         set
         {
+            var previous = _avatar;
             if (SetProperty(ref _avatar, value))
+            {
+                previous?.Dispose();
                 OnPropertyChanged(nameof(HasAvatar));
+            }
         }
     }
     public bool HasAvatar => Avatar is not null;
+
+    public void Dispose() => Avatar = null;
 }
 
 public sealed class ProfileDto

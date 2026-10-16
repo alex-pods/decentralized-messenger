@@ -3,7 +3,7 @@ using Avalonia.Media.Imaging;
 
 namespace MessengerDesktop;
 
-public partial class ChatItem : ObservableObject
+public partial class ChatItem : ObservableObject, IDisposable
 {
     public long Id { get; init; }
     public string Type { get; init; } = "";
@@ -17,7 +17,9 @@ public partial class ChatItem : ObservableObject
         get => _avatar;
         set
         {
+            var previous = _avatar;
             if (!SetProperty(ref _avatar, value)) return;
+            previous?.Dispose();
             OnPropertyChanged(nameof(HasAvatar));
             OnPropertyChanged(nameof(ShowInitial));
         }
@@ -26,6 +28,8 @@ public partial class ChatItem : ObservableObject
     [ObservableProperty] private bool _unread;
     public bool HasAvatar => Avatar is not null;
     public bool ShowInitial => !IsGroup && !HasAvatar;
+
+    public void Dispose() => Avatar = null;
 }
 
 public partial class MessageItem : ObservableObject
@@ -45,7 +49,7 @@ public partial class MessageItem : ObservableObject
     partial void OnReplyChanged(string value) => OnPropertyChanged(nameof(HasReply));
 }
 
-public partial class MemberRow : ObservableObject
+public partial class MemberRow : ObservableObject, IDisposable
 {
     public long Id { get; init; }
     public string Title { get; init; } = "";
@@ -55,8 +59,10 @@ public partial class MemberRow : ObservableObject
         get => _avatar;
         set
         {
-            if (SetProperty(ref _avatar, value))
-                OnPropertyChanged(nameof(HasAvatar));
+            var previous = _avatar;
+            if (!SetProperty(ref _avatar, value)) return;
+            previous?.Dispose();
+            OnPropertyChanged(nameof(HasAvatar));
         }
     }
     public string Role { get; init; } = "";
@@ -66,4 +72,6 @@ public partial class MemberRow : ObservableObject
     public bool CanPromote { get; init; }
     public bool CanTransfer { get; init; }
     public bool HasAvatar => Avatar is not null;
+
+    public void Dispose() => Avatar = null;
 }

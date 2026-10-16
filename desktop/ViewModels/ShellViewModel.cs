@@ -1,5 +1,6 @@
-using System.Collections.ObjectModel;
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
+using System.Net.Http;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -17,7 +18,8 @@ public partial class ShellViewModel : ObservableObject
     private readonly MessengerClient _api;
     private readonly LiveConnection _live;
     private readonly Dictionary<long, string> _names = new();
-    private readonly ConcurrentDictionary<long, Task<Bitmap?>> _avatarLoads = new();
+    private readonly object _avatarLoadsGate = new();
+    private readonly Dictionary<long, Task<byte[]?>> _avatarLoads = new();
     private readonly ConcurrentDictionary<long, int> _avatarVersions = new();
     private ProfileDto _me;
     private string _myRole = "";
@@ -42,9 +44,18 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _groupTitle = "";
     [ObservableProperty] private string _displayName = "";
     [ObservableProperty] private string _bio = "";
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasAvatar))]
     private Bitmap? _avatar;
+    public Bitmap? Avatar
+    {
+        get => _avatar;
+        set
+        {
+            var previous = _avatar;
+            if (!SetProperty(ref _avatar, value)) return;
+            previous?.Dispose();
+            OnPropertyChanged(nameof(HasAvatar));
+        }
+    }
     [ObservableProperty] private bool _hasMore;
 
     [ObservableProperty]
@@ -109,7 +120,7 @@ public partial class ShellViewModel : ObservableObject
         Header = $"{me.DisplayName}  @{me.Tag}";
         DisplayName = me.DisplayName;
         Bio = me.Bio ?? "";
-        _ = LoadAvatar(me.Id, image => Avatar = image);
+        _ = LoadAvatar(me.Id, bytes => Avatar = CreateAvatar(bytes));
         _live = new LiveConnection(api);
         _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));
         _live.State += s => Dispatcher.UIThread.Post(() => Status = s);
@@ -135,6 +146,11 @@ public partial class ShellViewModel : ObservableObject
         _closed = true;
         _live.Dispose();
         _api.Dispose();
+        DisposeItems(Chats);
+        DisposeItems(SearchResults, GroupDraft);
+        DisposeItems(GroupDraft, SearchResults);
+        DisposeItems(Members);
+        Avatar = null;
         SessionStore.Clear();
         _nav.Go(new LoginViewModel(_nav, _api.ServerBase, error));
     }
@@ -142,7 +158,7 @@ public partial class ShellViewModel : ObservableObject
     void ResetSearch()
     {
         SearchQuery = "";
-        SearchResults.Clear();
+        DisposeItems(SearchResults, GroupDraft);
     }
 
     string NameOf(long id) => id == _me.Id ? "Вы" : _names.TryGetValue(id, out var n) ? n : "#" + id;
@@ -151,43 +167,80 @@ public partial class ShellViewModel : ObservableObject
 
     static Task Ui(Action action) => Dispatcher.UIThread.InvokeAsync(action).GetTask();
 
-    async Task LoadAvatar(long userId, Action<Bitmap?> apply)
+    async Task LoadAvatar(long userId, Action<byte[]?> apply)
     {
         var version = _avatarVersions.GetOrAdd(userId, 0);
         try
         {
-            var image = await _avatarLoads.GetOrAdd(userId, FetchAvatar);
+            var bytes = await GetAvatarBytes(userId);
             await Ui(() =>
             {
-                if (_avatarVersions.GetOrAdd(userId, 0) == version) apply(image);
+                if (!_closed && _avatarVersions.GetOrAdd(userId, 0) == version)
+                    apply(bytes);
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is HttpRequestException or ApiException or TaskCanceledException
+                                   or IOException or ArgumentException or InvalidOperationException)
         {
-            await Ui(() => Error = Friendly(ex));
+            // Avatar reads are optional; keep the initials visible when a background request fails.
         }
     }
 
-    async Task<Bitmap?> FetchAvatar(long userId)
+    Task<byte[]?> GetAvatarBytes(long userId)
     {
-        var bytes = await _api.GetAvatar(userId);
-        if (bytes is null) return null;
-        using var stream = new MemoryStream(bytes);
-        return new Bitmap(stream);
+        lock (_avatarLoadsGate)
+        {
+            if (_avatarLoads.TryGetValue(userId, out var existing)) return existing;
+            var load = _api.GetAvatar(userId);
+            _avatarLoads[userId] = load;
+            _ = load.ContinueWith(completed =>
+            {
+                lock (_avatarLoadsGate)
+                {
+                    if (_avatarLoads.TryGetValue(userId, out var current) && ReferenceEquals(current, load))
+                        _avatarLoads.Remove(userId);
+                }
+                _ = completed.Exception;
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            return load;
+        }
     }
 
-    void RefreshAvatar(long userId, Bitmap? image)
+    void RefreshAvatar(long userId, byte[]? bytes)
     {
-        foreach (var chat in Chats.Where(c => c.AvatarUserId == userId)) chat.Avatar = image;
-        foreach (var user in SearchResults.Concat(GroupDraft).Where(u => u.Id == userId)) user.Avatar = image;
-        foreach (var member in Members.Where(m => m.Id == userId)) member.Avatar = image;
-        if (userId == _me.Id) Avatar = image;
+        foreach (var chat in Chats.Where(c => c.AvatarUserId == userId)) chat.Avatar = CreateAvatar(bytes);
+        foreach (var user in SearchResults.Concat(GroupDraft).Where(u => u.Id == userId)) user.Avatar = CreateAvatar(bytes);
+        foreach (var member in Members.Where(m => m.Id == userId)) member.Avatar = CreateAvatar(bytes);
+        if (userId == _me.Id) Avatar = CreateAvatar(bytes);
     }
 
     void InvalidateAvatar(long userId)
     {
         _avatarVersions.AddOrUpdate(userId, 1, (_, version) => version + 1);
-        _avatarLoads.TryRemove(userId, out _);
+        lock (_avatarLoadsGate) _avatarLoads.Remove(userId);
+    }
+
+    static Bitmap? CreateAvatar(byte[]? bytes)
+    {
+        if (bytes is null) return null;
+        using var stream = new MemoryStream(bytes);
+        return new Bitmap(stream);
+    }
+
+    static void DisposeItems<T>(ObservableCollection<T> items, params IEnumerable<T>[] survivors)
+    {
+        var oldItems = items.ToArray();
+        items.Clear();
+        foreach (var item in oldItems)
+            if (!survivors.Any(collection => collection.Contains(item)) && item is IDisposable disposable)
+                disposable.Dispose();
+    }
+
+    static void DisposeRemoved<T>(ObservableCollection<T> items, T item, params IEnumerable<T>[] survivors)
+    {
+        items.Remove(item);
+        if (!survivors.Any(collection => collection.Contains(item)) && item is IDisposable disposable)
+            disposable.Dispose();
     }
 
     string Friendly(Exception ex) => LoginViewModel.Friendly(ex);

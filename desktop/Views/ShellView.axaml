@@ -99,7 +99,7 @@
                            IsVisible="{Binding SelectedChat.HasAvatar}"/>
                     <TextBlock Classes="avatarText" FontSize="15"
                                Text="{Binding SelectedChat.Title, Converter={StaticResource Initial}}"
-                               IsVisible="{Binding SelectedChat.ShowInitial, FallbackValue=True}"/>
+                               IsVisible="{Binding SelectedChat.ShowInitial}"/>
                     <local:Glyph Data="{StaticResource IcGroup}" Width="19" Height="19" StrokeWidth="1.8"
                                  Foreground="White" IsVisible="{Binding IsGroup}"/>
                   </Panel>

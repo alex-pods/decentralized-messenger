@@ -51,15 +51,17 @@ public partial class ShellViewModel
         try
         {
             Error = null;
+            var file = new FileInfo(filePath);
+            if (!file.Exists) { Error = "Файл не найден"; return; }
+            if (file.Length > 5_000_000) { Error = "Аватар не должен быть больше 5 МБ"; return; }
             await _api.UploadAvatar(filePath);
             InvalidateAvatar(_me.Id);
-            var image = await _avatarLoads.GetOrAdd(_me.Id, FetchAvatar);
             var me = await _api.GetMe();
             await Ui(() =>
             {
                 _me = me;
-                RefreshAvatar(me.Id, image);
             });
+            await LoadAvatar(me.Id, bytes => RefreshAvatar(me.Id, bytes));
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }

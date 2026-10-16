@@ -24,7 +24,7 @@ public partial class ShellViewModel
         var staff = myRole is "owner" or "admin";
         await Ui(() =>
         {
-            Members.Clear();
+            DisposeItems(Members);
             foreach (var m in members)
             {
                 _names[m.Id] = m.DisplayName;
@@ -42,7 +42,7 @@ public partial class ShellViewModel
                 _ = LoadAvatar(m.Id, image =>
                 {
                     var row = Members.FirstOrDefault(x => x.Id == m.Id);
-                    if (row != null) row.Avatar = image;
+                    if (row != null) row.Avatar = CreateAvatar(image);
                 });
             }
             OnPropertyChanged(nameof(CanDeleteEveryone));

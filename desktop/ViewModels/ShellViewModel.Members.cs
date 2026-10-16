@@ -39,6 +39,11 @@ public partial class ShellViewModel
                     CanPromote = owner && m.Id != _me.Id && m.Role != "owner",
                     CanTransfer = owner && m.Id != _me.Id
                 });
+                _ = LoadAvatar(m.Id, image =>
+                {
+                    var row = Members.FirstOrDefault(x => x.Id == m.Id);
+                    if (row != null) row.Avatar = image;
+                });
             }
             OnPropertyChanged(nameof(CanDeleteEveryone));
         });

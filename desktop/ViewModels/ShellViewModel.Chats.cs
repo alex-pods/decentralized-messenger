@@ -38,6 +38,8 @@ public partial class ShellViewModel
                     var item = MessageMapper.MapChat(c, _me.Id, NameOf);
                     item.Unread = unread.Contains(item.Id) && item.Id != selected;
                     Chats.Add(item);
+                    if (item.AvatarUserId is { } avatarUserId)
+                        _ = LoadAvatar(avatarUserId, image => item.Avatar = image);
                     _live.Follow(item.Id); // member_added/left приходят только по follow
                 }
                 _suppress = false;
@@ -62,7 +64,11 @@ public partial class ShellViewModel
             await Ui(() =>
             {
                 SearchResults.Clear();
-                foreach (var u in users) SearchResults.Add(u);
+                foreach (var u in users)
+                {
+                    SearchResults.Add(u);
+                    _ = LoadAvatar(u.Id, image => u.Avatar = image);
+                }
                 if (users.Count == 0) Error = "Никого не нашли";
             });
         }

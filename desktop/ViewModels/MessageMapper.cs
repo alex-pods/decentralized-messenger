@@ -35,6 +35,7 @@ public static class MessageMapper
             Id = c.Id,
             Type = c.Type,
             Title = title,
+            AvatarUserId = c.Type == "direct" ? c.OtherUser?.Id : null,
             Kind = c.Type == "group" ? "Группа" : "Личный чат",
             Preview = c.LastMessage is null ? "Нет сообщений" : Preview(c.LastMessage, myId, nameOf)
         };

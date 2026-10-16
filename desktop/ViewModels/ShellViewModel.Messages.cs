@@ -207,6 +207,10 @@ public partial class ShellViewModel
             case "chat_deleted":
                 _ = ReloadChats();
                 break;
+            case "avatar_changed" when e.UserId is { } userId:
+                InvalidateAvatar(userId);
+                _ = LoadAvatar(userId, image => RefreshAvatar(userId, image));
+                break;
             case "member_removed":
             case "member_left":
                 if (e.UserId == _me.Id && e.ChatId is { } left)

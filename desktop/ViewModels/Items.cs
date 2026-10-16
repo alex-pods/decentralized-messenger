@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia.Media.Imaging;
 
 namespace MessengerDesktop;
 
@@ -9,8 +10,22 @@ public partial class ChatItem : ObservableObject
     public string Title { get; init; } = "";
     public string Kind { get; init; } = "";
     public bool IsGroup => Type == "group";
+    public long? AvatarUserId { get; init; }
+    private Bitmap? _avatar;
+    public Bitmap? Avatar
+    {
+        get => _avatar;
+        set
+        {
+            if (!SetProperty(ref _avatar, value)) return;
+            OnPropertyChanged(nameof(HasAvatar));
+            OnPropertyChanged(nameof(ShowInitial));
+        }
+    }
     [ObservableProperty] private string _preview = "";
     [ObservableProperty] private bool _unread;
+    public bool HasAvatar => Avatar is not null;
+    public bool ShowInitial => !IsGroup && !HasAvatar;
 }
 
 public partial class MessageItem : ObservableObject
@@ -34,10 +49,21 @@ public partial class MemberRow : ObservableObject
 {
     public long Id { get; init; }
     public string Title { get; init; } = "";
+    private Bitmap? _avatar;
+    public Bitmap? Avatar
+    {
+        get => _avatar;
+        set
+        {
+            if (SetProperty(ref _avatar, value))
+                OnPropertyChanged(nameof(HasAvatar));
+        }
+    }
     public string Role { get; init; } = "";
     public string RoleLabel { get; init; } = "";
     public string PromoteLabel { get; init; } = "";
     public bool CanKick { get; init; }
     public bool CanPromote { get; init; }
     public bool CanTransfer { get; init; }
+    public bool HasAvatar => Avatar is not null;
 }

@@ -1,6 +1,7 @@
 using System.Data;
 using Dapper;
 using MessengerBackend.Core;
+using MessengerBackend.Hubs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MessengerBackend.Endpoints;
@@ -10,6 +11,7 @@ public static class ProfileEndpoints
     public static void MapProfileEndpoints(this WebApplication app)
     {
         var filesRoot = AppCtx.FilesRootFromEnv();
+        var hub = app.Services.GetRequiredService<Hub>();
 
         app.MapGet("/users/me", (HttpContext ctx) =>
         {
@@ -89,11 +91,21 @@ public static class ProfileEndpoints
                 return Errors.Err(400, $"invalid_avatar: {reason}", "invalid_avatar");
             var rel = $"avatars/u{me.Id}_{Guid.NewGuid():N}{Files.SafeExtension(file.FileName)}";
             await File.WriteAllBytesAsync(Files.AvatarAbsPath(filesRoot, rel), data);
-            return Db.Write<IResult>(c =>
+            var result = Db.Write<IResult>(c =>
             {
                 c.Execute("UPDATE users SET path_to_avatar_file=@p WHERE id=@u", new { p = rel, u = me.Id });
                 return Results.Json(new { path_to_avatar_file = rel }, statusCode: 201);
             });
+            var peers = Db.Read(c => c.Query<long>(
+                """
+                SELECT DISTINCT peer.user_id
+                FROM chat_members mine
+                JOIN chat_members peer ON peer.chat_id=mine.chat_id
+                WHERE mine.user_id=@u AND peer.user_id<>@u
+                """, new { u = me.Id }).ToArray());
+            await hub.PublishToUsers(peers,
+                new WsEvent("avatar_changed") { AlwaysDeliver = true, UserId = me.Id });
+            return result;
         })
         .WithTags("Avatars").WithName("uploadAvatar").WithSummary("Загрузка своего аватара")
         .WithDescription("multipart/form-data, поле file (один файл, до 5 МБ → 413). Содержимое проверяется " +

@@ -45,4 +45,22 @@ public partial class ShellViewModel
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }
+
+    public async Task UploadAvatarAsync(string filePath)
+    {
+        try
+        {
+            Error = null;
+            await _api.UploadAvatar(filePath);
+            InvalidateAvatar(_me.Id);
+            var image = await _avatarLoads.GetOrAdd(_me.Id, FetchAvatar);
+            var me = await _api.GetMe();
+            await Ui(() =>
+            {
+                _me = me;
+                RefreshAvatar(me.Id, image);
+            });
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+    }
 }

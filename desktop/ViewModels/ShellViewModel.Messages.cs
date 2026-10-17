@@ -159,6 +159,22 @@ public partial class ShellViewModel
     }
 
     [RelayCommand]
+    async Task ToggleReaction(string? emoji)
+    {
+        var msg = SelectedMessage;
+        if (msg == null || msg.IsDeleted || string.IsNullOrEmpty(emoji)) return;
+        var had = msg.MyReactions.Contains(emoji);
+        try
+        {
+            Error = null;
+            if (had) await _api.RemoveReaction(msg.Id, emoji);
+            else await _api.AddReaction(msg.Id, emoji);
+            msg.ApplyReaction(emoji, _me.Id, add: !had);
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+    }
+
+    [RelayCommand]
     async Task DeleteForEveryone()
     {
         if (SelectedMessage == null || !CanDeleteEveryone) return;
@@ -220,6 +236,12 @@ public partial class ShellViewModel
                 if (e.ChatId == SelectedChat?.Id && Overlay == "members")
                     _ = LoadMembersPanel();
                 break;
+            case "reaction_added":
+            case "reaction_removed":
+                if (e.ChatId == SelectedChat?.Id && e.MessageId is { } mid && e.UserId is { } uid
+                    && !string.IsNullOrEmpty(e.Emoji))
+                    Messages.FirstOrDefault(m => m.Id == mid)?.ApplyReaction(e.Emoji, uid, add: e.Type == "reaction_added");
+                break;
             case "read":
                 if (SelectedChat is { } open && e.ChatId == open.Id && open.Type != "group"
                     && e.UserId != _me.Id && e.LastReadMessageId is { } upto)
@@ -265,6 +287,7 @@ public partial class ShellViewModel
             existing.Reply = fresh.Reply;
             existing.IsDeleted = fresh.IsDeleted;
             existing.IsNotStored = fresh.IsNotStored;
+            existing.SetReactions(fresh.ReactionUsers);
         }
     }
 

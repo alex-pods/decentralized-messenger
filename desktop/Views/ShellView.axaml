@@ -168,7 +168,6 @@
               </StackPanel>
 
               <ListBox x:Name="Log" Classes="log" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
-                      PointerPressed="OnLogPressed"
                       Background="Transparent"
                       Padding="0,16,0,10" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       IsVisible="{Binding HasChat}">

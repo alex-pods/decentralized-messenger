@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-
+using Avalonia.Interactivity;
 
 namespace MessengerDesktop.Views;
 
@@ -14,6 +14,7 @@ public partial class ShellView : UserControl
     {
         InitializeComponent();
         DataContextChanged += (_, _) => Hook();
+        this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
     }
 
     void Hook()
@@ -44,11 +45,24 @@ public partial class ShellView : UserControl
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.Source is not Control src) return;
-
-        if (src.FindAncestorOfType<ListBoxItem>() != null) return;
         if (src.FindAncestorOfType<ScrollBar>() != null) return;
+
+        bool isBubble = false;
+        for (Control? v = src; v != null; v = v.GetVisualParent() as Control)
+        {
+            if (v is Border b && b.Classes.Contains("bubble")) 
+            { 
+                isBubble = true; 
+                break; 
+            }
+            if (v is ListBoxItem) break; // дошли до строки, пузырь не найден
+        }
+
+        if (isBubble) return;
 
         if (DataContext is ShellViewModel vm)
             vm.SelectedMessage = null;
+
+        e.Handled = true;
     }
 }

@@ -4,6 +4,31 @@
              xmlns:local="using:MessengerDesktop"
              x:Class="MessengerDesktop.Views.ShellView"
              x:Name="Root">
+  <UserControl.Resources>
+    <StreamGeometry x:Key="IcSmilePlus">M22 11v1a10 10 0 1 1-9-10 M8 14s1.5 2 4 2 4-2 4-2 M8 9a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0Z M15 9a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0Z M16 5h6 M19 2v6</StreamGeometry>
+  </UserControl.Resources>
+  <UserControl.Styles>
+    <Style Selector="Border.reaction">
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="7,3"/>
+      <Setter Property="Margin" Value="0,0,5,3"/>
+      <Setter Property="Background" Value="#1FFFFFFF"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="Border.reaction:pointerover">
+      <Setter Property="Background" Value="#33FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#40FFFFFF"/>
+    </Style>
+    <Style Selector="Border.reaction.active">
+      <Setter Property="Background" Value="#CC34D399"/>
+      <Setter Property="BorderBrush" Value="#FF6EE7B7"/>
+    </Style>
+    <Style Selector="Border.reaction.active:pointerover">
+      <Setter Property="Background" Value="#E634D399"/>
+      <Setter Property="BorderBrush" Value="#FFFFFFFF"/>
+    </Style>
+  </UserControl.Styles>
   <Panel>
     <Panel Classes="backdrop" Classes.blurred="{Binding OverlayOpen}">
       <Grid ColumnDefinitions="310,*" Margin="10">
@@ -143,8 +168,9 @@
               </StackPanel>
 
               <ListBox x:Name="Log" Classes="log" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
-                       Padding="0,16,0,10" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                       IsVisible="{Binding HasChat}">
+                      Background="Transparent"
+                      Padding="0,16,0,10" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      IsVisible="{Binding HasChat}">
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <Border Classes="bubble" Classes.mine="{Binding Mine}"
@@ -170,6 +196,23 @@
                         </Border>
                         <TextBlock Text="{Binding Text}" FontSize="13.5" LineHeight="19" TextWrapping="Wrap"
                                    Foreground="White" Classes.deleted="{Binding IsDeleted}"/>
+                        <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}" Margin="0,3,0,0">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <WrapPanel/>
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                  <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
+                                  <TextBlock Text="{Binding Count}" FontSize="12" Foreground="White" VerticalAlignment="Center"/>
+                                </StackPanel>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <TextBlock Text="{Binding Meta}" FontSize="10.5" Opacity="0.6" Foreground="White"
                                    HorizontalAlignment="Right"/>
                       </StackPanel>
@@ -187,9 +230,53 @@
               </Button>
             </Panel>
 
-            <Border Grid.Row="2" Classes="capsule" HorizontalAlignment="Center" Margin="16,6,16,0"
-                    BoxShadow="0 10 30 0 #66000000" IsVisible="{Binding HasMessageActions}">
+            <StackPanel Grid.Row="2" Spacing="6" HorizontalAlignment="Center" Margin="16,6,16,0"
+            IsVisible="{Binding HasMessageActions}">
+
+            <!-- Остальные реакции (раскрываются по кнопке «+») -->
+            <Border Classes="capsule" HorizontalAlignment="Center" BoxShadow="0 10 30 0 #66000000"
+                    IsVisible="{Binding ShowMoreReactions}">
+              <ItemsControl ItemsSource="{Binding MoreReactions}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Button Classes="toolbar"
+                            Command="{Binding DataContext.ToggleReactionCommand, ElementName=Root}"
+                            CommandParameter="{Binding}">
+                      <local:ReactionIcon Emoji="{Binding}" Width="18" Height="18"/>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+
+            <!-- Основная панель -->
+            <Border Classes="capsule" HorizontalAlignment="Center" BoxShadow="0 10 30 0 #66000000">
               <StackPanel Orientation="Horizontal">
+                <ItemsControl ItemsSource="{Binding QuickReactions}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Classes="toolbar"
+                              Command="{Binding DataContext.ToggleReactionCommand, ElementName=Root}"
+                              CommandParameter="{Binding}">
+                        <local:ReactionIcon Emoji="{Binding}" Width="18" Height="18"/>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Classes="toolbar" ToolTip.Tip="Ещё реакции" Command="{Binding ToggleMoreReactionsCommand}">
+                  <local:Glyph Data="{StaticResource IcSmilePlus}" Width="16" Height="16"/>
+                </Button>
+                <Border Width="1" Margin="4,8" Background="#26FFFFFF"/>
                 <Button Classes="toolbar" Command="{Binding ReplyCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <local:Glyph Data="{StaticResource IcReply}" Width="14" Height="14"/>
@@ -217,6 +304,7 @@
                 </Button>
               </StackPanel>
             </Border>
+          </StackPanel>
 
             <StackPanel Grid.Row="3" Margin="16,10,16,16" Spacing="8" IsVisible="{Binding HasChat}">
               <Border Classes="glass" CornerRadius="14" Padding="10,7" IsVisible="{Binding HasComposeHint}">

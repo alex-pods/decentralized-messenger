@@ -57,6 +57,7 @@ public sealed class MessageDto
     [JsonPropertyName("edited_at")] public string? EditedAt { get; set; }
     [JsonPropertyName("read_at")] public string? ReadAt { get; set; }
     [JsonPropertyName("deleted_at")] public string? DeletedAt { get; set; }
+    [JsonPropertyName("reactions")] public List<ReactionDto>? Reactions { get; set; }
 }
 
 public sealed class MemberDto
@@ -99,4 +100,10 @@ public sealed class ApiException(int status, string message, string? code = null
 {
     public int Status { get; } = status;
     public string? Code { get; } = code;
+}
+
+public sealed class ReactionDto
+{
+    [JsonPropertyName("emoji")] public string? Emoji { get; set; }
+    [JsonPropertyName("user_ids")] public List<long>? UserIds { get; set; }
 }

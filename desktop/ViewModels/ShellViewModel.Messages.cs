@@ -150,12 +150,43 @@ public partial class ShellViewModel
     [RelayCommand] void Reply() { if (SelectedMessage != null) { Editing = null; ReplyTo = SelectedMessage; } }
     [RelayCommand] void BeginEdit() { if (CanEdit && SelectedMessage != null) { ReplyTo = null; Editing = SelectedMessage; Draft = SelectedMessage.Text; } }
     [RelayCommand] void CancelCompose() { ReplyTo = null; Editing = null; }
+    [RelayCommand] void ToggleMoreReactions() => ShowMoreReactions = !ShowMoreReactions;
+
+    partial void OnSelectedMessageChanged(MessageItem? value) => ShowMoreReactions = false;
 
     [RelayCommand]
     async Task DeleteForMe()
     {
         if (SelectedMessage == null) return;
         await Delete(SelectedMessage.Id, false);
+    }
+
+    private bool _reactionBusy;
+
+    [RelayCommand]
+    async Task ToggleReaction(string? emoji)
+    {
+        await ToggleReactionFor(SelectedMessage, emoji);
+        ShowMoreReactions = false;
+    }
+
+    [RelayCommand]
+    Task ToggleChip(ReactionChip? chip) => ToggleReactionFor(chip?.Message, chip?.Emoji);
+
+    async Task ToggleReactionFor(MessageItem? msg, string? emoji)
+    {
+        if (msg == null || msg.IsDeleted || string.IsNullOrEmpty(emoji) || _reactionBusy) return;
+        _reactionBusy = true;
+        try
+        {
+            Error = null;
+            var had = msg.MyReactions.Contains(emoji);
+            if (had) await _api.RemoveReaction(msg.Id, emoji);
+            else await _api.AddReaction(msg.Id, emoji);
+            msg.ApplyReaction(emoji, _me.Id, add: !had);
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+        finally { _reactionBusy = false; }
     }
 
     [RelayCommand]
@@ -220,6 +251,12 @@ public partial class ShellViewModel
                 if (e.ChatId == SelectedChat?.Id && Overlay == "members")
                     _ = LoadMembersPanel();
                 break;
+            case "reaction_added":
+            case "reaction_removed":
+                if (e.ChatId == SelectedChat?.Id && e.MessageId is { } mid && e.UserId is { } uid
+                    && !string.IsNullOrEmpty(e.Emoji))
+                    Messages.FirstOrDefault(m => m.Id == mid)?.ApplyReaction(e.Emoji, uid, add: e.Type == "reaction_added");
+                break;
             case "read":
                 if (SelectedChat is { } open && e.ChatId == open.Id && open.Type != "group"
                     && e.UserId != _me.Id && e.LastReadMessageId is { } upto)
@@ -265,6 +302,7 @@ public partial class ShellViewModel
             existing.Reply = fresh.Reply;
             existing.IsDeleted = fresh.IsDeleted;
             existing.IsNotStored = fresh.IsNotStored;
+            existing.SetReactions(fresh.ReactionUsers);
         }
     }
 

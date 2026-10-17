@@ -150,6 +150,9 @@ public partial class ShellViewModel
     [RelayCommand] void Reply() { if (SelectedMessage != null) { Editing = null; ReplyTo = SelectedMessage; } }
     [RelayCommand] void BeginEdit() { if (CanEdit && SelectedMessage != null) { ReplyTo = null; Editing = SelectedMessage; Draft = SelectedMessage.Text; } }
     [RelayCommand] void CancelCompose() { ReplyTo = null; Editing = null; }
+    [RelayCommand] void ToggleMoreReactions() => ShowMoreReactions = !ShowMoreReactions;
+
+    partial void OnSelectedMessageChanged(MessageItem? value) => ShowMoreReactions = false;
 
     [RelayCommand]
     async Task DeleteForMe()
@@ -170,6 +173,7 @@ public partial class ShellViewModel
             if (had) await _api.RemoveReaction(msg.Id, emoji);
             else await _api.AddReaction(msg.Id, emoji);
             msg.ApplyReaction(emoji, _me.Id, add: !had);
+            ShowMoreReactions = false;
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }

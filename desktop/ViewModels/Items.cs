@@ -59,7 +59,13 @@ public partial class MessageItem : ObservableObject
         MyReactions = ReactionUsers.Where(kv => kv.Value.Contains(MyId)).Select(kv => kv.Key).ToHashSet();
         Chips = ReactionUsers
             .OrderBy(kv => kv.Key, StringComparer.Ordinal)
-            .Select(kv => new ReactionChip { Emoji = kv.Key, Count = kv.Value.Count, Mine = kv.Value.Contains(MyId) })
+            .Select(kv => new ReactionChip
+            {
+                Emoji = kv.Key,
+                Count = kv.Value.Count,
+                Mine = kv.Value.Contains(MyId),
+                Message = this
+            })
             .ToList();
     }
 }
@@ -81,4 +87,5 @@ public sealed class ReactionChip
     public string Emoji { get; init; } = "";
     public int Count { get; init; }
     public bool Mine { get; init; }
+    public MessageItem Message { get; init; } = null!;
 }

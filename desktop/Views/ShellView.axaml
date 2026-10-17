@@ -16,9 +16,17 @@
       <Setter Property="BorderBrush" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="1"/>
     </Style>
+    <Style Selector="Border.reaction:pointerover">
+      <Setter Property="Background" Value="#33FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#40FFFFFF"/>
+    </Style>
     <Style Selector="Border.reaction.active">
-      <Setter Property="Background" Value="#40A78BFA"/>
-      <Setter Property="BorderBrush" Value="#B3A78BFA"/>
+      <Setter Property="Background" Value="#CC34D399"/>
+      <Setter Property="BorderBrush" Value="#FF6EE7B7"/>
+    </Style>
+    <Style Selector="Border.reaction.active:pointerover">
+      <Setter Property="Background" Value="#E634D399"/>
+      <Setter Property="BorderBrush" Value="#FFFFFFFF"/>
     </Style>
   </UserControl.Styles>
   <Panel>
@@ -160,8 +168,10 @@
               </StackPanel>
 
               <ListBox x:Name="Log" Classes="log" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}"
-                       Padding="0,16,0,10" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                       IsVisible="{Binding HasChat}">
+                      PointerPressed="OnLogPressed"
+                      Background="Transparent"
+                      Padding="0,16,0,10" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      IsVisible="{Binding HasChat}">
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <Border Classes="bubble" Classes.mine="{Binding Mine}"
@@ -195,7 +205,7 @@
                           </ItemsControl.ItemsPanel>
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                              <Border Classes="reaction" Classes.active="{Binding Mine}">
+                              <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
                                 <StackPanel Orientation="Horizontal" Spacing="5">
                                   <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
                                   <TextBlock Text="{Binding Count}" FontSize="12" Foreground="White" VerticalAlignment="Center"/>

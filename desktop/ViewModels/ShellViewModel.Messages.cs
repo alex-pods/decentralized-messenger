@@ -161,21 +161,32 @@ public partial class ShellViewModel
         await Delete(SelectedMessage.Id, false);
     }
 
+    private bool _reactionBusy;
+
     [RelayCommand]
     async Task ToggleReaction(string? emoji)
     {
-        var msg = SelectedMessage;
-        if (msg == null || msg.IsDeleted || string.IsNullOrEmpty(emoji)) return;
-        var had = msg.MyReactions.Contains(emoji);
+        await ToggleReactionFor(SelectedMessage, emoji);
+        ShowMoreReactions = false;
+    }
+
+    [RelayCommand]
+    Task ToggleChip(ReactionChip? chip) => ToggleReactionFor(chip?.Message, chip?.Emoji);
+
+    async Task ToggleReactionFor(MessageItem? msg, string? emoji)
+    {
+        if (msg == null || msg.IsDeleted || string.IsNullOrEmpty(emoji) || _reactionBusy) return;
+        _reactionBusy = true;
         try
         {
             Error = null;
+            var had = msg.MyReactions.Contains(emoji);
             if (had) await _api.RemoveReaction(msg.Id, emoji);
             else await _api.AddReaction(msg.Id, emoji);
             msg.ApplyReaction(emoji, _me.Id, add: !had);
-            ShowMoreReactions = false;
         }
         catch (Exception ex) { Error = Friendly(ex); }
+        finally { _reactionBusy = false; }
     }
 
     [RelayCommand]

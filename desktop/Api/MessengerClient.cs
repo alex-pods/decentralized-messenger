@@ -84,6 +84,29 @@ public sealed class MessengerClient : IDisposable
             ["bio"] = bio
         }, ct);
 
+    public async Task UploadAvatar(string filePath, CancellationToken ct = default)
+    {
+        using var content = new MultipartFormDataContent();
+        await using var file = File.OpenRead(filePath);
+        using var fileContent = new StreamContent(file);
+        content.Add(fileContent, "file", Path.GetFileName(filePath));
+        using var req = new HttpRequestMessage(HttpMethod.Post, "users/me/avatar") { Content = content };
+        using var res = await _http.SendAsync(req, ct);
+        var text = await res.Content.ReadAsStringAsync(ct);
+        if (!res.IsSuccessStatusCode)
+            throw ParseError(text, res.StatusCode);
+    }
+
+    public async Task<byte[]?> GetAvatar(long userId, CancellationToken ct = default)
+    {
+        using var res = await _http.GetAsync($"users/{userId}/avatar", ct);
+        if (res.StatusCode == HttpStatusCode.NotFound) return null;
+        var data = await res.Content.ReadAsByteArrayAsync(ct);
+        if (!res.IsSuccessStatusCode)
+            throw ParseError(Encoding.UTF8.GetString(data), res.StatusCode);
+        return data;
+    }
+
     public async Task<List<ChatDto>> GetChats(CancellationToken ct = default) =>
         await Send<List<ChatDto>>(HttpMethod.Get, "chats", null, ct) ?? new();
 

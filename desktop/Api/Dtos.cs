@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using Avalonia.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MessengerDesktop;
 
@@ -26,12 +28,29 @@ public sealed class MessageIdDto
     [JsonPropertyName("message_id")] public long MessageId { get; set; }
 }
 
-public sealed class UserCardDto
+public partial class UserCardDto : ObservableObject, IDisposable
 {
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("tag")] public string Tag { get; set; } = "";
     [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
     public string Label => string.IsNullOrWhiteSpace(DisplayName) ? "@" + Tag : $"{DisplayName}  @{Tag}";
+    private Bitmap? _avatar;
+    public Bitmap? Avatar
+    {
+        get => _avatar;
+        set
+        {
+            var previous = _avatar;
+            if (SetProperty(ref _avatar, value))
+            {
+                previous?.Dispose();
+                OnPropertyChanged(nameof(HasAvatar));
+            }
+        }
+    }
+    public bool HasAvatar => Avatar is not null;
+
+    public void Dispose() => Avatar = null;
 }
 
 public sealed class ProfileDto
@@ -39,6 +58,7 @@ public sealed class ProfileDto
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("tag")] public string Tag { get; set; } = "";
     [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
+    [JsonPropertyName("path_to_avatar_file")] public string? PathToAvatarFile { get; set; }
     [JsonPropertyName("bio")] public string? Bio { get; set; }
     [JsonPropertyName("join_date")] public string? JoinDate { get; set; }
     [JsonPropertyName("last_seen_at")] public string? LastSeenAt { get; set; }

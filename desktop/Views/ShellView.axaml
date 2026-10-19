@@ -55,9 +55,13 @@
             <Border DockPanel.Dock="Bottom" Classes="glass" CornerRadius="18" Margin="10" Padding="10,9,6,9">
               <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <Panel>
-                  <Border Classes="avatar" Width="36" Height="36" CornerRadius="18"
+                  <Border Classes="avatar" Width="36" Height="36" CornerRadius="18" ClipToBounds="True"
                           Background="{Binding Header, Converter={StaticResource AvatarBrush}}">
-                    <TextBlock Classes="avatarText" FontSize="14" Text="{Binding Header, Converter={StaticResource Initial}}"/>
+                    <Panel>
+                      <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+                      <TextBlock Classes="avatarText" FontSize="14" Text="{Binding Header, Converter={StaticResource Initial}}"
+                                 IsVisible="{Binding !HasAvatar}"/>
+                    </Panel>
                   </Border>
                   <Border Width="12" Height="12" CornerRadius="6" Background="{DynamicResource OnlineBrush}"
                           BorderBrush="#16161F" BorderThickness="2" BoxShadow="0 0 8 0 #8034D399"
@@ -82,11 +86,12 @@
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Border Classes="avatar" Width="44" Height="44" CornerRadius="22"
+                    <Border Classes="avatar" Width="44" Height="44" CornerRadius="22" ClipToBounds="True"
                             Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
                       <Panel>
+                        <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
                         <TextBlock Classes="avatarText" FontSize="17" Text="{Binding Title, Converter={StaticResource Initial}}"
-                                   IsVisible="{Binding IsGroup, Converter={StaticResource Not}}"/>
+                                   IsVisible="{Binding ShowInitial}"/>
                         <local:Glyph Data="{StaticResource IcGroup}" Width="22" Height="22" StrokeWidth="1.8"
                                      Foreground="White" IsVisible="{Binding IsGroup}"/>
                       </Panel>
@@ -111,12 +116,15 @@
                     PointerPressed="OnDragAreaPressed">
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <Border Classes="avatar" Width="38" Height="38" CornerRadius="19" Margin="0,0,12,0"
+                        ClipToBounds="True"
                         IsVisible="{Binding HasChat}"
                         Background="{Binding SelectedChat.Id, Converter={StaticResource AvatarBrush}}">
                   <Panel>
+                    <Image Source="{Binding SelectedChat.Avatar}" Stretch="UniformToFill"
+                           IsVisible="{Binding SelectedChat.HasAvatar}"/>
                     <TextBlock Classes="avatarText" FontSize="15"
                                Text="{Binding SelectedChat.Title, Converter={StaticResource Initial}}"
-                               IsVisible="{Binding !IsGroup}"/>
+                               IsVisible="{Binding SelectedChat.ShowInitial}"/>
                     <local:Glyph Data="{StaticResource IcGroup}" Width="19" Height="19" StrokeWidth="1.8"
                                  Foreground="White" IsVisible="{Binding IsGroup}"/>
                   </Panel>
@@ -355,6 +363,19 @@
 
           <StackPanel DockPanel.Dock="Top" Spacing="6"
                       IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}">
+            <StackPanel HorizontalAlignment="Center" Spacing="8" Margin="0,0,0,8">
+              <Border Width="120" Height="120" CornerRadius="60" Background="{Binding Header, Converter={StaticResource AvatarBrush}}"
+                      ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver"
+                      DragDrop.Drop="OnAvatarDrop">
+                <Grid>
+                  <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+                  <TextBlock Text="Перетащите картинку" TextWrapping="Wrap" TextAlignment="Center"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15"
+                             IsVisible="{Binding !HasAvatar}"/>
+                </Grid>
+              </Border>
+              <Button Content="Выбрать изображение…" Click="OnChooseAvatarClick"/>
+            </StackPanel>
             <TextBlock Classes="field" Text="Имя"/>
             <TextBox Text="{Binding DisplayName}"/>
             <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>
@@ -425,10 +446,14 @@
                             Command="{Binding DataContext.PickUserCommand, ElementName=Root}"
                             CommandParameter="{Binding}">
                       <Grid ColumnDefinitions="Auto,*">
-                        <Border Classes="avatar" Width="32" Height="32" CornerRadius="16"
+                        <Border Classes="avatar" Width="32" Height="32" CornerRadius="16" ClipToBounds="True"
                                 Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
-                          <TextBlock Classes="avatarText" FontSize="13"
-                                     Text="{Binding Label, Converter={StaticResource Initial}}"/>
+                          <Panel>
+                            <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+                            <TextBlock Classes="avatarText" FontSize="13"
+                                       Text="{Binding Label, Converter={StaticResource Initial}}"
+                                       IsVisible="{Binding !HasAvatar}"/>
+                          </Panel>
                         </Border>
                         <TextBlock Grid.Column="1" Text="{Binding Label}" Margin="12,0,0,0"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -445,9 +470,14 @@
                 <DataTemplate>
                   <Grid ColumnDefinitions="Auto,*" Margin="0,7">
                     <Border Classes="avatar" Width="36" Height="36" CornerRadius="18" VerticalAlignment="Top"
+                            ClipToBounds="True"
                             Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
-                      <TextBlock Classes="avatarText" FontSize="14"
-                                 Text="{Binding Title, Converter={StaticResource Initial}}"/>
+                      <Panel>
+                        <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+                        <TextBlock Classes="avatarText" FontSize="14"
+                                   Text="{Binding Title, Converter={StaticResource Initial}}"
+                                   IsVisible="{Binding !HasAvatar}"/>
+                      </Panel>
                     </Border>
                     <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="6">
                       <StackPanel Orientation="Horizontal" Spacing="8">

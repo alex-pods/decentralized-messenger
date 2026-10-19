@@ -47,6 +47,46 @@ public partial class MessageItem : ObservableObject
     public bool ShowSender => !Mine;
 
     partial void OnReplyChanged(string value) => OnPropertyChanged(nameof(HasReply));
+
+    public long MyId { get; init; }
+    public Dictionary<string, HashSet<long>> ReactionUsers { get; private set; } = new();
+    public HashSet<string> MyReactions { get; private set; } = new();
+    [ObservableProperty] private IReadOnlyList<ReactionChip> _chips = Array.Empty<ReactionChip>();
+    public bool HasReactions => Chips.Count > 0;
+    partial void OnChipsChanged(IReadOnlyList<ReactionChip> value) => OnPropertyChanged(nameof(HasReactions));
+
+    public void SetReactions(Dictionary<string, HashSet<long>> map)
+    {
+        ReactionUsers = map;
+        RefreshReactions();
+    }
+
+    public void ApplyReaction(string emoji, long userId, bool add)
+    {
+        if (!ReactionUsers.TryGetValue(emoji, out var users))
+        {
+            if (!add) return;
+            ReactionUsers[emoji] = users = new HashSet<long>();
+        }
+        if (add) users.Add(userId); else users.Remove(userId);
+        if (users.Count == 0) ReactionUsers.Remove(emoji);
+        RefreshReactions();
+    }
+
+    void RefreshReactions()
+    {
+        MyReactions = ReactionUsers.Where(kv => kv.Value.Contains(MyId)).Select(kv => kv.Key).ToHashSet();
+        Chips = ReactionUsers
+            .OrderBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => new ReactionChip
+            {
+                Emoji = kv.Key,
+                Count = kv.Value.Count,
+                Mine = kv.Value.Contains(MyId),
+                Message = this
+            })
+            .ToList();
+    }
 }
 
 public partial class MemberRow : ObservableObject, IDisposable
@@ -74,4 +114,12 @@ public partial class MemberRow : ObservableObject, IDisposable
     public bool HasAvatar => Avatar is not null;
 
     public void Dispose() => Avatar = null;
+}
+
+public sealed class ReactionChip
+{
+    public string Emoji { get; init; } = "";
+    public int Count { get; init; }
+    public bool Mine { get; init; }
+    public MessageItem Message { get; init; } = null!;
 }

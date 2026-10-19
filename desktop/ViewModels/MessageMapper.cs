@@ -51,17 +51,30 @@ public static class MessageMapper
         if (m.EditedAt != null) meta += " · изменено";
         if (m.SenderId == myId && m.ReadAt != null) meta += " · прочитано";
         else if (m.SenderId == myId && m.DeliveredAt != null) meta += " · доставлено";
-        return new MessageItem
+        var item = new MessageItem
         {
             Id = m.Id,
             SenderId = m.SenderId,
             SenderName = m.SenderId == myId ? "Вы" : nameOf(m.SenderId),
             Mine = m.SenderId == myId,
+            MyId = myId,
             Text = Body(m),
             Meta = meta,
             Reply = reply,
             IsDeleted = m.ContentState == "deleted",
             IsNotStored = m.ContentState == "not_stored"
         };
+        item.SetReactions(ReactionMap(m.Reactions));
+        return item;
+    }
+
+    public static Dictionary<string, HashSet<long>> ReactionMap(List<ReactionDto>? list)
+    {
+        var map = new Dictionary<string, HashSet<long>>();
+        if (list is null) return map;
+        foreach (var r in list)
+            if (!string.IsNullOrEmpty(r.Emoji) && r.UserIds is { Count: > 0 })
+                map[r.Emoji] = r.UserIds.ToHashSet();
+        return map;
     }
 }

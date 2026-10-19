@@ -87,6 +87,10 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowPeopleSearch))]
     private string _overlay = "";
 
+    [ObservableProperty] private bool _showMoreReactions;
+    public IReadOnlyList<string> QuickReactions => ReactionCatalog.Main;
+    public IReadOnlyList<string> MoreReactions => ReactionCatalog.More;
+
     public bool IsGroup => SelectedChat?.Type == "group";
     public bool HasChat => SelectedChat != null;
     public bool HasAvatar => Avatar is not null;

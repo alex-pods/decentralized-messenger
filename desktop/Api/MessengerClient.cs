@@ -202,6 +202,15 @@ public sealed class MessengerClient : IDisposable
         {
             ["for_everyone"] = forEveryone
         }, ct);
+    
+    public Task AddReaction(long messageId, string emoji, CancellationToken ct = default) =>
+        Send(HttpMethod.Post, $"messages/{messageId}/reactions", new Dictionary<string, object?>
+        {
+            ["emoji"] = emoji
+        }, ct);
+
+    public Task RemoveReaction(long messageId, string emoji, CancellationToken ct = default) =>
+        Send(HttpMethod.Delete, $"messages/{messageId}/reactions/{Uri.EscapeDataString(emoji)}", null, ct);
 
     public async Task<T?> Send<T>(HttpMethod method, string path, object? body, CancellationToken ct)
     {

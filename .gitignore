@@ -435,3 +435,5 @@ localfiles/
 publish.tar.gz
 local_run.log
 swagger_local.json
+keys/
+files/

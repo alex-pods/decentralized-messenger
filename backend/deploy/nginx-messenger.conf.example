@@ -1,0 +1,13 @@
+# Under nginx http {} (e.g. /etc/nginx/conf.d/messenger-logging.conf):
+log_format messenger_safe '$remote_addr - [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent';
+
+# Inside the HTTPS server's existing /messenger/ proxy location:
+# access_log /var/log/nginx/messenger-access.log messenger_safe;
+# Preserve the existing Upgrade/Connection and forwarded headers.
+# Do not use $request or $request_uri in logs: WS query parameters contain a session token.
+
+# Inside the HTTP server for the old IP address:
+# location /messenger/ {
+#     access_log /var/log/nginx/messenger-access.log messenger_safe;
+#     return 308 https://sftp-ftp-server.duckdns.org$request_uri;
+# }

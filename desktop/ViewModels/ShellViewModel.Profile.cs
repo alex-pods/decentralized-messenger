@@ -45,4 +45,24 @@ public partial class ShellViewModel
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }
+
+    public async Task UploadAvatarAsync(string filePath)
+    {
+        try
+        {
+            Error = null;
+            var file = new FileInfo(filePath);
+            if (!file.Exists) { Error = "Файл не найден"; return; }
+            if (file.Length > 5_000_000) { Error = "Аватар не должен быть больше 5 МБ"; return; }
+            await _api.UploadAvatar(filePath);
+            InvalidateAvatar(_me.Id);
+            var me = await _api.GetMe();
+            await Ui(() =>
+            {
+                _me = me;
+            });
+            await LoadAvatar(me.Id, bytes => RefreshAvatar(me.Id, bytes));
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+    }
 }

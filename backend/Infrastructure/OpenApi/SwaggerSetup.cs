@@ -12,7 +12,7 @@ public static class SwaggerSetup
         o.SwaggerDoc("v1", new()
         {
             Title = "Messenger Backend API",
-            Version = "4.1.0",
+            Version = "4.1.1",
             Description = "Обычные личные и групповые чаты с сохранением истории на сервере. " +
                           "Регистрация/вход/выход, профили и аватары, поиск, участники и роли (member/admin/owner), " +
                           "сообщения и ответы, идемпотентная отправка (client_ref), редактирование, удаление " +

@@ -105,10 +105,24 @@ public static class MemberEndpoints
                 if (myRole == "owner" && others.Count > 0)
                     return Errors.Err(409, "сначала передайте владение (POST /chats/{id}/owner)",
                         "owner_transfer_required");
-                c.Execute("DELETE FROM chat_members WHERE chat_id=@c AND user_id=@u", new { c = chat.Id, u = me.Id });
-                if (myRole == "owner" && others.Count == 0)
+                var closing = myRole == "owner" && others.Count == 0;
+                var files = closing ? c.Query<string>(
+                    "SELECT a.path_to_file FROM attachments a JOIN messages m ON m.id=a.message_id WHERE m.chat_id=@c",
+                    new { c = chat.Id }).ToList() : [];
+                Infrastructure.SchemaMigrator.Transaction(c, () =>
                 {
-                    c.Execute("DELETE FROM chats WHERE id=@c", new { c = chat.Id }); // последний вышел — группа закрывается
+                    c.Execute("DELETE FROM chat_members WHERE chat_id=@c AND user_id=@u", new { c = chat.Id, u = me.Id });
+                    if (closing) c.Execute("DELETE FROM chats WHERE id=@c", new { c = chat.Id });
+                    return 0;
+                });
+                if (closing)
+                {
+                    foreach (var path in files)
+                    {
+                        try { File.Delete(path); }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        { app.Logger.LogError(ex, "Failed to delete closed group's attachment"); }
+                    }
                     await SafePublish(() => hub.PublishToUsers([me.Id],
                         new WsEvent("chat_deleted", chat.Id) { AlwaysDeliver = true }));
                     return Results.NoContent();

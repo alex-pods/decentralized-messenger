@@ -36,29 +36,33 @@ public static class StorageEncryption
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
 
-    public static byte[] ReadFile(string path)
+    internal static bool HasFileEnvelope(byte[] data) => data.AsSpan().StartsWith(Magic);
+
+    internal static byte[] UnprotectFile(byte[] data)
     {
-        var data = File.ReadAllBytes(path);
-        if (!data.AsSpan().StartsWith(Magic))
+        if (!HasFileEnvelope(data))
             throw new InvalidDataException("Unencrypted or invalid stored file");
         return _files.Unprotect(data[Magic.Length..]);
     }
+
+    public static byte[] ReadFile(string path) => UnprotectFile(File.ReadAllBytes(path));
 
     // Startup runs before accepting traffic. Resume-safe if interrupted between files or batches.
     public static async Task Migrate(string filesRoot)
     {
         using var c = Db.Open();
-        c.Execute("CREATE TABLE IF NOT EXISTS storage_metadata(id INTEGER PRIMARY KEY CHECK(id=1), key_probe TEXT NOT NULL)");
         var probe = c.ExecuteScalar<string?>("SELECT key_probe FROM storage_metadata WHERE id=1");
         if (probe is null)
-            c.Execute("INSERT INTO storage_metadata VALUES(1,@p)", new { p = Protect("messenger-storage-v1") });
+            c.Execute("INSERT INTO storage_metadata(id,key_probe,legacy_files) VALUES(1,@p,1)", new { p = Protect("messenger-storage-v1") });
         else if (Unprotect(probe) != "messenger-storage-v1")
             throw new InvalidOperationException("Invalid storage key probe");
 
+        var changed = false;
         while (true)
         {
             var rows = c.Query<(long Id, string Text)>("SELECT id,text FROM messages WHERE storage_version=0 AND text<>'' LIMIT 200").ToList();
             if (rows.Count == 0) break;
+            changed = true;
             SchemaMigrator.Transaction(c, () =>
             {
                 foreach (var row in rows)
@@ -66,26 +70,41 @@ public static class StorageEncryption
                 return 0;
             });
         }
-        foreach (var row in c.Query<(long Id, string Bio)>("SELECT id,bio FROM users WHERE storage_version=0 AND bio IS NOT NULL").ToList())
-            c.Execute("UPDATE users SET bio=@b,storage_version=1 WHERE id=@i", new { b = Protect(row.Bio), i = row.Id });
-        foreach (var row in c.Query<(long Id, string Payload)>("SELECT id,client_ref_payload FROM messages WHERE client_ref_payload IS NOT NULL AND client_ref_payload NOT LIKE 'dp1:%'").ToList())
-            c.Execute("UPDATE messages SET client_ref_payload=@p WHERE id=@i", new { p = ProtectFingerprint(row.Payload), i = row.Id });
-
-        var paths = c.Query<string>("SELECT path_to_file FROM attachments").Concat(
-            c.Query<string>("SELECT path_to_avatar_file FROM users WHERE path_to_avatar_file IS NOT NULL")
-                .Select(p => Core.Files.AvatarAbsPath(filesRoot, p)))
-            .Concat(Directory.EnumerateFiles(filesRoot, "*", SearchOption.AllDirectories)).Distinct();
-        foreach (var path in paths)
+        while (true)
         {
-            if (!File.Exists(path)) continue; // existing missing files remain 404
-            var data = await File.ReadAllBytesAsync(path);
-            if (!data.AsSpan().StartsWith(Magic)) await WriteFile(path, data);
-            else _files.Unprotect(data[Magic.Length..]); // fail closed on damaged data or lost keys
+            var rows = c.Query<(long Id, string Bio)>("SELECT id,bio FROM users WHERE storage_version=0 AND bio IS NOT NULL LIMIT 200").ToList();
+            if (rows.Count == 0) break;
+            changed = true;
+            SchemaMigrator.Transaction(c, () =>
+            {
+                foreach (var row in rows)
+                    c.Execute("UPDATE users SET bio=@b,storage_version=1 WHERE id=@i", new { b = Protect(row.Bio), i = row.Id });
+                return 0;
+            });
         }
-        // Scrub pre-encryption payloads and already deleted messages from SQLite free pages/WAL.
-        c.Execute("UPDATE messages SET text='',storage_version=0 WHERE deleted_at IS NOT NULL AND text<>''");
-        c.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
-        c.Execute("VACUUM");
-        c.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
+        while (true)
+        {
+            var rows = c.Query<(long Id, string Payload)>("SELECT id,client_ref_payload FROM messages WHERE client_ref_payload IS NOT NULL AND client_ref_payload NOT LIKE 'dp1:%' LIMIT 200").ToList();
+            if (rows.Count == 0) break;
+            changed = true;
+            SchemaMigrator.Transaction(c, () =>
+            {
+                foreach (var row in rows)
+                    c.Execute("UPDATE messages SET client_ref_payload=@p WHERE id=@i", new { p = ProtectFingerprint(row.Payload), i = row.Id });
+                return 0;
+            });
+        }
+        var firstMigration = c.ExecuteScalar<long>("SELECT COUNT(*) FROM storage_maintenance WHERE id='001_encryption'") == 0;
+        if (firstMigration)
+            await FileEncryptionMigration.Apply(c, filesRoot, c.ExecuteScalar<int>("SELECT legacy_files FROM storage_metadata WHERE id=1") == 1);
+        changed |= c.Execute("UPDATE messages SET text='',storage_version=0 WHERE deleted_at IS NOT NULL AND text<>''") > 0;
+        // Compact only after a migration; ordinary restarts must not rewrite the entire DB or files.
+        if (firstMigration || changed)
+        {
+            c.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
+            c.Execute("VACUUM");
+            c.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
+            c.Execute("INSERT OR REPLACE INTO storage_maintenance VALUES('001_encryption',@at)", new { at = Util.NowIso() });
+        }
     }
 }

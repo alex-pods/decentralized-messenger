@@ -246,7 +246,8 @@ public class AuthAndErrorsOperationFilter : IOperationFilter
                 {
                     ["status"] = new() { Type = "string" },
                     ["service"] = new() { Type = "string" },
-                    ["version"] = new() { Type = "string" }
+                    ["version"] = new() { Type = "string" },
+                    ["revision"] = new() { Type = "string", Nullable = true }
                 }
             });
         else if (method == "POST" && path == "/auth/register")

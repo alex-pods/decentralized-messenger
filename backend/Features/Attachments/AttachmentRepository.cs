@@ -43,7 +43,17 @@ public static class Files
         return codec.GetPixels(info, bitmap.GetPixels()) == SkiaSharp.SKCodecResult.Success;
     }
 
-    public static async Task<(long Id, AttachmentOut Dto)> SaveAttachment(
+    public static MessageRow RequireAttachableMessage(IDbConnection c, long messageId, long userId)
+    {
+        var m = MessageRepository.ById(c, messageId);
+        ChatRepository.RequireMember(c, m.Chat_Id, userId);
+        if (m.Sender_Id != userId) throw new HttpException(403, "вкладывать файлы может только автор сообщения");
+        if (m.Deleted_At is not null) throw new HttpException(409, "message_deleted", "message_deleted");
+        if (m.Text.Length == 0) throw new HttpException(409, "content_not_stored", "content_not_stored");
+        return m;
+    }
+
+    public static async Task<(long Id, AttachmentOut Dto, string Path)> SaveAttachment(
         IDbConnection c, string filesRoot, MessageRow msg, IFormFile f)
     {
         var dir = Path.Combine(filesRoot, "attachments", msg.Id.ToString());
@@ -68,7 +78,7 @@ public static class Files
             File.Delete(abs);
             throw;
         }
-        return (id, new AttachmentOut(id, msg.Id, name, type, f.Length));
+        return (id, new AttachmentOut(id, msg.Id, name, type, f.Length), abs);
     }
 
     public static AttachmentRow AttachmentById(IDbConnection c, long id) =>

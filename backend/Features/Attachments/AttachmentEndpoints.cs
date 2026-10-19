@@ -15,6 +15,8 @@ public static class AttachmentEndpoints
         app.MapPost("/messages/{message_id:long}/attachments", async (HttpContext ctx, long message_id) =>
         {
             var me = Accounts.RequireUser(ctx);
+            // Reject unauthorized uploads before buffering multipart data. Recheck before writing.
+            Db.Read(c => Files.RequireAttachableMessage(c, message_id, me.Id));
             IFormCollection form;
             try { form = await ctx.Request.ReadFormAsync(); }
             catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException)
@@ -28,17 +30,31 @@ public static class AttachmentEndpoints
                     return Errors.Err(413, $"файл {f.FileName} слишком большой: {f.Length} байт (макс. 10 МБ)");
             return await Db.WriteAsync<IResult>(async c =>
             {
-                var m = MessageRepository.ById(c, message_id);
-                ChatRepository.RequireMember(c, m.Chat_Id, me.Id);
-                if (m.Sender_Id != me.Id)
-                    return Errors.Err(403, "вкладывать файлы может только автор сообщения");
-                if (m.Deleted_At is not null) return Errors.Err(409, "message_deleted", "message_deleted");
-                if (m.Text.Length == 0) return Errors.Err(409, "content_not_stored", "content_not_stored");
+                var m = Files.RequireAttachableMessage(c, message_id, me.Id);
                 var results = new List<AttachmentOut>();
-                foreach (var f in form.Files)
+                var written = new List<string>();
+                try
                 {
-                    var (_, dto) = await Files.SaveAttachment(c, filesRoot, m, f);
-                    results.Add(dto);
+                    await Infrastructure.SchemaMigrator.TransactionAsync(c, async () =>
+                    {
+                        foreach (var f in form.Files)
+                        {
+                            var (_, dto, path) = await Files.SaveAttachment(c, filesRoot, m, f);
+                            written.Add(path);
+                            results.Add(dto);
+                        }
+                        return 0;
+                    });
+                }
+                catch
+                {
+                    foreach (var path in written)
+                    {
+                        try { File.Delete(path); }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        { app.Logger.LogError(ex, "Failed to clean up rolled back attachment"); }
+                    }
+                    throw;
                 }
                 foreach (var att in results)
                     await ChatEndpoints.SafePublish(() => hub.PublishToChat(m.Chat_Id,

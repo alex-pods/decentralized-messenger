@@ -118,7 +118,7 @@ def run():
                 assert db.execute('SELECT text FROM messages WHERE id=1').fetchone()[0] != 'legacy secret message'
                 assert db.execute('SELECT bio FROM users WHERE id=1').fetchone()[0] != 'old bio'
                 assert db.execute('SELECT password_hash FROM users WHERE id=1').fetchone()[0].startswith('pbkdf2_sha256$600000$')
-                assert db.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0] == 4
+                assert db.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0] == 5
             assert b'legacy secret message' not in s.db.read_bytes()
             print('PASS legacy schema/data/file migration, password upgrade, plaintext scrubbing')
 

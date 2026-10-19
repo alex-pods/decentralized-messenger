@@ -131,19 +131,18 @@ public sealed class Hub
 
     static async Task SendLocked(Conn conn, byte[] payload, CancellationToken ct)
     {
-        if (!conn.SendLock.Wait(0))
-        { conn.Queue.Writer.TryWrite(payload); return; } // занято — вернём в очередь
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, conn.Lifetime.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        var entered = false;
         try
         {
+            await conn.SendLock.WaitAsync(timeout.Token);
+            entered = true;
             if (conn.Ws.State == WebSocketState.Open)
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, conn.Lifetime.Token);
-                timeout.CancelAfter(TimeSpan.FromSeconds(10));
                 await conn.Ws.SendAsync(payload, WebSocketMessageType.Text, true, timeout.Token);
-            }
         }
         catch { conn.Ws.Abort(); }
-        finally { conn.SendLock.Release(); }
+        finally { if (entered) conn.SendLock.Release(); }
     }
 
     public Task CloseSession(string tokenHash, int closeCode, string reason) =>
@@ -162,17 +161,23 @@ public sealed class Hub
         return Task.WhenAll(tasks);
     }
 
-    static async Task KillAsync(Conn conn, int closeCode, string reason)
+    public static async Task KillAsync(Conn conn, int closeCode, string reason)
     {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var entered = false;
         try
         {
+            await conn.SendLock.WaitAsync(timeout.Token);
+            entered = true;
             if (conn.Ws.State == WebSocketState.Open)
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                await conn.Ws.CloseAsync((WebSocketCloseStatus)closeCode, reason, cts.Token);
-            }
+                await conn.Ws.CloseOutputAsync((WebSocketCloseStatus)closeCode, reason, timeout.Token);
         }
         catch { try { conn.Ws.Abort(); } catch { /* уже мёртв */ } }
+        finally
+        {
+            if (entered) conn.SendLock.Release();
+            conn.Lifetime.Cancel();
+        }
     }
 }
 

@@ -49,4 +49,11 @@ public static class SchemaMigrator
         try { var result = action(); c.Execute("COMMIT"); return result; }
         catch { c.Execute("ROLLBACK"); throw; }
     }
+
+    public static async Task<T> TransactionAsync<T>(System.Data.IDbConnection c, Func<Task<T>> action)
+    {
+        c.Execute("BEGIN IMMEDIATE");
+        try { var result = await action(); c.Execute("COMMIT"); return result; }
+        catch { c.Execute("ROLLBACK"); throw; }
+    }
 }

@@ -97,6 +97,13 @@ using var oversized = await Connect(b.Token);
 await Send(oversized, new { action = new string('x', 17000) });
 Check((await Receive(oversized)).GetProperty("close").GetInt32() == 1009, "oversized frame close code");
 Console.WriteLine("PASS WS fragmented/oversized input is bounded");
+using (var normal = await Connect(b.Token))
+{
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    await normal.CloseAsync(WebSocketCloseStatus.NormalClosure, "test complete", timeout.Token);
+    Check(normal.State == WebSocketState.Closed, "normal close handshake");
+}
+Console.WriteLine("PASS WS normal close handshake");
 
 // Eight subscribers and concurrent HTTP traffic, measuring actual event delivery.
 var c = await User();

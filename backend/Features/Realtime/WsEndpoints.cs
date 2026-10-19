@@ -11,9 +11,11 @@ public static class WsEndpoints
     public static void MapWsEndpoints(this WebApplication app)
     {
         var hub = app.Services.GetRequiredService<Hub>();
+        var revisionPath = Path.Combine(AppContext.BaseDirectory, "REVISION");
+        var revision = File.Exists(revisionPath) ? File.ReadAllText(revisionPath).Trim() : null;
 
         app.MapGet("/health", () => Results.Json(new
-        { status = "ok", service = "messenger-backend", version = "4.1.0" }))
+        { status = "ok", service = "messenger-backend", version = "4.1.1", revision }))
            .WithTags("Health").WithName("health").WithSummary("Живость сервиса");
 
         app.MapGet("/ws/protocol", () => Results.Json(ProtocolDoc))
@@ -42,8 +44,9 @@ public static class WsEndpoints
                 await ctx.Response.WriteAsync("websocket required");
                 return;
             }
-            var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+            using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
             await using var reg = hub.Register(session.Id, session.TokenHash, ws);
+            using var receiveLifetime = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted, reg.Connection.Lifetime.Token);
             var writer = RunWriter(hub, reg.Connection);
 
             try
@@ -57,11 +60,11 @@ public static class WsEndpoints
                     WebSocketReceiveResult res;
                     do
                     {
-                        res = await ws.ReceiveAsync(new ArraySegment<byte>(buf), ctx.RequestAborted);
+                        res = await ws.ReceiveAsync(new ArraySegment<byte>(buf), receiveLifetime.Token);
                         if (res.MessageType == WebSocketMessageType.Close) break;
                         if (ms.Length + res.Count > 16_384 || res.MessageType == WebSocketMessageType.Binary)
                         {
-                            await ws.CloseOutputAsync(WebSocketCloseStatus.MessageTooBig, "text frames up to 16 KiB", CancellationToken.None);
+                            await Hub.KillAsync(reg.Connection, 1009, "text frames up to 16 KiB");
                             return;
                         }
                         ms.Write(buf, 0, res.Count);

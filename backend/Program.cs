@@ -56,7 +56,17 @@ app.MapAttachmentEndpoints();
 app.MapMemberEndpoints();
 app.MapWsEndpoints(); // включая /health и /ws/protocol
 
-StorageEncryption.Configure(app.Services);
-Db.Init();
-await StorageEncryption.Migrate(ctx.FilesRoot);
+try
+{
+    StorageEncryption.Configure(app.Services);
+    Db.Init();
+    await StorageEncryption.Migrate(ctx.FilesRoot);
+}
+catch (Exception ex)
+{
+    app.Logger.LogCritical(ex, "Storage startup failed; no requests will be accepted");
+    await app.DisposeAsync();
+    Environment.ExitCode = 1;
+    return;
+}
 app.Run();

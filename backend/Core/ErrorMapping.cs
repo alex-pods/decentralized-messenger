@@ -45,6 +45,10 @@ public static class ErrorMapping
         app.Use(async (ctx, next) =>
         {
             try { await next(ctx); }
+            catch (BadHttpRequestException ex)
+            {
+                await Errors.Err(ex.StatusCode, "Некорректный запрос").ExecuteAsync(ctx);
+            }
             catch (HttpException ex)
             {
                 if (ctx.Response.HasStarted) return;

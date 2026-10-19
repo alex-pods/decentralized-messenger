@@ -12,9 +12,7 @@ public sealed class AppCtx
     public IHostApplicationLifetime? Lifetime { get; private set; }
 
     public static string FilesRootFromEnv() =>
-        Environment.GetEnvironmentVariable("MESSENGER_FILES") ?? "/var/lib/messenger/files";
-
-    public static void Configure(IWebHostEnvironment env, IConfiguration config) { /* зарезервировано */ }
+        Environment.GetEnvironmentVariable("MESSENGER_FILES") ?? Path.Combine(PathUtilities.DirOf(Db.Path), "files");
 
     public static AppCtx Resolve(WebApplication app)
     {
@@ -42,13 +40,21 @@ public sealed class AppCtx
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
         });
         app.UsePathBase(pathBase);
-        app.UseSwagger();
+        app.UseSwagger(o => o.PreSerializeFilters.Add((doc, request) =>
+            doc.Servers = [new Microsoft.OpenApi.Models.OpenApiServer { Url = request.PathBase.HasValue ? request.PathBase.Value : "/" }]));
         app.UseSwaggerUI();
         app.UseCors();
+        app.UseRateLimiter();
+        app.Use(async (ctx, next) =>
+        {
+            ctx.Response.Headers.XContentTypeOptions = "nosniff";
+            ctx.Response.Headers.CacheControl = "no-store";
+            await next(ctx);
+        });
         app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
         // graceful shutdown: закрыть все WS при остановке приложения
         Lifetime?.ApplicationStopping.Register(() =>
-            Hub.CloseAll(1001, "server shutting down").GetAwaiter().GetResult());
+            _ = Hub.CloseAll(1001, "server shutting down"));
     }
 }

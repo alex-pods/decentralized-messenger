@@ -2,7 +2,7 @@ name: backend-ci
 
 on:
   pull_request:
-    paths: ["backend/**", "desktop/**", ".github/workflows/backend-ci.yml"]
+    paths: ["backend/**", "desktop/**", "tests/**", ".github/workflows/backend-ci.yml"]
   push:
     branches: ["feature-*"]
 
@@ -18,3 +18,10 @@ jobs:
         run: dotnet build backend/MessengerBackend.csproj -c Release --nologo
       - name: Сборка десктопа
         run: dotnet build desktop/MessengerDesktop.csproj -c Release --nologo
+      - name: Сборка проверок протокола
+        run: dotnet build tests/ProtocolChecks/ProtocolChecks.csproj -c Release --nologo
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: HTTP, WebSocket, миграции и шифрование
+        run: python backend/tests/integration.py

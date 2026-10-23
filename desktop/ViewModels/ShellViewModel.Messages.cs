@@ -58,17 +58,7 @@ public partial class ShellViewModel
                 var page = await _api.GetMessages(chat.Id, 50, afterId: afterId);
                 if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
                 if (page.Count == 0) break;
-                await Ui(() =>
-                {
-                    var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-                    foreach (var m in page) texts[m.Id] = MessageMapper.Body(m);
-                    foreach (var m in page)
-                    {
-                        if (Messages.Any(x => x.Id == m.Id)) continue;
-                        Messages.Add(MessageMapper.ToItem(m, _me.Id, NameOf, texts));
-                    }
-                    chat.Preview = MessageMapper.Preview(page[^1], _me.Id, NameOf);
-                });
+                await Ui(() => MergePage(chat, page));
                 afterId = page[^1].Id;
                 if (page.Count < 50) break;
             }
@@ -92,7 +82,16 @@ public partial class ShellViewModel
         Messages.Clear();
         foreach (var m in messages) Messages.Add(MessageMapper.ToItem(m, _me.Id, NameOf, texts));
         HasMore = messages.Count >= 50;
-        chat.Preview = messages.Count == 0 ? "Нет сообщений" : MessageMapper.Preview(messages[^1], _me.Id, NameOf);
+        if (messages.Count == 0)
+        {
+            chat.Preview = "Нет сообщений";
+            chat.Time = "";
+        }
+        else
+        {
+            chat.Preview = MessageMapper.Preview(messages[^1], _me.Id, NameOf);
+            chat.Time = MessageMapper.FormatTime(messages[^1].SentAt);
+        }
     }
 
     [RelayCommand]
@@ -132,19 +131,69 @@ public partial class ShellViewModel
             {
                 await _api.EditMessage(ed.Id, text);
                 Editing = null;
+                Draft = "";
+                await ReloadMessages();
             }
             else
             {
                 // client_ref: повтор после сетевого сбоя не создаст дубль
                 var clientRef = Guid.NewGuid().ToString("N");
-                await _api.SendMessage(chat.Id, text, ReplyTo?.Id, clientRef);
+                var id = await _api.SendMessage(chat.Id, text, ReplyTo?.Id, clientRef);
                 ReplyTo = null;
+                Draft = "";
+                // Без полного Reload (Clear мигает «фантомами»): догоняем after_id, WS дедупится по id.
+                await MergeAfter(chat, afterId: id - 1);
             }
-            Draft = "";
-            await ReloadMessages();
         }
         catch (Exception ex) { Error = Friendly(ex); }
         finally { Busy = false; }
+    }
+
+    async Task MergeAfter(ChatItem chat, long afterId)
+    {
+        var gen = _openGen;
+        try
+        {
+            var page = await _api.GetMessages(chat.Id, 50, afterId: afterId);
+            if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
+            await Ui(() => MergePage(chat, page));
+            if (Messages.Count > 0)
+            {
+                try { await _api.MarkRead(chat.Id, Messages[^1].Id); } catch { }
+            }
+            RequestScroll();
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+    }
+
+    void MergePage(ChatItem chat, List<MessageDto> page)
+    {
+        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
+        foreach (var m in page) texts[m.Id] = MessageMapper.Body(m);
+        foreach (var m in page)
+        {
+            var existing = Messages.FirstOrDefault(x => x.Id == m.Id);
+            if (existing is null)
+            {
+                var idx = 0;
+                while (idx < Messages.Count && Messages[idx].Id < m.Id) idx++;
+                Messages.Insert(idx, MessageMapper.ToItem(m, _me.Id, NameOf, texts));
+            }
+            else
+            {
+                var fresh = MessageMapper.ToItem(m, _me.Id, NameOf, texts);
+                existing.Text = fresh.Text;
+                existing.Meta = fresh.Meta;
+                existing.Reply = fresh.Reply;
+                existing.IsDeleted = fresh.IsDeleted;
+                existing.IsNotStored = fresh.IsNotStored;
+            }
+        }
+        if (page.Count > 0)
+        {
+            chat.Preview = MessageMapper.Preview(page[^1], _me.Id, NameOf);
+            chat.Time = MessageMapper.FormatTime(page[^1].SentAt);
+        }
     }
 
     [RelayCommand] void Reply() { if (SelectedMessage != null) { Editing = null; ReplyTo = SelectedMessage; } }
@@ -284,6 +333,7 @@ public partial class ShellViewModel
             return;
         }
         chat.Preview = MessageMapper.Preview(message, _me.Id, NameOf);
+        chat.Time = MessageMapper.FormatTime(message.SentAt);
         if (unread && SelectedChat?.Id != chat.Id) chat.Unread = true;
         if (SelectedChat?.Id != chat.Id) return;
         var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
@@ -314,6 +364,14 @@ public partial class ShellViewModel
     {
         if (SelectedChat == null) return;
         var last = Messages.LastOrDefault();
-        SelectedChat.Preview = last == null ? "Нет сообщений" : $"{last.SenderName}: {last.Text}";
+        if (last == null)
+        {
+            SelectedChat.Preview = "Нет сообщений";
+            SelectedChat.Time = "";
+            return;
+        }
+        var who = last.Mine ? "Вы" : last.SenderName;
+        SelectedChat.Preview = MessageMapper.Trim($"{who}: {last.Text}", 120);
+        SelectedChat.Time = last.Meta.Split(" · ", 2, StringSplitOptions.None)[0];
     }
 }

@@ -85,7 +85,7 @@
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListBox.ItemTemplate>
                 <DataTemplate>
-                  <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Grid ColumnDefinitions="Auto,*" MinHeight="44" ClipToBounds="True">
                     <Border Classes="avatar" Width="44" Height="44" CornerRadius="22" ClipToBounds="True"
                             Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
                       <Panel>
@@ -96,11 +96,21 @@
                                      Foreground="White" IsVisible="{Binding IsGroup}"/>
                       </Panel>
                     </Border>
-                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center" Spacing="2">
-                      <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding Preview}" Classes="secondary" TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
-                    <Border Grid.Column="2" Classes="unread" VerticalAlignment="Center" IsVisible="{Binding Unread}"/>
+                    <DockPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" LastChildFill="True">
+                      <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,2">
+                        <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Time}" Classes="caption" Margin="8,0,0,0"
+                                   VerticalAlignment="Center"/>
+                      </Grid>
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding Preview}" Classes="secondary"
+                                   TextTrimming="CharacterEllipsis" MaxLines="1"
+                                   TextWrapping="NoWrap" VerticalAlignment="Center"/>
+                        <Border Grid.Column="1" Classes="unread" Margin="8,0,0,0"
+                                VerticalAlignment="Center" IsVisible="{Binding Unread}"/>
+                      </Grid>
+                    </DockPanel>
                   </Grid>
                 </DataTemplate>
               </ListBox.ItemTemplate>
@@ -181,50 +191,56 @@
                       IsVisible="{Binding HasChat}">
                 <ListBox.ItemTemplate>
                   <DataTemplate>
-                    <Border Classes="bubble" Classes.mine="{Binding Mine}"
-                            HorizontalAlignment="{Binding Mine, Converter={StaticResource Align}}"
-                            MaxWidth="540" Margin="0,3">
-                      <StackPanel Spacing="3">
-                        <TextBlock Text="{Binding SenderName}" FontSize="11.5" FontWeight="SemiBold"
-                                   Foreground="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
-                          <TextBlock.IsVisible>
-                            <MultiBinding Converter="{x:Static BoolConverters.And}">
-                              <Binding Path="ShowSender"/>
-                              <Binding Path="DataContext.IsGroup" ElementName="Root"/>
-                            </MultiBinding>
-                          </TextBlock.IsVisible>
-                        </TextBlock>
-                        <Border Background="#1FFFFFFF" CornerRadius="10" Padding="0,5,10,5" Margin="0,2,0,3"
-                                IsVisible="{Binding HasReply}">
-                          <Grid ColumnDefinitions="Auto,*">
-                            <Border Width="3" CornerRadius="1.5" Background="#CCFFFFFF" Margin="6,0,8,0"/>
-                            <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="12" Opacity="0.85"
-                                       TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                          </Grid>
-                        </Border>
-                        <TextBlock Text="{Binding Text}" FontSize="13.5" LineHeight="19" TextWrapping="Wrap"
-                                   Foreground="White" Classes.deleted="{Binding IsDeleted}"/>
-                        <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}" Margin="0,3,0,0">
-                          <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                              <WrapPanel/>
-                            </ItemsPanelTemplate>
-                          </ItemsControl.ItemsPanel>
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                              <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
-                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                  <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
-                                  <TextBlock Text="{Binding Count}" FontSize="12" Foreground="White" VerticalAlignment="Center"/>
-                                </StackPanel>
-                              </Border>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Text="{Binding Meta}" FontSize="10.5" Opacity="0.6" Foreground="White"
-                                   HorizontalAlignment="Right"/>
-                      </StackPanel>
-                    </Border>
+                    <!-- Растягиваем строку на всю ширину; MaxWidth на тексте, иначе при Align=Right
+                         Avalonia измеряет пузырь «в ноль» и ломает перенос по буквам (колонка-фантом). -->
+                    <Grid Margin="0,3" HorizontalAlignment="Stretch">
+                      <Border Classes="bubble" Classes.mine="{Binding Mine}"
+                              HorizontalAlignment="{Binding Mine, Converter={StaticResource Align}}"
+                              MaxWidth="448" MinWidth="56">
+                        <StackPanel Spacing="3" MaxWidth="420">
+                          <TextBlock Text="{Binding SenderName}" FontSize="11.5" FontWeight="SemiBold"
+                                     Foreground="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
+                            <TextBlock.IsVisible>
+                              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="ShowSender"/>
+                                <Binding Path="DataContext.IsGroup" ElementName="Root"/>
+                              </MultiBinding>
+                            </TextBlock.IsVisible>
+                          </TextBlock>
+                          <Border Background="#1FFFFFFF" CornerRadius="10" Padding="0,5,10,5" Margin="0,2,0,3"
+                                  IsVisible="{Binding HasReply}">
+                            <Grid ColumnDefinitions="Auto,*">
+                              <Border Width="3" CornerRadius="1.5" Background="#CCFFFFFF" Margin="6,0,8,0"/>
+                              <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="12" Opacity="0.85"
+                                         MaxWidth="400" TextWrapping="Wrap" MaxLines="2"
+                                         TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                          </Border>
+                          <TextBlock Text="{Binding Text}" FontSize="13.5" LineHeight="19"
+                                     MaxWidth="420" TextWrapping="Wrap"
+                                     Foreground="White" Classes.deleted="{Binding IsDeleted}"/>
+                          <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}" Margin="0,3,0,0">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <WrapPanel/>
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
+                                  <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
+                                    <TextBlock Text="{Binding Count}" FontSize="12" Foreground="White" VerticalAlignment="Center"/>
+                                  </StackPanel>
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                          <TextBlock Text="{Binding Meta}" FontSize="10.5" Opacity="0.6" Foreground="White"
+                                     HorizontalAlignment="Right"/>
+                        </StackPanel>
+                      </Border>
+                    </Grid>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>

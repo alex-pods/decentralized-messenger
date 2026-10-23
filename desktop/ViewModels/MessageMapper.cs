@@ -3,11 +3,13 @@ namespace MessengerDesktop;
 /// <summary>Чистые преобразования DTO → элементы списка. Без сети и UI-потока.</summary>
 public static class MessageMapper
 {
+    public const double BubbleContentMaxWidth = 420;
+
     public static string Body(MessageDto m) => m.ContentState switch
     {
         "deleted" => "Сообщение удалено",
         "not_stored" when string.IsNullOrEmpty(m.Text) => "Текст не сохранён на сервере",
-        _ => m.Text ?? ""
+        _ => OneLine(m.Text ?? "")
     };
 
     public static string FormatTime(string? iso)
@@ -17,12 +19,17 @@ public static class MessageMapper
         return "";
     }
 
-    public static string Trim(string text, int n) => text.Length <= n ? text : text[..n] + "…";
+    public static string Trim(string text, int n)
+    {
+        text = OneLine(text);
+        return text.Length <= n ? text : text[..n] + "…";
+    }
 
+    /// <summary>Превью в списке чатов — одна строка, без переносов (иначе сайдбар раздувается «фантомами»).</summary>
     public static string Preview(MessageDto m, long myId, Func<long, string> nameOf)
     {
         var who = m.SenderId == myId ? "Вы" : nameOf(m.SenderId);
-        return $"{who}: {Body(m)}";
+        return Trim($"{who}: {Body(m)}", 120);
     }
 
     public static ChatItem MapChat(ChatDto c, long myId, Func<long, string> nameOf)
@@ -37,7 +44,8 @@ public static class MessageMapper
             Title = title,
             AvatarUserId = c.Type == "direct" ? c.OtherUser?.Id : null,
             Kind = c.Type == "group" ? "Группа" : "Личный чат",
-            Preview = c.LastMessage is null ? "Нет сообщений" : Preview(c.LastMessage, myId, nameOf)
+            Preview = c.LastMessage is null ? "Нет сообщений" : Preview(c.LastMessage, myId, nameOf),
+            Time = c.LastMessage is null ? "" : FormatTime(c.LastMessage.SentAt)
         };
     }
 
@@ -77,4 +85,7 @@ public static class MessageMapper
                 map[r.Emoji] = r.UserIds.ToHashSet();
         return map;
     }
+
+    static string OneLine(string text) =>
+        string.Join(' ', text.Replace('\r', '\n').Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 }

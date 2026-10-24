@@ -1,4 +1,4 @@
-namespace Messenger.Api.Services;
+namespace Messenger.Api.Infrastructure;
 
 public interface IFileStorage
 {

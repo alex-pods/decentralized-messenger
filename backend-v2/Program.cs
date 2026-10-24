@@ -1,6 +1,7 @@
 using Messenger.Api.Common.Errors;
 using Messenger.Api.Database;
 using Messenger.Api.Endpoints;
+using Messenger.Api.Infrastructure;
 using Messenger.Api.Repositories;
 using Messenger.Api.Services;
 
@@ -15,6 +16,8 @@ builder.Services.AddSingleton<IAvatarsRepository, AvatarsRepository>();
 builder.Services.AddSingleton<IMessagesRepository, MessagesRepository>();
 builder.Services.AddSingleton<IAttachmentsRepository, AttachmentsRepository>();
 builder.Services.AddSingleton<IChatMembershipRepository, ChatMembershipRepository>();
+builder.Services.AddSingleton<IChatsRepository, ChatsRepository>();
+builder.Services.AddSingleton<IReactionsRepository, ReactionsRepository>();
 builder.Services.AddSingleton<ISessionsRepository, SessionsRepository>();
 builder.Services.AddSingleton<IFileStorage, FileStorage>();
 
@@ -22,6 +25,8 @@ builder.Services.AddSingleton<IFileStorage, FileStorage>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<IMessagesService, MessagesService>();
+builder.Services.AddScoped<IChatsService, ChatsService>();
+builder.Services.AddScoped<IReactionsService, ReactionsService>();
 builder.Services.AddScoped<IAvatarsService, AvatarsService>();
 builder.Services.AddScoped<IAttachmentsService, AttachmentsService>();
 

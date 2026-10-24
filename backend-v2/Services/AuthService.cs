@@ -56,7 +56,7 @@ public sealed class AuthService(IUsersRepository users, ISessionsRepository sess
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var expiresAt = DateTimeOffset.UtcNow.AddDays(SessionDays);
         await sessions.Create(user.Id, HashToken(token), expiresAt.ToString("O"));
-        return new TokenResponse(token, expiresAt.ToString("O"));
+        return new TokenResponse(token, expiresAt);
     }
 
     public async Task Logout(string token) => await sessions.Delete(HashToken(token));

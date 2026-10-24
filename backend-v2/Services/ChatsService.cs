@@ -1,7 +1,7 @@
 using Messenger.Api.Common.Errors;
 using Messenger.Api.Repositories;
 using Messenger.Api.Repositories.Models;
-using Messenger.Api.Services.Contracts;
+using Messenger.Api.Contracts.Requests;
 
 namespace Messenger.Api.Services;
 
@@ -55,7 +55,8 @@ public sealed class ChatsService(
         if (string.IsNullOrEmpty(title) || title.Length > 64)
             throw new ValidationException("Title must be 1..64 characters");
 
-        var memberIds = request.MemberIds.Where(id => id != creatorId).Distinct().ToList();
+        var memberIds = (request.MemberIds ?? Array.Empty<long>())
+            .Where(id => id != creatorId).Distinct().ToList();
         if (memberIds.Count == 0)
             throw new ValidationException("At least one other member required");
 
@@ -180,8 +181,13 @@ public sealed class ChatsService(
     }
 
     private async Task<ChatAccess> RequireAccessAsync(long chatId, long userId, CancellationToken ct)
-        => await chats.GetAccessAsync(chatId, userId, ct)
-            ?? throw new NotFoundException("Chat not found or not accessible");
+    {
+        var access = await chats.GetAccessAsync(chatId, userId, ct);
+        if (access is not null) return access;
+        if (!await chats.ExistsAsync(chatId, ct))
+            throw new NotFoundException("Chat not found");
+        throw new ForbiddenException("User is not a chat member");
+    }
 
     private async Task<ChatAccess> RequireGroupAdminAsync(long chatId, long userId, CancellationToken ct)
     {

@@ -58,6 +58,11 @@ public sealed class ReactionsService(
             ?? throw new NotFoundException("Message not found");
 
     private async Task<ChatAccess> RequireAccessAsync(long chatId, long userId, CancellationToken ct)
-        => await chats.GetAccessAsync(chatId, userId, ct)
-            ?? throw new NotFoundException("Chat not found or not accessible");
+    {
+        var access = await chats.GetAccessAsync(chatId, userId, ct);
+        if (access is not null) return access;
+        if (!await chats.ExistsAsync(chatId, ct))
+            throw new NotFoundException("Chat not found");
+        throw new ForbiddenException("User is not a chat member");
+    }
 }

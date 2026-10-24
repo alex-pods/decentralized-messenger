@@ -1,4 +1,5 @@
 using Messenger.Api.Common.Errors;
+using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
 using Messenger.Api.Repositories;
 

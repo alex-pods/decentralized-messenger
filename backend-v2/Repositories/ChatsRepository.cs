@@ -8,6 +8,7 @@ namespace Messenger.Api.Repositories;
 
 public interface IChatsRepository
 {
+    Task<bool> ExistsAsync(long chatId, CancellationToken ct = default);
     Task<ChatAccess?> GetAccessAsync(long chatId, long userId, CancellationToken ct = default);
     Task<ChatSummary?> GetSummaryAsync(long chatId, long viewerId, CancellationToken ct = default);
     Task<IReadOnlyList<ChatSummary>> GetVisibleChatsAsync(long userId, CancellationToken ct = default);
@@ -25,6 +26,14 @@ public interface IChatsRepository
 
 public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
 {
+    public async Task<bool> ExistsAsync(long chatId, CancellationToken ct = default)
+    {
+        using var c = db.Open();
+        return await c.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT COUNT(*) FROM chats WHERE id = @chatId",
+            new { chatId }, cancellationToken: ct)) > 0;
+    }
+
     public async Task<ChatAccess?> GetAccessAsync(long chatId, long userId, CancellationToken ct = default)
     {
         using var c = db.Open();
@@ -50,11 +59,11 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
                        CASE WHEN c.type = 'direct'
                             THEN CASE WHEN c.user_a_id = @viewerId THEN c.user_b_id ELSE c.user_a_id END
                        END AS other_user_id,
-                       (SELECT MAX(m.id) FROM messages m
+                       CAST((SELECT MAX(m.id) FROM messages m
                         WHERE m.chat_id = c.id
                           AND NOT EXISTS (SELECT 1 FROM message_hidden h
                                           WHERE h.message_id = m.id AND h.user_id = @viewerId)
-                       ) AS last_message_id
+                       ) AS INTEGER) AS last_message_id
                 FROM chats c
                 JOIN users_chats uc ON uc.chat_id = c.id AND uc.user_id = @viewerId
                 WHERE c.id = @chatId
@@ -81,11 +90,11 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
                        CASE WHEN c.type = 'direct'
                             THEN CASE WHEN c.user_a_id = @userId THEN c.user_b_id ELSE c.user_a_id END
                        END AS other_user_id,
-                       (SELECT MAX(m.id) FROM messages m
+                       CAST((SELECT MAX(m.id) FROM messages m
                         WHERE m.chat_id = c.id
                           AND NOT EXISTS (SELECT 1 FROM message_hidden h
                                           WHERE h.message_id = m.id AND h.user_id = @userId)
-                       ) AS last_message_id
+                       ) AS INTEGER) AS last_message_id
                 FROM chats c
                 JOIN users_chats uc ON uc.chat_id = c.id AND uc.user_id = @userId
                 WHERE uc.hidden_at IS NULL
@@ -301,12 +310,12 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
     }
 
     private static ChatAccess MapAccess(AccessRow r) => new(
-        Enum.Parse<ChatType>(r.Type, true),
+        r.Type == "direct" ? ChatType.Direct : Enum.Parse<ChatType>(r.Type, true),
         r.Role is null ? null : Enum.Parse<MemberRole>(r.Role, true));
 
     private static ChatSummary MapSummary(SummaryRow r) => new(
         r.Id,
-        Enum.Parse<ChatType>(r.Type, true),
+        r.Type == "direct" ? ChatType.Direct : Enum.Parse<ChatType>(r.Type, true),
         r.Title,
         r.CreatedBy,
         SqliteTime.Parse(r.CreatedAt),
@@ -333,11 +342,24 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
     private static bool IsUniqueViolation(SqliteException ex)
         => ex.SqliteErrorCode == 19 && ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
 
-    private sealed record AccessRow(string Type, string? Role);
+    private sealed class AccessRow
+    {
+        public string Type { get; set; } = "";
+        public string? Role { get; set; }
+    }
 
-    private sealed record SummaryRow(
-        long Id, string Type, string? Title, long? CreatedBy, string CreatedAt,
-        long? OtherUserId, string? OtherUserTag, string? OtherUserName, long? LastMessageId);
+    private sealed class SummaryRow
+    {
+        public long Id { get; set; }
+        public string Type { get; set; } = "";
+        public string? Title { get; set; }
+        public long? CreatedBy { get; set; }
+        public string CreatedAt { get; set; } = "";
+        public long? OtherUserId { get; set; }
+        public long? LastMessageId { get; set; }
+        public string? OtherUserTag { get; set; }
+        public string? OtherUserName { get; set; }
+    }
 
     private sealed record MemberRowRaw(
         long UserId, string Tag, string DisplayName, string Role, string JoinedAt);

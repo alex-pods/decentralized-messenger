@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Messenger.Api.Services;
 
 namespace Messenger.Api.Common.Errors;
@@ -20,8 +21,11 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
             throw AppException.Unauthorized("missing bearer token");
 
         var token = authorization["Bearer ".Length..].Trim();
-        context.Items[CurrentUser.ContextKey] = await auth.GetUserIdByToken(token);
+        var userId = await auth.GetUserIdByToken(token);
+        context.Items[CurrentUser.ContextKey] = userId;
         context.Items[CurrentUser.TokenContextKey] = token;
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Session"));
         await next(context);
     }
 }

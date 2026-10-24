@@ -1,7 +1,9 @@
 using Messenger.Api.Common.Errors;
 using Messenger.Api.Contracts.Responses;
+using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
 using Messenger.Api.Repositories;
+using Messenger.Api.Repositories.Models;
 
 namespace Messenger.Api.Services;
 
@@ -30,13 +32,14 @@ public sealed class AttachmentsService(
         if (formFiles.Count == 0) throw AppException.BadRequest("file is required");
         if (formFiles.Count > MaxFiles) throw AppException.BadRequest("up to 10 files may be uploaded at once");
 
-        var message = await messages.GetById(messageId) ?? throw AppException.NotFound("message not found");
+        var message = await messages.GetByIdAsync(messageId, cancellationToken)
+            ?? throw AppException.NotFound("message not found");
         await RequireMember(message.ChatId, userId);
         if (message.SenderId != userId)
             throw AppException.Forbidden("only the message author may attach files");
-        if (message.ContentState == "deleted")
+        if (message.ContentState == MessageContentState.Deleted)
             throw AppException.Conflict("message_deleted", "message has been deleted");
-        if (message.ContentState == "not_stored")
+        if (message.ContentState == MessageContentState.NotStored)
             throw AppException.Conflict("content_not_stored", "message content is not stored");
 
         foreach (var file in formFiles)
@@ -78,7 +81,7 @@ public sealed class AttachmentsService(
     {
         var attachment = await attachments.GetById(attachmentId)
             ?? throw AppException.NotFound("attachment not found");
-        var message = await messages.GetById(attachment.MessageId)
+        var message = await messages.GetByIdAsync(attachment.MessageId)
             ?? throw AppException.NotFound("message not found");
         await RequireMember(message.ChatId, userId);
         if (!files.Exists(attachment.StoragePath))

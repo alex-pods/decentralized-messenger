@@ -13,10 +13,3 @@ public sealed class AppException(int status, string code, string message) : Exce
     public static AppException Conflict(string code, string m) => new(409, code, m);
     public static AppException PayloadTooLarge(string m) => new(413, "payload_too_large", m);
 }
-
-/// <summary>Заглушка для ручек, которые ещё не сделаны.</summary>
-public static class ImplementMe
-{
-    public static IResult Result(string what) =>
-        Results.Json(new { code = "not_implemented", error = "implement me: " + what }, statusCode: 501);
-}

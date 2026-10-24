@@ -3,8 +3,8 @@ using Microsoft.Data.Sqlite;
 
 namespace Messenger.Api.Database;
 
-/// <summary>«DatabaseConnection» с доски: единственное место, которое знает строку подключения.</summary>
-public sealed class DbConnectionFactory(string path)
+
+public sealed class DbConnectionFactory
 {
     private readonly string connectionString = new SqliteConnectionStringBuilder
     {

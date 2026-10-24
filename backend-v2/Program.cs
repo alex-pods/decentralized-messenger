@@ -34,6 +34,7 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = 110 * 1024 * 1024);
 
 var app = builder.Build();
+
 app.UseMiddleware<ErrorMiddleware>();
 app.UseMiddleware<SessionAuthenticationMiddleware>();
 MigrationRunner.Run(app.Services.GetRequiredService<DbConnectionFactory>());

@@ -19,6 +19,7 @@ builder.Services.AddSingleton<UsersService>();
 builder.Services.AddSingleton<MessagesService>();
 
 var app = builder.Build();
+
 app.UseMiddleware<ErrorMiddleware>();
 MigrationRunner.Run(app.Services.GetRequiredService<DbConnectionFactory>());
 

@@ -13,7 +13,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Database/Migrations/*.sql" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+    <None Update="Database/Migrations/*.sql"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+</ItemGroup>
 
 </Project>

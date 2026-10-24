@@ -1,4 +1,11 @@
 namespace Messenger.Api.Models;
 
-/// <summary>Строка таблицы users — ровно как в БД.</summary>
-public sealed record User(long Id, string Tag, string Name);
+/// <summary>A row from the users table.</summary>
+public sealed record User(
+    long Id,
+    string Tag,
+    string Name,
+    string? Bio,
+    string CreatedAt,
+    string? LastSeenAt,
+    string PasswordHash);

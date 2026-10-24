@@ -1,0 +1,5408 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Messenger Backend API",
+    "description": "Обычные личные и групповые чаты с сохранением истории на сервере. Регистрация/вход/выход, профили и аватары, поиск, участники и роли (member/admin/owner), сообщения и ответы, идемпотентная отправка (client_ref), редактирование, удаление у себя и у всех, реакции, вложения, история с курсорной пагинацией, прочтения, WebSocket follow(chat_id).\n\nREST-авторизация — только Authorization: Bearer <user_session_token>. WebSocket — query-параметр user_session_token. Протокол WS: GET /ws/protocol.\n\nАрхитектурно заложено расширение режимом секретных чатов (без хранения содержимого) и собственными узлами; в этой версии они не реализованы и не объявлены.",
+    "version": "4.1.1"
+  },
+  "servers": [
+    {
+      "url": "/messenger"
+    }
+  ],
+  "paths": {
+    "/messages/{message_id}/attachments": {
+      "post": {
+        "tags": [
+          "Attachments"
+        ],
+        "summary": "Вложить файлы в своё сообщение",
+        "description": "multipart/form-data, поле file (до 10 файлов за запрос, каждый до 10 МБ → 413). Только автор сохранённого сообщения: 409 message_deleted / 409 content_not_stored. 201 → МАССИВ AttachmentOut. Удаление для всех отзывает вложения (GET → 404). Событие attachment_added на каждый файл.",
+        "operationId": "uploadAttachments",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "До 10 файлов, каждый до 10 МБ; несколько — повторением поля"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Массив созданных вложений",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AttachmentOut"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Конфликт состояния (message_deleted / content_not_stored)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Файл превышает допустимый размер",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/attachments/{attachment_id}": {
+      "get": {
+        "tags": [
+          "Attachments"
+        ],
+        "summary": "Скачать вложение",
+        "description": "Только участник чата (403). Бинарный ответ application/octet-stream, Content-Disposition: attachment и X-Content-Type-Options: nosniff. Вложения удалённого для всех сообщения → 404.",
+        "operationId": "downloadAttachment",
+        "parameters": [
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Бинарное содержимое файла",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Регистрация",
+        "description": "Создаёт пользователя: tag = login (3-16: буквы, цифры, _ . -), пароль >= 8, display_name = login. 201 без тела. 409 — login занят. Лимит 30 запросов/мин на IP.",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Пользователь создан; тело ответа пустое"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Указанный login уже занят",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит 30 запросов/мин на IP (заголовок Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Вход",
+        "description": "Возвращает user_session_token (30 дней) и expires_at. Токен далее передаётся в Authorization: Bearer. 401 — неверные учётные данные.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenOut"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный login или password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит 30 запросов/мин на IP (заголовок Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Выход",
+        "description": "Удаляет ТОЛЬКО эту сессию и закрывает её WebSocket-соединения (close 4001). Другие сессии пользователя остаются действительными.",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/users/me/avatar": {
+      "post": {
+        "tags": [
+          "Avatars"
+        ],
+        "summary": "Загрузка своего аватара",
+        "description": "multipart/form-data, поле file (один файл, до 5 МБ → 413). Содержимое проверяется полным декодированием: PNG/JPEG/WebP, габариты до 4096x4096. Текст/HTML/SVG и повреждённые изображения → 400 invalid_avatar; прежний аватар при ошибке сохраняется.",
+        "operationId": "uploadAvatar",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "description": "Изображение PNG/JPEG/WebP (до 5 МБ)",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Путь сохранённого файла",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "path_to_avatar_file"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "path_to_avatar_file": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Файл превышает допустимый размер",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/users/{user_id}/avatar": {
+      "get": {
+        "tags": [
+          "Avatars"
+        ],
+        "summary": "Файл аватара",
+        "description": "Бинарный ответ (фактический Content-Type). 404 — аватар не установлен.",
+        "operationId": "getAvatar",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Бинарное содержимое файла",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats": {
+      "get": {
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Мои чаты",
+        "description": "direct -> other_user; group -> title/created_by. last_message — последнее не скрытое «у себя» сообщение. Скрытые через DELETE /chats/{id} чаты не возвращаются. Прямых N+1-запросов нет: участники и последние сообщения грузятся пакетно.",
+        "operationId": "listChats",
+        "responses": {
+          "200": {
+            "description": "Список чатов (direct с other_user / group с title), + last_message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/DirectChatOut"
+                      },
+                      {
+                        "$ref": "#/components/schemas/GroupChatOut"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Личный чат (единственный на пару)",
+        "description": "201 — создан; 200 — чат этой пары уже существует, возвращён его chat_id (единственность гарантирует UNIQUE(user1,user2) в direct_chats при user1<user2; одновременное создание с двух сторон даёт один чат). Повтор снимает скрытие у вызывающего. Событие WS chat_created обоим (без follow).",
+        "operationId": "createDirectChat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatIdOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatIdOut"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats/group": {
+      "post": {
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Создать группу",
+        "description": "Каждый вызов создаёт НОВУЮ группу, даже с тем же составом; создатель — owner. member_ids дедуплицируются; несуществующий user_id → 404. Событие chat_created (без follow).",
+        "operationId": "createGroupChat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGroupIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatIdOut"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats/{chat_id}": {
+      "get": {
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Карточка чата",
+        "description": "direct -> other_user; group -> title/created_by/created_at. Только участник (403).",
+        "operationId": "getChat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Карточка чата: direct или group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DirectChatOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GroupChatOut"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Скрыть чат у себя",
+        "description": "Скрывает чат только у вызывающего (chat_hidden); участники, сообщения и вложения не затрагиваются. НЕ выход из группы и НЕ удаление группы. Для direct повторный POST /chats возвращает тот же chat_id и снимает скрытие. Идемпотентно.",
+        "operationId": "hideChat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Живость сервиса",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Состояние сервиса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}/members": {
+      "get": {
+        "tags": [
+          "Members"
+        ],
+        "summary": "Участники чата",
+        "description": "[{id, tag, display_name, role: member|admin|owner, joined_at}]. Только участник.",
+        "operationId": "getMembers",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberOut"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Members"
+        ],
+        "summary": "Добавить участника в группу",
+        "description": "Owner/admin, только группа; повторное добавление не создаёт дубль (204). События: member_added участникам (follow), chat_created добавленному (без follow).",
+        "operationId": "addMember",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMemberIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats/{chat_id}/members/{user_id}": {
+      "delete": {
+        "tags": [
+          "Members"
+        ],
+        "summary": "Исключить участника из группы",
+        "description": "Owner/admin (admin снимает только member; owner — и admin; owner не исключаем). Исключённый сразу теряет доступ по HTTP и WS. Событие member_removed (включая исключённого).",
+        "operationId": "removeMember",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Members"
+        ],
+        "summary": "Назначить/снять admin",
+        "description": "Только owner; цель — участник, не owner. role: admin | member. Событие member_role_changed (без follow).",
+        "operationId": "setMemberRole",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRoleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats/{chat_id}/leave": {
+      "post": {
+        "tags": [
+          "Members"
+        ],
+        "summary": "Выйти из группы",
+        "description": "Владелец не может выйти, пока есть другие участники: 409 owner_transfer_required. Выход последнего закрывает группу (каскадно удаляются сообщения/вложения). Direct покинуть нельзя (400). Событие member_left.",
+        "operationId": "leaveChat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "owner_transfer_required: сначала передайте владение",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats/{chat_id}/owner": {
+      "post": {
+        "tags": [
+          "Members"
+        ],
+        "summary": "Передать владение группой",
+        "description": "Только owner и только действующему участнику; атомарно: прежний owner становится admin, новый — owner (в группе всегда ровно один owner). Событие owner_changed (без follow).",
+        "operationId": "transferOwner",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwnerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats/{chat_id}/messages": {
+      "get": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "История сообщений",
+        "description": "Постраничная выдача: до limit (1..100, default 50) сообщений с id СТРОГО меньше before_id, внутри страницы от старых к новым; без before_id — начиная с самых последних. Некорректные limit/before_id → 400. Удалённые для всех — заглушки (content_state=deleted, text=null, без вложений/реакций). Скрытые «у себя» не возвращаются. read_at — агрегат: прочитано всеми участниками, кроме отправителя; delivered_at — доставлено хотя бы одному онлайн-получателю. not_stored встречается только в legacy-записях (текст утрачен).",
+        "operationId": "getHistory",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Размер страницы: целое 1..100 (по умолчанию 50)",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int64",
+              "default": 50
+            }
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "description": "Пагинация назад: только сообщения с id СТРОГО МЕНЬШЕ курсора; без него — от самых последних",
+            "schema": {
+              "minimum": 1,
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "description": "Синхронизация после переподключения: только сообщения с id СТРОГО БОЛЬШЕ курсора, по возрастанию; листать до пустой страницы",
+            "schema": {
+              "minimum": 1,
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MessageOut"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Отправить сообщение",
+        "description": "text 1..4096, reply_to_id? (сообщение ЭТОГО чата; ответ на заглушку удалённого разрешён), client_ref? — идемпотентный ключ ОТПРАВИТЕЛЯ (до 64 символов): повтор с тем же ключом и содержимым возвращает прежний message_id (200), с другим содержимым — 409 client_ref_conflict. Обычное сообщение всегда сохраняется на сервере. Событие message — подписанным (follow). 201 → message_id.",
+        "operationId": "sendMessage",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageIdOut"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageIdOut"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "client_ref_conflict: ключ отправки уже использован с другим содержимым",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/chats/{chat_id}/read": {
+      "post": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Подтвердить прочтение",
+        "description": "Курсор прочтения по message_id: не уменьшается, закрывает и более ранние сообщения. GET истории ничего не помечает. Событие read — подписанным участникам.",
+        "operationId": "markRead",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/messages/{message_id}": {
+      "patch": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Редактировать своё сообщение",
+        "description": "Только автор; меняются text и edited_at. 409 message_deleted — удалено; 409 content_not_stored — legacy-запись без текста. Событие message_edited.",
+        "operationId": "editMessage",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditMessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Конфликт состояния (message_deleted / content_not_stored)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Удалить сообщение",
+        "description": "for_everyone ОБЯЗАТЕЛЕН. true — для всех (автор или owner/admin): deleted_at, вложения отзываются (GET вложения → 404, файлы удаляются), реакции снимаются, в истории заглушка; повтор идемпотентен. false — скрыть у себя: сообщение остаётся у остальных; событие только действующим сессиям этого пользователя. Изменения удалённого → 409 message_deleted.",
+        "operationId": "deleteMessage",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/users/me": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Мой профиль",
+        "description": "tag, display_name, path_to_avatar_file, bio, join_date, last_seen_at (обновляется при запросах и WS-подключениях).",
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Частичное изменение профиля",
+        "description": "PATCH-семантика: отсутствующее или null поле НЕ меняется; bio=\"\" очищает bio; display_name пустым быть не может (400).",
+        "operationId": "updateMe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/users/search": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Поиск пользователей",
+        "description": "Подстрока по tag или display_name, до 20 карточек [{id, tag, display_name}].",
+        "operationId": "searchUsers",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserCard"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/users/{user_id}": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Профиль по id",
+        "description": "Публичный профиль. 404 — пользователь не найден.",
+        "operationId": "getUser",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/messages/{message_id}/reactions": {
+      "post": {
+        "tags": [
+          "Reactions"
+        ],
+        "summary": "Поставить реакцию",
+        "description": "Идемпотентно: (message, user, emoji) не дублируется. Участник чата; 409 message_deleted — на удалённое. Событие reaction_added.",
+        "operationId": "addReaction",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "415": {
+            "description": "Content-Type не поддерживается",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Некорректные поля/query или пустой текст",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Конфликт состояния (message_deleted / content_not_stored)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/messages/{message_id}/reactions/{emoji}": {
+      "delete": {
+        "tags": [
+          "Reactions"
+        ],
+        "summary": "Убрать свою реакцию",
+        "description": "Удаляет только СВОЮ реакцию с данной emoji. 404 — реакции не было. Событие reaction_removed.",
+        "operationId": "removeReaction",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "emoji",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Нет, просрочена или удалена сессия (Bearer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Сессия действительна, но прав на операцию нет (не участник, не владелец, не автор)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Пользователь/чат/сообщение/вложение не найдено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "code",
+                    "error",
+                    "trace_id"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Машинный код ошибки"
+                    },
+                    "error": {
+                      "type": "string",
+                      "description": "Человекочитаемое описание"
+                    },
+                    "details": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "trace_id": {
+                      "type": "string",
+                      "description": "Идентификатор ошибки для логов"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionBearer": [ ]
+          }
+        ]
+      }
+    },
+    "/ws/protocol": {
+      "get": {
+        "tags": [
+          "WebSocket"
+        ],
+        "summary": "Описание протокола WebSocket",
+        "description": "Авторизация, действия, события, close codes, повторный follow, переподключение и догрузка истории.",
+        "operationId": "wsProtocol",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddMemberIn": {
+        "required": [
+          "user_id"
+        ],
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AttachmentOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "message_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "file_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "file_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "file_size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChatIdOut": {
+        "type": "object",
+        "properties": {
+          "chat_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateChatIn": {
+        "required": [
+          "another_user_id"
+        ],
+        "type": "object",
+        "properties": {
+          "another_user_id": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateGroupIn": {
+        "required": [
+          "member_ids",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string",
+            "nullable": true
+          },
+          "member_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeleteMessageIn": {
+        "required": [
+          "for_everyone"
+        ],
+        "type": "object",
+        "properties": {
+          "for_everyone": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DirectChatOut": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "enum": [
+              "direct"
+            ],
+            "type": "string",
+            "nullable": true
+          },
+          "other_user": {
+            "$ref": "#/components/schemas/UserCard"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "last_message": {
+            "$ref": "#/components/schemas/MessageOut"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditMessageIn": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "GroupChatOut": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "enum": [
+              "group"
+            ],
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "last_message": {
+            "$ref": "#/components/schemas/MessageOut"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LoginIn": {
+        "required": [
+          "login",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "login": {
+            "maxLength": 16,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_.\\-]{3,16}$",
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 8,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "MemberOut": {
+        "required": [
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": "string",
+            "nullable": true
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "enum": [
+              "member",
+              "admin",
+              "owner"
+            ],
+            "type": "string",
+            "nullable": true
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageIdOut": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageOut": {
+        "required": [
+          "content_state",
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chat_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sender_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reply_to_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "content_state": {
+            "enum": [
+              "stored",
+              "not_stored",
+              "deleted"
+            ],
+            "type": "string",
+            "nullable": true
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "delivered_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "edited_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "read_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentOut"
+            },
+            "nullable": true
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReactionOut"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProfileOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": "string",
+            "nullable": true
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "path_to_avatar_file": {
+            "type": "string",
+            "nullable": true
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          },
+          "join_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReactionIn": {
+        "required": [
+          "emoji"
+        ],
+        "type": "object",
+        "properties": {
+          "emoji": {
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReactionOut": {
+        "type": "object",
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadIn": {
+        "required": [
+          "message_id"
+        ],
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RegisterIn": {
+        "required": [
+          "login",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "login": {
+            "maxLength": 16,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_.\\-]{3,16}$",
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 8,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SendMessageIn": {
+        "required": [
+          "text"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "reply_to_id": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "client_ref": {
+            "maxLength": 64,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SetRoleIn": {
+        "required": [
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "role": {
+            "enum": [
+              "admin",
+              "member"
+            ],
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TokenOut": {
+        "type": "object",
+        "properties": {
+          "user_session_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TransferOwnerIn": {
+        "required": [
+          "user_id"
+        ],
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateProfileIn": {
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string",
+            "nullable": true
+          },
+          "bio": {
+            "maxLength": 500,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UserCard": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
+            "type": "string",
+            "nullable": true
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "SessionBearer": {
+        "type": "http",
+        "description": "Authorization: Bearer <user_session_token> — единственный способ REST-авторизации",
+        "scheme": "bearer",
+        "bearerFormat": "user_session_token"
+      }
+    }
+  }
+}

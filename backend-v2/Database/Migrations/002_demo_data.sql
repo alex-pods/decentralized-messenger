@@ -16,7 +16,7 @@ INSERT INTO users_chats(user_id, chat_id, role) VALUES
     (3, 1, 'member');
 
 INSERT INTO chats(type, user_a_id, user_b_id, created_by) VALUES
-    ('dm', 1, 3, 1);
+    ('direct', 1, 3, 1);
 
 INSERT INTO messages(chat_id, sender_id, text, sent_at) VALUES
     (1, 1, 'Привет! Глянул новую схему?',      '2026-10-20 10:00:00'),

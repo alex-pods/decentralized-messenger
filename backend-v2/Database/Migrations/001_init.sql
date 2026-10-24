@@ -41,7 +41,7 @@ CREATE TABLE chats(
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chat_shape CHECK (
-        (type = 'dm'
+        (type = 'direct'
             AND user_a_id IS NOT NULL
             AND user_b_id IS NOT NULL
             AND title IS NULL
@@ -53,9 +53,9 @@ CREATE TABLE chats(
             AND title IS NOT NULL)
     )
 );
-CREATE UNIQUE INDEX ux_chats_dm_pair
+CREATE UNIQUE INDEX ux_chats_direct_pair
     ON chats(user_a_id, user_b_id)
-    WHERE type = 'dm';
+    WHERE type = 'direct';
 
 CREATE TABLE users_chats(
     user_id              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -73,39 +73,39 @@ CREATE UNIQUE INDEX ux_users_chats_one_owner
     ON users_chats(chat_id)
     WHERE role = 'owner';
 
-CREATE TRIGGER trg_dm_insert_members
+CREATE TRIGGER trg_direct_insert_members
 AFTER INSERT ON chats
-WHEN NEW.type = 'dm'
+WHEN NEW.type = 'direct'
 BEGIN
     INSERT INTO users_chats(user_id, chat_id) VALUES (NEW.user_a_id, NEW.id);
     INSERT INTO users_chats(user_id, chat_id) VALUES (NEW.user_b_id, NEW.id);
 END;
 
-CREATE TRIGGER trg_dm_reject_extra_member
+CREATE TRIGGER trg_direct_reject_extra_member
 BEFORE INSERT ON users_chats
-WHEN (SELECT type FROM chats WHERE id = NEW.chat_id) = 'dm'
+WHEN (SELECT type FROM chats WHERE id = NEW.chat_id) = 'direct'
  AND NEW.user_id NOT IN (
         SELECT user_a_id FROM chats WHERE id = NEW.chat_id
         UNION ALL
         SELECT user_b_id FROM chats WHERE id = NEW.chat_id
      )
 BEGIN
-    SELECT RAISE(ABORT, 'dm chat allows only its two members');
+    SELECT RAISE(ABORT, 'direct chat allows only its two members');
 END;
 
-CREATE TRIGGER trg_dm_reject_member_delete
+CREATE TRIGGER trg_direct_reject_member_delete
 BEFORE DELETE ON users_chats
-WHEN (SELECT type FROM chats WHERE id = OLD.chat_id) = 'dm'
+WHEN (SELECT type FROM chats WHERE id = OLD.chat_id) = 'direct'
 BEGIN
-    SELECT RAISE(ABORT, 'delete the dm chat itself, not its members');
+    SELECT RAISE(ABORT, 'delete the direct chat itself, not its members');
 END;
 
-CREATE TRIGGER trg_dm_reject_roles
+CREATE TRIGGER trg_direct_reject_roles
 BEFORE UPDATE OF role ON users_chats
 WHEN NEW.role <> 'member'
- AND (SELECT type FROM chats WHERE id = NEW.chat_id) = 'dm'
+ AND (SELECT type FROM chats WHERE id = NEW.chat_id) = 'direct'
 BEGIN
-    SELECT RAISE(ABORT, 'dm chat has no roles');
+    SELECT RAISE(ABORT, 'direct chat has no roles');
 END;
 
 
@@ -127,7 +127,7 @@ CREATE TABLE messages(
         OR
         (content_state <> 'stored' AND text IS NULL)
     ),
-    CONSTRAINT client_ref_length CHECK (length(client_ref) BETWEEN 1 AND 64)
+    CONSTRAINT client_ref_length CHECK (length(client_ref) <= 64)
 );
 CREATE INDEX idx_messages_chat   ON messages(chat_id, id);
 CREATE INDEX idx_messages_sender ON messages(sender_id, id);

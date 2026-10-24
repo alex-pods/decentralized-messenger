@@ -9,13 +9,25 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
         catch (AppException e)
         {
             ctx.Response.StatusCode = e.Status;
-            await ctx.Response.WriteAsJsonAsync(new { code = e.Code, error = e.Message });
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                code = e.Code,
+                error = e.Message,
+                details = (object?)null,
+                trace_id = ctx.TraceIdentifier
+            });
         }
         catch (Exception e)
         {
             log.LogError(e, "unhandled error on {Path}", ctx.Request.Path);
             ctx.Response.StatusCode = 500;
-            await ctx.Response.WriteAsJsonAsync(new { code = "internal_error", error = "internal error" });
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                code = "internal_error",
+                error = "internal error",
+                details = (object?)null,
+                trace_id = ctx.TraceIdentifier
+            });
         }
     }
 }

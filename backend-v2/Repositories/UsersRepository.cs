@@ -6,22 +6,63 @@ namespace Messenger.Api.Repositories;
 
 public interface IUsersRepository
 {
-    Task<List<User>> GetAll();
     Task<User?> GetById(long id);
+    Task<User?> GetByTag(string tag);
+    Task<List<User>> Search(string query, int limit);
+    Task<long> Insert(string tag, string name, string passwordHash);
+    Task UpdateProfile(long id, string? name, bool updateBio, string? bio);
+    Task TouchLastSeen(long id);
 }
 
-/// <summary>Только SQL по таблице users. Никаких правил и HTTP.</summary>
+/// <summary>Database access for users.</summary>
 public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
 {
-    public async Task<List<User>> GetAll()
-    {
-        using var c = db.Open();
-        return (await c.QueryAsync<User>("SELECT id, tag, name FROM users ORDER BY id")).ToList();
-    }
+    private const string Columns = "id, tag, name, bio, created_at AS CreatedAt, last_seen_at AS LastSeenAt, password_hash AS PasswordHash";
 
     public async Task<User?> GetById(long id)
     {
-        using var c = db.Open();
-        return await c.QuerySingleOrDefaultAsync<User>("SELECT id, tag, name FROM users WHERE id = @id", new { id });
+        using var connection = db.Open();
+        return await connection.QuerySingleOrDefaultAsync<User>(
+            $"SELECT {Columns} FROM users WHERE id = @id", new { id });
+    }
+
+    public async Task<User?> GetByTag(string tag)
+    {
+        using var connection = db.Open();
+        return await connection.QuerySingleOrDefaultAsync<User>(
+            $"SELECT {Columns} FROM users WHERE tag = @tag COLLATE NOCASE", new { tag });
+    }
+
+    public async Task<List<User>> Search(string query, int limit)
+    {
+        using var connection = db.Open();
+        var escaped = $"%{query.Replace("@", "@@").Replace("%", "@%").Replace("_", "@_")}%";
+        return (await connection.QueryAsync<User>(
+            $"SELECT {Columns} FROM users WHERE tag LIKE @query ESCAPE '@' OR name LIKE @query ESCAPE '@' ORDER BY tag LIMIT @limit",
+            new { query = escaped, limit })).ToList();
+    }
+
+    public async Task<long> Insert(string tag, string name, string passwordHash)
+    {
+        using var connection = db.Open();
+        return await connection.ExecuteScalarAsync<long>(
+            "INSERT INTO users(tag, name, password_hash) VALUES(@tag, @name, @passwordHash); SELECT last_insert_rowid()",
+            new { tag, name, passwordHash });
+    }
+
+    public async Task UpdateProfile(long id, string? name, bool updateBio, string? bio)
+    {
+        using var connection = db.Open();
+        await connection.ExecuteAsync(
+            "UPDATE users SET name = COALESCE(@name, name), bio = CASE WHEN @updateBio THEN @bio ELSE bio END WHERE id = @id",
+            new { id, name, updateBio, bio });
+    }
+
+    public async Task TouchLastSeen(long id)
+    {
+        using var connection = db.Open();
+        await connection.ExecuteAsync(
+            "UPDATE users SET last_seen_at = CURRENT_TIMESTAMP WHERE id = @id AND (last_seen_at IS NULL OR last_seen_at < datetime('now', '-1 minute'))",
+            new { id });
     }
 }

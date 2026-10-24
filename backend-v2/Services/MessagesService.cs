@@ -1,161 +1,107 @@
 using Messenger.Api.Common.Errors;
-using Messenger.Api.Contracts.Requests;
-using Messenger.Api.Contracts.Responses;
-using Messenger.Api.Models;
 using Messenger.Api.Repositories;
+using Messenger.Api.Repositories.Models;
+using Messenger.Api.Services.Contracts;
 
 namespace Messenger.Api.Services;
 
-public sealed record SentMessage(long Id, bool Created);
-
 public interface IMessagesService
 {
-    Task<List<MessageResponse>> GetHistory(long userId, long chatId, long? beforeId, long? afterId, int? limit);
-    Task<SentMessage> Send(long userId, long chatId, SendMessageRequest request);
-    Task MarkRead(long userId, long chatId, long? messageId);
-    Task Edit(long userId, long messageId, EditMessageRequest request);
-    Task Delete(long userId, long messageId, DeleteMessageRequest? request);
+    Task<IReadOnlyList<MessageRow>> GetHistoryAsync(long chatId, long viewerId, HistoryQuery query, CancellationToken ct = default);
+    Task<MessageRow> GetMessageAsync(long messageId, long viewerId, CancellationToken ct = default);
+    Task<MessageRow> SendAsync(long chatId, long senderId, SendMessageRequest request, CancellationToken ct = default);
+    Task<MessageRow> EditAsync(long messageId, long editorId, EditMessageRequest request, CancellationToken ct = default);
+    Task<MessageRow> DeleteAsync(long messageId, long deleterId, CancellationToken ct = default);
 }
 
 public sealed class MessagesService(
     IMessagesRepository messages,
-    IAttachmentsRepository attachments,
-    IChatMembershipRepository memberships,
-    IFileStorage files,
-    ILogger<MessagesService> logger) : IMessagesService
+    IChatsRepository chats) : IMessagesService
 {
     private const int MaxTextLength = 4096;
 
-    public async Task<List<MessageResponse>> GetHistory(
-        long userId, long chatId, long? beforeId, long? afterId, int? limit)
+    public async Task<IReadOnlyList<MessageRow>> GetHistoryAsync(
+        long chatId, long viewerId, HistoryQuery query, CancellationToken ct = default)
     {
-        await RequireMember(chatId, userId);
-        var pageSize = limit ?? 50;
-        if (pageSize is < 1 or > 100) throw AppException.BadRequest("limit must be between 1 and 100");
-        if (beforeId is <= 0 || afterId is <= 0)
-            throw AppException.BadRequest("message cursors must be positive");
-
-        var history = await messages.GetByChat(chatId, userId, beforeId, afterId, pageSize);
-        return await ToResponses(history);
+        await RequireAccessAsync(chatId, viewerId, ct);
+        return await messages.GetHistoryAsync(chatId, viewerId, query, ct);
     }
 
-    public async Task<SentMessage> Send(long userId, long chatId, SendMessageRequest request)
+    public async Task<MessageRow> GetMessageAsync(long messageId, long viewerId, CancellationToken ct = default)
     {
-        var text = request.Text ?? "";
-        if (string.IsNullOrWhiteSpace(text))
-            throw AppException.BadRequest("text must not be empty");
-        if (text.Length > MaxTextLength)
-            throw AppException.BadRequest($"text must be at most {MaxTextLength} characters");
-        if (request.ReplyToId is <= 0)
-            throw AppException.BadRequest("reply_to_id must be positive");
-        if (request.ClientRef is { Length: 0 or > 64 })
-            throw AppException.BadRequest("client_ref must be 1-64 characters");
+        var message = await RequireMessageAsync(messageId, ct);
+        await RequireAccessAsync(message.ChatId, viewerId, ct);
+        return message;
+    }
 
-        await RequireMember(chatId, userId);
-        if (request.ReplyToId is { } replyToId)
+    public async Task<MessageRow> SendAsync(
+        long chatId, long senderId, SendMessageRequest request, CancellationToken ct = default)
+    {
+        await RequireAccessAsync(chatId, senderId, ct);
+
+        var text = request.Text?.Trim();
+        if (string.IsNullOrEmpty(text) || text.Length > MaxTextLength)
+            throw new ValidationException($"Text must be 1..{MaxTextLength} characters");
+
+        if (request.ClientRef is { Length: > 64 })
+            throw new ValidationException("ClientRef must be at most 64 characters");
+
+        if (request.ReplyToId is long replyToId)
         {
-            var reply = await messages.GetById(replyToId) ?? throw AppException.NotFound("reply message not found");
-            if (reply.ChatId != chatId)
-                throw AppException.BadRequest("reply_to_id must refer to a message in this chat");
+            var parent = await RequireMessageAsync(replyToId, ct);
+            if (parent.ChatId != chatId)
+                throw new ValidationException("Reply target must be in the same chat");
+            if (parent.ContentState != MessageContentState.Stored)
+                throw new ValidationException("Cannot reply to a deleted message");
         }
 
-        var inserted = await messages.Insert(chatId, userId, text, request.ReplyToId, request.ClientRef);
-        if (inserted.Existing is { } existing)
-        {
-            if (existing.ChatId != chatId || existing.ReplyToId != request.ReplyToId || existing.Text != text)
-                throw AppException.Conflict("client_ref_conflict", "client_ref was already used with different content");
-            return new SentMessage(inserted.Id, false);
-        }
-        return new SentMessage(inserted.Id, inserted.Created);
+        var result = await messages.AddAsync(
+            new NewMessage(chatId, senderId, text, request.ReplyToId, request.ClientRef), ct);
+        return result.Message;
     }
 
-    public async Task MarkRead(long userId, long chatId, long? messageId)
+    public async Task<MessageRow> EditAsync(
+        long messageId, long editorId, EditMessageRequest request, CancellationToken ct = default)
     {
-        if (messageId is null or <= 0)
-            throw AppException.BadRequest("message_id must be positive");
-        await RequireMember(chatId, userId);
-        var message = await messages.GetById(messageId.Value);
-        if (message is null || message.ChatId != chatId)
-            throw AppException.NotFound("message_id was not found in this chat");
-        await messages.MarkRead(chatId, userId, messageId.Value);
+        var message = await RequireMessageAsync(messageId, ct);
+        await RequireAccessAsync(message.ChatId, editorId, ct);
+
+        if (message.SenderId != editorId)
+            throw new ForbiddenException("Only the author can edit the message");
+        if (message.ContentState != MessageContentState.Stored)
+            throw new ForbiddenException("Only stored messages can be edited");
+
+        var text = request.Text?.Trim();
+        if (string.IsNullOrEmpty(text) || text.Length > MaxTextLength)
+            throw new ValidationException($"Text must be 1..{MaxTextLength} characters");
+
+        return await messages.EditAsync(messageId, text, ct)
+            ?? throw new NotFoundException("Message not found");
     }
 
-    public async Task Edit(long userId, long messageId, EditMessageRequest request)
+    public async Task<MessageRow> DeleteAsync(long messageId, long deleterId, CancellationToken ct = default)
     {
-        var text = request.Text ?? "";
-        if (string.IsNullOrWhiteSpace(text))
-            throw AppException.BadRequest("text must not be empty");
-        if (text.Length > MaxTextLength)
-            throw AppException.BadRequest($"text must be at most {MaxTextLength} characters");
+        var message = await RequireMessageAsync(messageId, ct);
+        var access = await RequireAccessAsync(message.ChatId, deleterId, ct);
 
-        var message = await messages.GetById(messageId) ?? throw AppException.NotFound("message not found");
-        await RequireMember(message.ChatId, userId);
-        if (message.SenderId != userId)
-            throw AppException.Forbidden("only the message author may edit it");
-        if (message.ContentState == "deleted")
-            throw AppException.Conflict("message_deleted", "message has been deleted");
-        if (message.ContentState == "not_stored")
-            throw AppException.Conflict("content_not_stored", "message content is not stored");
-        await messages.UpdateText(messageId, text);
+        if (message.ContentState == MessageContentState.Deleted)
+            throw new ValidationException("Message is already deleted");
+
+        var canDelete = message.SenderId == deleterId
+            || (access.Type == ChatType.Group && access.Role is MemberRole.Admin or MemberRole.Owner);
+
+        if (!canDelete)
+            throw new ForbiddenException("Not allowed to delete this message");
+
+        return await messages.DeleteAsync(messageId, ct)
+            ?? throw new NotFoundException("Message not found");
     }
 
-    public async Task Delete(long userId, long messageId, DeleteMessageRequest? request)
-    {
-        if (request?.ForEveryone is null)
-            throw AppException.BadRequest("for_everyone is required");
-        var message = await messages.GetById(messageId) ?? throw AppException.NotFound("message not found");
-        await RequireMember(message.ChatId, userId);
+    private async Task<MessageRow> RequireMessageAsync(long messageId, CancellationToken ct)
+        => await messages.GetByIdAsync(messageId, ct)
+            ?? throw new NotFoundException("Message not found");
 
-        if (!request.ForEveryone.Value)
-        {
-            await messages.HideForUser(messageId, userId);
-            return;
-        }
-
-        if (message.SenderId != userId)
-        {
-            var role = await memberships.GetRole(message.ChatId, userId);
-            if (role is not ("owner" or "admin"))
-                throw AppException.Forbidden("only the author or a chat admin may delete for everyone");
-        }
-        if (message.ContentState == "deleted") return;
-
-        var paths = await messages.DeleteForEveryone(messageId);
-        foreach (var path in paths)
-        {
-            try
-            {
-                await files.Delete(path);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                logger.LogWarning(exception, "Failed to remove deleted message attachment {AttachmentPath}", path);
-            }
-        }
-    }
-
-    private async Task<List<MessageResponse>> ToResponses(IReadOnlyCollection<Message> rows)
-    {
-        var relatedAttachments = await attachments.GetByMessageIds(rows.Select(message => message.Id).ToArray());
-        var attachmentsByMessage = relatedAttachments
-            .GroupBy(attachment => attachment.MessageId)
-            .ToDictionary(group => group.Key, group => group.Select(AttachmentResponse.From).ToList());
-
-        var result = new List<MessageResponse>(rows.Count);
-        foreach (var message in rows)
-        {
-            var readAt = await messages.GetReadAt(message.Id);
-            result.Add(MessageResponse.From(message, readAt,
-                attachmentsByMessage.GetValueOrDefault(message.Id, [])));
-        }
-        return result;
-    }
-
-    private async Task RequireMember(long chatId, long userId)
-    {
-        if (!await memberships.ChatExists(chatId))
-            throw AppException.NotFound("chat not found");
-        if (!await memberships.IsMember(chatId, userId))
-            throw AppException.Forbidden("user is not a chat member");
-    }
+    private async Task<ChatAccess> RequireAccessAsync(long chatId, long userId, CancellationToken ct)
+        => await chats.GetAccessAsync(chatId, userId, ct)
+            ?? throw new NotFoundException("Chat not found or not accessible");
 }

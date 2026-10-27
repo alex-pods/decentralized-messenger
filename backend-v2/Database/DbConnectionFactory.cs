@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 namespace Messenger.Api.Database;
 
 
-public sealed class DbConnectionFactory
+public sealed class DbConnectionFactory(string path)
 {
     private readonly string connectionString = new SqliteConnectionStringBuilder
     {

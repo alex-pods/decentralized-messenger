@@ -1,5 +1,7 @@
 using Messenger.Api.Common.Errors;
+using Messenger.Api.Contracts.Requests;
 using Messenger.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Messenger.Api.Endpoints;
 
@@ -7,14 +9,27 @@ public static class MessagesEndpoints
 {
     public static void MapMessagesEndpoints(this WebApplication app)
     {
-        app.MapGet("/chats/{chatId:long}/messages", (long chatId, long? before_id, int? limit, MessagesService s) =>
-            s.GetHistory(chatId, before_id, limit));
+        app.MapPatch("/messages/{message_id:long}",
+            async (long message_id, EditMessageRequest request, HttpContext context,
+                IMessagesService service, CancellationToken cancellationToken) =>
+            {
+                await service.EditAsync(message_id, CurrentUser.GetId(context), request, cancellationToken);
+                return Results.NoContent();
+            })
+            .WithName("EditMessage")
+            .WithSummary("Редактировать своё сообщение");
 
-        app.MapPost("/chats/{chatId:long}/messages", (long chatId) =>
-            ImplementMe.Result("POST /chats/{id}/messages — MessagesService.Send: проверка участника, MessagesRepository.Insert"));
-        app.MapPatch("/messages/{id:long}", (long id) =>
-            ImplementMe.Result("PATCH /messages/{id} — правка своего сообщения"));
-        app.MapDelete("/messages/{id:long}", (long id) =>
-            ImplementMe.Result("DELETE /messages/{id} — удаление"));
+        app.MapDelete("/messages/{message_id:long}",
+            async (long message_id, [FromBody] DeleteMessageRequest? request, HttpContext context,
+                IMessagesService service, CancellationToken cancellationToken) =>
+            {
+                if (request?.ForEveryone is null)
+                    throw AppException.BadRequest("for_everyone is required");
+                await service.DeleteAsync(message_id, CurrentUser.GetId(context), request.ForEveryone.Value,
+                    cancellationToken);
+                return Results.NoContent();
+            })
+            .WithName("DeleteMessage")
+            .WithSummary("Удалить сообщение");
     }
 }

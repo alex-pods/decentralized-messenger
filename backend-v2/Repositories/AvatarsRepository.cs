@@ -6,8 +6,8 @@ namespace Messenger.Api.Repositories;
 
 public interface IAvatarsRepository
 {
-    /// <summary>Аватары сразу для многих пользователей — одним запросом, без N+1.</summary>
     Task<Dictionary<long, Avatar>> GetByUserIds(IReadOnlyCollection<long> userIds);
+    Task Upsert(Avatar avatar);
 }
 
 public sealed class AvatarsRepository(DbConnectionFactory db) : IAvatarsRepository
@@ -15,9 +15,21 @@ public sealed class AvatarsRepository(DbConnectionFactory db) : IAvatarsReposito
     public async Task<Dictionary<long, Avatar>> GetByUserIds(IReadOnlyCollection<long> userIds)
     {
         if (userIds.Count == 0) return [];
-        using var c = db.Open();
-        var rows = await c.QueryAsync<Avatar>(
-            "SELECT user_id AS UserId, url FROM avatars WHERE user_id IN @userIds", new { userIds });
-        return rows.ToDictionary(a => a.UserId);
+        using var connection = db.Open();
+        var rows = await connection.QueryAsync<Avatar>(
+            "SELECT user_id AS UserId, path AS Path, content_type AS ContentType FROM avatars WHERE user_id IN @userIds",
+            new { userIds = userIds.Distinct().ToArray() });
+        return rows.ToDictionary(avatar => avatar.UserId);
+    }
+
+    public async Task Upsert(Avatar avatar)
+    {
+        using var connection = db.Open();
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO avatars(user_id, path, content_type) VALUES(@UserId, @Path, @ContentType)
+            ON CONFLICT(user_id) DO UPDATE SET path = excluded.path, content_type = excluded.content_type,
+                updated_at = CURRENT_TIMESTAMP
+            """, avatar);
     }
 }

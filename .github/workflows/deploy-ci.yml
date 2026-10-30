@@ -1,0 +1,43 @@
+name: deploy-cli-ci
+on:
+  pull_request:
+    paths: ["tools/deploy/**", "backend/Dockerfile", "compose.yaml", ".dockerignore", ".github/workflows/deploy-ci.yml"]
+  push:
+    branches: ["feature-*"]
+    paths: ["tools/deploy/**", "backend/Dockerfile", "compose.yaml", ".dockerignore", ".github/workflows/deploy-ci.yml"]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: python -m unittest discover -s tools/deploy -v
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -p messenger-ci up --build -d
+      - name: Health, storage and restart
+        shell: bash
+        run: |
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:18090/health > /tmp/health.json; then break; fi
+            sleep 1
+          done
+          python -c 'import json,os; assert json.load(open("/tmp/health.json"))["revision"] == os.environ["REVISION"]'
+          curl -fsS http://127.0.0.1:18090/swagger/v1/swagger.json > /dev/null
+          docker compose -p messenger-ci restart
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:18090/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - if: always()
+        run: docker compose -p messenger-ci logs --tail=60 && docker compose -p messenger-ci down -v --rmi local

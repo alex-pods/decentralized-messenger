@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-18090}:8080"
+    environment:
+      MESSENGER_PATH_BASE: ${MESSENGER_PATH_BASE:-}
+    volumes:
+      - messenger-data:/state
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"
+volumes:
+  messenger-data:

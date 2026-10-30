@@ -5,54 +5,47 @@
              x:Class="MessengerDesktop.Views.LoginView"
              Background="Transparent"
              PointerPressed="OnDragAreaPressed">
-  <Border Classes="sheet" Width="400" Padding="34,36,34,26"
-          HorizontalAlignment="Center" VerticalAlignment="Center">
-    <StackPanel Spacing="8">
-      <Panel HorizontalAlignment="Center" Width="76" Height="76">
-        <Border CornerRadius="24" Background="{DynamicResource AccentFill}" Opacity="0.55">
-          <Border.Effect>
-            <BlurEffect Radius="26"/>
-          </Border.Effect>
-        </Border>
-        <Border CornerRadius="24" Background="{DynamicResource AccentFill}"
-                BorderBrush="#4DFFFFFF" BorderThickness="1">
-          <Panel>
-            <local:Glyph Data="{StaticResource IcBubble}" Width="38" Height="38" StrokeWidth="2.1" Foreground="White"/>
-            <local:Glyph Data="{StaticResource IcSparkle}" Width="14" Height="14" StrokeWidth="1.6" Foreground="White"
-                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,10,0"/>
-          </Panel>
-        </Border>
-      </Panel>
+  <StackPanel Width="360" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <Border Width="44" Height="44" CornerRadius="22" Background="{DynamicResource LabelPrimary}"
+            HorizontalAlignment="Center">
+      <local:Glyph Data="{StaticResource IcBubble}" Width="24" Height="24" StrokeWidth="2.1" Foreground="#0D0D0D"/>
+    </Border>
 
-      <TextBlock Text="Мессенджер" FontSize="28" FontWeight="Bold" LetterSpacing="-0.6"
-                 Foreground="{DynamicResource TitleText}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
-      <TextBlock Text="Ваш сервер. Ваши разговоры." Classes="secondary" FontSize="13.5" HorizontalAlignment="Center"/>
+    <TextBlock Text="С возвращением" FontSize="26" FontWeight="SemiBold"
+               Foreground="{DynamicResource LabelPrimary}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+    <TextBlock Text="Войдите, чтобы продолжить общение" Classes="secondary" HorizontalAlignment="Center"/>
 
-      <StackPanel Spacing="6" Margin="0,22,0,0">
-        <TextBlock Classes="field" Text="Сервер"/>
-        <TextBox Text="{Binding Server}" Watermark="https://…/messenger"/>
-        <TextBlock Classes="field" Text="Логин" Margin="0,8,0,0"/>
-        <TextBox Text="{Binding Login}" Watermark="3–16 символов"/>
-        <TextBlock Classes="field" Text="Пароль" Margin="0,8,0,0"/>
-        <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="минимум 8 символов">
-          <TextBox.KeyBindings>
-            <KeyBinding Gesture="Enter" Command="{Binding SignInCommand}"/>
-          </TextBox.KeyBindings>
-        </TextBox>
-      </StackPanel>
-
-      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"
-                 Margin="0,4,0,0"
-                 IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-
-      <Button Classes="accent large glow" Content="Войти" Command="{Binding SignInCommand}"
-              HorizontalAlignment="Stretch" Margin="0,16,0,0"
-              IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
-      <Button Classes="large" Content="Создать аккаунт" Command="{Binding SignUpCommand}"
-              HorizontalAlignment="Stretch" FontWeight="Medium"
-              IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
-      <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0"
-                 Text="Регистрация создаёт аккаунт и сразу входит. Сессия сохранится на этом компьютере."/>
+    <StackPanel Spacing="10" Margin="0,24,0,0">
+      <TextBox Text="{Binding Server}" Watermark="Сервер, например https://…/messenger"
+               CornerRadius="22" MinHeight="46" Padding="18,0"/>
+      <TextBox Text="{Binding Login}" Watermark="Логин"
+               CornerRadius="22" MinHeight="46" Padding="18,0"/>
+      <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="Пароль"
+               CornerRadius="22" MinHeight="46" Padding="18,0">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding SignInCommand}"/>
+        </TextBox.KeyBindings>
+      </TextBox>
     </StackPanel>
-  </Border>
+
+    <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"
+               FontSize="13" Margin="4,4,4,0"
+               IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+
+    <Button Classes="accent large" Content="Войти" Command="{Binding SignInCommand}"
+            HorizontalAlignment="Stretch" MinHeight="46" CornerRadius="23" Margin="0,12,0,0"
+            IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+
+    <Grid ColumnDefinitions="*,Auto,*" Margin="0,8,0,0">
+      <Border Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
+      <TextBlock Grid.Column="1" Text="или" Classes="caption" Margin="12,0"/>
+      <Border Grid.Column="2" Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
+    </Grid>
+
+    <Button Classes="large" Content="Создать аккаунт" Command="{Binding SignUpCommand}"
+            HorizontalAlignment="Stretch" MinHeight="46" CornerRadius="23"
+            IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+    <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" Margin="0,14,0,0"
+               Text="Регистрация создаёт аккаунт и сразу входит. Сессия сохранится на этом компьютере."/>
+  </StackPanel>
 </UserControl>

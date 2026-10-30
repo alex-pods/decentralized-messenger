@@ -23,9 +23,10 @@
   <Application.Styles>
     <FluentTheme>
       <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Dark" Accent="#FF8B6CFF"/>
+        <ColorPaletteResources x:Key="Dark" Accent="#FF8E8E8E"
+                               RegionColor="#FF212121" BaseHigh="#FFECECEC" BaseMedium="#FFB4B4B4" BaseLow="#FF2F2F2F"/>
       </FluentTheme.Palettes>
     </FluentTheme>
-    <StyleInclude Source="avares://MessengerDesktop/Styles/Glass.axaml"/>
+    <StyleInclude Source="avares://MessengerDesktop/Styles/Theme.axaml"/>
   </Application.Styles>
 </Application>

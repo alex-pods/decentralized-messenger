@@ -28,27 +28,22 @@ public sealed class MineAlignConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-/// <summary>Stable colourful avatar fill for an id (long) or a name (string).</summary>
+/// <summary>Stable flat avatar fill for an id (long) or a name (string). Muted ChatGPT-like solids.</summary>
 public sealed class AvatarBrushConverter : IValueConverter
 {
     static readonly IBrush[] Palette =
     [
-        Gradient("#5EE7FF", "#3B82F6"),
-        Gradient("#E29BFF", "#9333EA"),
-        Gradient("#FF8FC7", "#E11D74"),
-        Gradient("#FFD27A", "#F97316"),
-        Gradient("#7CF2B0", "#10B981"),
-        Gradient("#7FF0E6", "#0EA5A4"),
-        Gradient("#A5A3FF", "#6366F1"),
-        Gradient("#FFA39A", "#EF4444"),
+        Solid("#19C37D"),
+        Solid("#AB68FF"),
+        Solid("#EF4146"),
+        Solid("#F4AC36"),
+        Solid("#3B82F6"),
+        Solid("#0EA5A4"),
+        Solid("#E255A1"),
+        Solid("#6E6E80"),
     ];
 
-    static IBrush Gradient(string from, string to) => new LinearGradientBrush
-    {
-        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-        EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-        GradientStops = { new GradientStop(Color.Parse(from), 0), new GradientStop(Color.Parse(to), 1) },
-    };
+    static IBrush Solid(string hex) => new SolidColorBrush(Color.Parse(hex));
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {

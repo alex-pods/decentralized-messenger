@@ -1,5 +1,6 @@
 using Dapper;
 using Messenger.Api.Database;
+using Messenger.Api.Infrastructure;
 using Messenger.Api.Repositories.Models;
 
 namespace Messenger.Api.Repositories;
@@ -25,14 +26,16 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
             return new Dictionary<long, IReadOnlyList<ReactionRow>>();
 
         using var c = db.Open();
-        var raw = await c.QueryAsync<ReactionRowRaw>(new CommandDefinition(
+        var raw = (await c.QueryAsync<ReactionRowRaw>(new CommandDefinition(
             """
             SELECT message_id, emoji, user_id
             FROM message_reactions
             WHERE message_id IN @messageIds
             ORDER BY message_id, emoji, created_at, user_id
             """,
-            new { messageIds }, cancellationToken: ct));
+            new { messageIds }, cancellationToken: ct)))
+            .Select(x => x with { Emoji = Crypto.Decrypt(x.Emoji)! })
+            .ToList();
 
         return raw
             .GroupBy(x => x.MessageId)
@@ -40,6 +43,7 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
                 g => g.Key,
                 g => (IReadOnlyList<ReactionRow>)g
                     .GroupBy(x => x.Emoji)
+                    .OrderBy(eg => eg.Key, StringComparer.Ordinal)
                     .Select(eg => new ReactionRow(eg.Key, eg.Select(x => x.UserId).ToList()))
                     .ToList());
     }
@@ -49,7 +53,7 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
         using var c = db.Open();
         var rows = await c.ExecuteAsync(new CommandDefinition(
             "INSERT OR IGNORE INTO message_reactions(message_id, user_id, emoji) VALUES (@messageId, @userId, @emoji)",
-            new { messageId, userId, emoji }, cancellationToken: ct));
+            new { messageId, userId, emoji = Crypto.Encrypt(emoji) }, cancellationToken: ct));
         return rows > 0;
     }
 
@@ -58,7 +62,7 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
         using var c = db.Open();
         var rows = await c.ExecuteAsync(new CommandDefinition(
             "DELETE FROM message_reactions WHERE message_id = @messageId AND user_id = @userId AND emoji = @emoji",
-            new { messageId, userId, emoji }, cancellationToken: ct));
+            new { messageId, userId, emoji = Crypto.Encrypt(emoji) }, cancellationToken: ct));
         return rows > 0;
     }
 

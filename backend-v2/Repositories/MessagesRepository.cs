@@ -108,7 +108,15 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
                 INSERT INTO messages(chat_id, sender_id, text, reply_to_id, client_ref)
                 VALUES (@ChatId, @SenderId, @Text, @ReplyToId, @ClientRef)
                 RETURNING id
-                """, message, cancellationToken: cancellationToken));
+                """,
+                new
+                {
+                    message.ChatId,
+                    message.SenderId,
+                    Text = Crypto.Encrypt(message.Text),
+                    message.ReplyToId,
+                    ClientRef = Crypto.Encrypt(message.ClientRef)
+                }, cancellationToken: cancellationToken));
             return new AddMessageResult((await LoadRow(connection, id, cancellationToken))!, true);
         }
         catch (SqliteException exception) when (
@@ -131,7 +139,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
             SET text = @newText, edited_at = CURRENT_TIMESTAMP
             WHERE id = @messageId AND content_state = 'stored'
             """,
-            new { messageId, newText }, cancellationToken: cancellationToken));
+            new { messageId, newText = Crypto.Encrypt(newText) }, cancellationToken: cancellationToken));
         return changed == 0 ? null : await LoadRow(connection, messageId, cancellationToken);
     }
 
@@ -160,7 +168,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         IDbConnection connection, long senderId, string clientRef, CancellationToken cancellationToken)
         => await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
             "SELECT id FROM messages WHERE sender_id = @senderId AND client_ref = @clientRef",
-            new { senderId, clientRef }, cancellationToken: cancellationToken));
+            new { senderId, clientRef = Crypto.Encrypt(clientRef) }, cancellationToken: cancellationToken));
 
     private static async Task<MessageRow?> LoadRow(
         IDbConnection connection, long messageId, CancellationToken cancellationToken)
@@ -176,7 +184,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         row.ChatId,
         row.SenderId,
         row.ReplyToId,
-        row.Text,
+        Crypto.Decrypt(row.Text),
         ParseState(row.ContentState),
         SqliteTime.Parse(row.SentAt),
         SqliteTime.ParseOrNull(row.DeliveredAt),

@@ -123,11 +123,11 @@ CREATE TABLE messages(
     content_state TEXT    NOT NULL DEFAULT 'stored',
     CONSTRAINT state_values CHECK (content_state IN ('stored', 'deleted', 'not_stored')),
     CONSTRAINT text_matches_state CHECK (
-        (content_state = 'stored' AND text IS NOT NULL AND length(text) BETWEEN 1 AND 4096)
+        (content_state = 'stored' AND text IS NOT NULL AND length(text) BETWEEN 1 AND 22000)
         OR
         (content_state <> 'stored' AND text IS NULL)
     ),
-    CONSTRAINT client_ref_length CHECK (length(client_ref) <= 64)
+    CONSTRAINT client_ref_length CHECK (length(client_ref) <= 128)
 );
 CREATE INDEX idx_messages_chat   ON messages(chat_id, id);
 CREATE INDEX idx_messages_sender ON messages(sender_id, id);
@@ -162,7 +162,7 @@ CREATE TABLE message_reactions(
     emoji      TEXT    NOT NULL,
     created_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (message_id, user_id, emoji),
-    CONSTRAINT emoji_length CHECK (length(emoji) BETWEEN 1 AND 32)
+    CONSTRAINT emoji_length CHECK (length(emoji) BETWEEN 1 AND 220)
 );
 CREATE INDEX idx_message_reactions_user ON message_reactions(user_id);
 

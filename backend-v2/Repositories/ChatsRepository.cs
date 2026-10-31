@@ -157,7 +157,7 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
 
         var chatId = await c.ExecuteScalarAsync<long>(new CommandDefinition(
             "INSERT INTO chats(type, title, created_by) VALUES ('group', @title, @creatorId) RETURNING id",
-            new { title, creatorId }, tx, cancellationToken: ct));
+            new { title = Crypto.Encrypt(title), creatorId }, tx, cancellationToken: ct));
 
         await c.ExecuteAsync(new CommandDefinition(
             "INSERT INTO users_chats(user_id, chat_id, role) VALUES (@creatorId, @chatId, 'owner')",
@@ -316,18 +316,18 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
     private static ChatSummary MapSummary(SummaryRow r) => new(
         r.Id,
         r.Type == "direct" ? ChatType.Direct : Enum.Parse<ChatType>(r.Type, true),
-        r.Title,
+        Crypto.Decrypt(r.Title),
         r.CreatedBy,
         SqliteTime.Parse(r.CreatedAt),
         r.OtherUserId is long uid && r.OtherUserTag is not null && r.OtherUserName is not null
-            ? new UserCardRow(uid, r.OtherUserTag, r.OtherUserName)
+            ? new UserCardRow(uid, r.OtherUserTag, Crypto.Decrypt(r.OtherUserName)!)
             : null,
         r.LastMessageId);
 
     private static MemberRow MapMember(MemberRowRaw r) => new(
         r.UserId,
         r.Tag,
-        r.DisplayName,
+        Crypto.Decrypt(r.DisplayName)!,
         Enum.Parse<MemberRole>(r.Role, true),
         SqliteTime.Parse(r.JoinedAt));
 

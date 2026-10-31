@@ -37,7 +37,10 @@ var app = builder.Build();
 
 app.UseMiddleware<ErrorMiddleware>();
 app.UseMiddleware<SessionAuthenticationMiddleware>();
-MigrationRunner.Run(app.Services.GetRequiredService<DbConnectionFactory>());
+
+var dbFactory = app.Services.GetRequiredService<DbConnectionFactory>();
+MigrationRunner.Run(dbFactory);
+DevSeed.Run(dbFactory);
 
 // Endpoints («ручки»)
 app.MapUsersEndpoints();

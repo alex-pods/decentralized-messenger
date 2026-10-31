@@ -22,7 +22,7 @@ public sealed class AvatarsRepository(DbConnectionFactory db) : IAvatarsReposito
             new { userIds = userIds.Distinct().ToArray() });
         return rows.ToDictionary(
             row => row.UserId,
-            row => new Avatar(row.UserId, Crypto.Decrypt(row.Path)!, Crypto.Decrypt(row.ContentType)!));
+            row => new Avatar(row.UserId, Crypto.Decrypt(row.Path)!, row.ContentType));
     }
 
     public async Task Upsert(Avatar avatar)
@@ -38,7 +38,7 @@ public sealed class AvatarsRepository(DbConnectionFactory db) : IAvatarsReposito
             {
                 avatar.UserId,
                 Path = Crypto.Encrypt(avatar.Path),
-                ContentType = Crypto.Encrypt(avatar.ContentType)
+                avatar.ContentType
             });
     }
 

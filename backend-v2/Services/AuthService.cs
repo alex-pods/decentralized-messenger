@@ -5,8 +5,11 @@ using Microsoft.Data.Sqlite;
 using Messenger.Api.Common.Errors;
 using Messenger.Api.Contracts.Responses;
 using Messenger.Api.Repositories;
+using Messenger.Api.Infrastructure;
+using Messenger.Api.Realtime;
 
 namespace Messenger.Api.Services;
+
 
 public interface IAuthService
 {
@@ -16,7 +19,10 @@ public interface IAuthService
     Task<long> GetUserIdByToken(string token);
 }
 
-public sealed class AuthService(IUsersRepository users, ISessionsRepository sessions) : IAuthService
+public sealed class AuthService(
+    IUsersRepository users,
+    ISessionsRepository sessions,
+    WsConnectionRegistry connections) : IAuthService
 {
     private const int PasswordIterations = 600_000;
     private const int SessionDays = 30;
@@ -55,17 +61,27 @@ public sealed class AuthService(IUsersRepository users, ISessionsRepository sess
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var expiresAt = DateTimeOffset.UtcNow.AddDays(SessionDays);
-        await sessions.Create(user.Id, HashToken(token), expiresAt.ToString("O"));
+        await sessions.Create(user.Id, SessionTokenHash.Compute(token), expiresAt.ToString("O"));
         return new TokenResponse(token, expiresAt);
     }
 
-    public async Task Logout(string token) => await sessions.Delete(HashToken(token));
+    public async Task Logout(string token)
+    {
+        var tokenHash = SessionTokenHash.Compute(token);
+
+        await sessions.Delete(tokenHash);
+
+        connections.CloseSession(
+            tokenHash,
+            4001,
+            "session revoked");
+    }
 
     public async Task<long> GetUserIdByToken(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
             throw AppException.Unauthorized("missing bearer token");
-        var userId = await sessions.GetUserId(HashToken(token));
+        var userId = await sessions.GetUserId(SessionTokenHash.Compute(token));
         if (userId is null)
             throw AppException.Unauthorized("invalid or expired session");
         await users.TouchLastSeen(userId.Value);
@@ -98,7 +114,4 @@ public sealed class AuthService(IUsersRepository users, ISessionsRepository sess
             return false;
         }
     }
-
-    private static string HashToken(string token) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
 }

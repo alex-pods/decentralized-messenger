@@ -1,6 +1,8 @@
 using Messenger.Api.Common.Errors;
 using Messenger.Api.Repositories;
 using Messenger.Api.Repositories.Models;
+using Messenger.Api.Contracts.Responses;
+using Messenger.Api.Realtime;
 
 namespace Messenger.Api.Services;
 
@@ -14,7 +16,8 @@ public interface IReactionsService
 public sealed class ReactionsService(
     IReactionsRepository reactions,
     IMessagesRepository messages,
-    IChatsRepository chats) : IReactionsService
+    IChatsRepository chats,
+    WsEventPublisher publisher) : IReactionsService
 {
     private const int MaxEmojiLength = 32;
 
@@ -27,24 +30,71 @@ public sealed class ReactionsService(
         return all.TryGetValue(messageId, out var list) ? list : Array.Empty<ReactionRow>();
     }
 
-    public async Task AddAsync(long messageId, long userId, string emoji, CancellationToken ct = default)
+    public async Task AddAsync(
+        long messageId,
+        long userId,
+        string emoji,
+        CancellationToken ct = default)
     {
+        emoji = (emoji ?? "").Trim();
         ValidateEmoji(emoji);
 
         var message = await RequireMessageAsync(messageId, ct);
         await RequireAccessAsync(message.ChatId, userId, ct);
 
-        await reactions.AddAsync(messageId, userId, emoji, ct);
+        if (message.ContentState == MessageContentState.Deleted)
+            throw AppException.Conflict("message_deleted", "message_deleted");
+
+        var added = await reactions.AddAsync(
+            messageId, userId, emoji, ct);
+
+        if (!added)
+        {
+            // Между проверкой и INSERT сообщение могли удалить.
+            var current = await RequireMessageAsync(messageId, ct);
+
+            if (current.ContentState == MessageContentState.Deleted)
+                throw AppException.Conflict("message_deleted", "message_deleted");
+        }
+
+        await publisher.PublishToChatSafelyAsync(
+            message.ChatId,
+            userId,
+            new WsEventResponse(
+                "reaction_added",
+                ChatId: message.ChatId,
+                UserId: userId,
+                MessageId: messageId,
+                Emoji: emoji));
     }
 
-    public async Task RemoveAsync(long messageId, long userId, string emoji, CancellationToken ct = default)
+    public async Task RemoveAsync(
+        long messageId,
+        long userId,
+        string emoji,
+        CancellationToken ct = default)
     {
+        emoji = (emoji ?? "").Trim();
         ValidateEmoji(emoji);
 
         var message = await RequireMessageAsync(messageId, ct);
         await RequireAccessAsync(message.ChatId, userId, ct);
 
-        await reactions.RemoveAsync(messageId, userId, emoji, ct);
+        var removed = await reactions.RemoveAsync(
+            messageId, userId, emoji, ct);
+
+        if (!removed)
+            throw new NotFoundException("Reaction not found");
+
+        await publisher.PublishToChatSafelyAsync(
+            message.ChatId,
+            userId,
+            new WsEventResponse(
+                "reaction_removed",
+                ChatId: message.ChatId,
+                UserId: userId,
+                MessageId: messageId,
+                Emoji: emoji));
     }
 
     private static void ValidateEmoji(string emoji)

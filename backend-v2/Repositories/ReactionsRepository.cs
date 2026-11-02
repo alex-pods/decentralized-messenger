@@ -48,7 +48,13 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
     {
         using var c = db.Open();
         var rows = await c.ExecuteAsync(new CommandDefinition(
-            "INSERT OR IGNORE INTO message_reactions(message_id, user_id, emoji) VALUES (@messageId, @userId, @emoji)",
+            """
+            INSERT INTO message_reactions(message_id, user_id, emoji)
+            SELECT id, @userId, @emoji
+            FROM messages
+            WHERE id = @messageId AND content_state <> 'deleted'
+            ON CONFLICT(message_id, user_id, emoji) DO NOTHING
+            """,
             new { messageId, userId, emoji }, cancellationToken: ct));
         return rows > 0;
     }

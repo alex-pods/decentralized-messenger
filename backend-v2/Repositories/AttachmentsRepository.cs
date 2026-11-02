@@ -1,6 +1,7 @@
 using Dapper;
 using Messenger.Api.Database;
 using Messenger.Api.Models;
+using Messenger.Api.Common.Errors;
 
 namespace Messenger.Api.Repositories;
 
@@ -43,11 +44,23 @@ public sealed class AttachmentsRepository(DbConnectionFactory db) : IAttachments
         using var transaction = connection.BeginTransaction();
         foreach (var attachment in attachments)
         {
-            await connection.ExecuteAsync(
+            var inserted = await connection.ExecuteAsync(
                 """
-                INSERT INTO attachments(message_id, file_name, content_type, size_bytes, storage_path)
-                VALUES(@MessageId, @FileName, @ContentType, @SizeBytes, @StoragePath)
-                """, attachment, transaction);
+                INSERT INTO attachments(
+                    message_id, file_name, content_type, size_bytes, storage_path)
+                SELECT id, @FileName, @ContentType, @SizeBytes, @StoragePath
+                FROM messages
+                WHERE id = @MessageId AND content_state = 'stored'
+                """,
+                attachment,
+                transaction);
+
+            if (inserted == 0)
+            {
+                throw AppException.Conflict(
+                    "message_unavailable",
+                    "message is no longer stored");
+            }
         }
         transaction.Commit();
     }

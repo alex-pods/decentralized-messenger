@@ -1,9 +1,12 @@
+using Dapper;
 using Messenger.Api.Common.Errors;
 using Messenger.Api.Database;
 using Messenger.Api.Endpoints;
 using Messenger.Api.Infrastructure;
 using Messenger.Api.Repositories;
 using Messenger.Api.Services;
+
+SqlMapper.AddTypeHandler(new SecretTypeHandler(new SecretCipher()));
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,7 +43,7 @@ app.UseMiddleware<SessionAuthenticationMiddleware>();
 
 var dbFactory = app.Services.GetRequiredService<DbConnectionFactory>();
 MigrationRunner.Run(dbFactory);
-DevSeed.Run(dbFactory);
+await DevSeed.Run(dbFactory);
 
 // Endpoints («ручки»)
 app.MapUsersEndpoints();

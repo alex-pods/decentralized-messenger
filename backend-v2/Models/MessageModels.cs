@@ -1,3 +1,5 @@
+using Messenger.Api.Infrastructure;
+
 namespace Messenger.Api.Repositories.Models;
 
 public enum MessageContentState
@@ -24,9 +26,9 @@ public sealed record MessageRow(
 public sealed record NewMessage(
     long ChatId,
     long SenderId,
-    string Text,
+    Secret Text,
     long? ReplyToId,
-    string? ClientRef
+    Secret? ClientRef
 );
 
 public sealed record AddMessageResult(MessageRow Message, bool Created);

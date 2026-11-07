@@ -11,9 +11,9 @@ public interface IReactionsRepository
         IReadOnlyCollection<long> messageIds,
         CancellationToken ct = default);
 
-    Task<bool> AddAsync(long messageId, long userId, string emoji, CancellationToken ct = default);
+    Task<bool> AddAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default);
 
-    Task<bool> RemoveAsync(long messageId, long userId, string emoji, CancellationToken ct = default);
+    Task<bool> RemoveAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default);
 }
 
 public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepository
@@ -26,16 +26,14 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
             return new Dictionary<long, IReadOnlyList<ReactionRow>>();
 
         using var c = db.Open();
-        var raw = (await c.QueryAsync<ReactionRowRaw>(new CommandDefinition(
+        var raw = await c.QueryAsync<ReactionRowRaw>(new CommandDefinition(
             """
             SELECT message_id, emoji, user_id
             FROM message_reactions
             WHERE message_id IN @messageIds
-            ORDER BY message_id, emoji, created_at, user_id
+            ORDER BY message_id, created_at, user_id
             """,
-            new { messageIds }, cancellationToken: ct)))
-            .Select(x => x with { Emoji = Crypto.Decrypt(x.Emoji)! })
-            .ToList();
+            new { messageIds }, cancellationToken: ct));
 
         return raw
             .GroupBy(x => x.MessageId)
@@ -43,28 +41,28 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
                 g => g.Key,
                 g => (IReadOnlyList<ReactionRow>)g
                     .GroupBy(x => x.Emoji)
-                    .OrderBy(eg => eg.Key, StringComparer.Ordinal)
-                    .Select(eg => new ReactionRow(eg.Key, eg.Select(x => x.UserId).ToList()))
+                    .OrderBy(eg => eg.Key.Value, StringComparer.Ordinal)
+                    .Select(eg => new ReactionRow(eg.Key.Value, eg.Select(x => x.UserId).ToList()))
                     .ToList());
     }
 
-    public async Task<bool> AddAsync(long messageId, long userId, string emoji, CancellationToken ct = default)
+    public async Task<bool> AddAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default)
     {
         using var c = db.Open();
         var rows = await c.ExecuteAsync(new CommandDefinition(
             "INSERT OR IGNORE INTO message_reactions(message_id, user_id, emoji) VALUES (@messageId, @userId, @emoji)",
-            new { messageId, userId, emoji = Crypto.Encrypt(emoji) }, cancellationToken: ct));
+            new { messageId, userId, emoji }, cancellationToken: ct));
         return rows > 0;
     }
 
-    public async Task<bool> RemoveAsync(long messageId, long userId, string emoji, CancellationToken ct = default)
+    public async Task<bool> RemoveAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default)
     {
         using var c = db.Open();
         var rows = await c.ExecuteAsync(new CommandDefinition(
             "DELETE FROM message_reactions WHERE message_id = @messageId AND user_id = @userId AND emoji = @emoji",
-            new { messageId, userId, emoji = Crypto.Encrypt(emoji) }, cancellationToken: ct));
+            new { messageId, userId, emoji }, cancellationToken: ct));
         return rows > 0;
     }
 
-    private sealed record ReactionRowRaw(long MessageId, string Emoji, long UserId);
+    private sealed record ReactionRowRaw(long MessageId, Secret Emoji, long UserId);
 }

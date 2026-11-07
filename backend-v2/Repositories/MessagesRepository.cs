@@ -15,7 +15,7 @@ public interface IMessagesRepository
     Task<IReadOnlyList<MessageRow>> GetHistoryAsync(
         long chatId, long viewerId, HistoryQuery query, CancellationToken cancellationToken = default);
     Task<AddMessageResult> AddAsync(NewMessage message, CancellationToken cancellationToken = default);
-    Task<MessageRow?> EditAsync(long messageId, string newText, CancellationToken cancellationToken = default);
+    Task<MessageRow?> EditAsync(long messageId, Secret newText, CancellationToken cancellationToken = default);
     Task<MessageRow?> DeleteAsync(long messageId, CancellationToken cancellationToken = default);
     Task HideAsync(long messageId, long userId, CancellationToken cancellationToken = default);
 }
@@ -108,15 +108,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
                 INSERT INTO messages(chat_id, sender_id, text, reply_to_id, client_ref)
                 VALUES (@ChatId, @SenderId, @Text, @ReplyToId, @ClientRef)
                 RETURNING id
-                """,
-                new
-                {
-                    message.ChatId,
-                    message.SenderId,
-                    Text = Crypto.Encrypt(message.Text),
-                    message.ReplyToId,
-                    ClientRef = Crypto.Encrypt(message.ClientRef)
-                }, cancellationToken: cancellationToken));
+                """, message, cancellationToken: cancellationToken));
             return new AddMessageResult((await LoadRow(connection, id, cancellationToken))!, true);
         }
         catch (SqliteException exception) when (
@@ -130,7 +122,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     }
 
     public async Task<MessageRow?> EditAsync(
-        long messageId, string newText, CancellationToken cancellationToken = default)
+        long messageId, Secret newText, CancellationToken cancellationToken = default)
     {
         using var connection = db.Open();
         var changed = await connection.ExecuteAsync(new CommandDefinition(
@@ -139,7 +131,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
             SET text = @newText, edited_at = CURRENT_TIMESTAMP
             WHERE id = @messageId AND content_state = 'stored'
             """,
-            new { messageId, newText = Crypto.Encrypt(newText) }, cancellationToken: cancellationToken));
+            new { messageId, newText }, cancellationToken: cancellationToken));
         return changed == 0 ? null : await LoadRow(connection, messageId, cancellationToken);
     }
 
@@ -165,10 +157,10 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     }
 
     private static async Task<long?> FindByClientRef(
-        IDbConnection connection, long senderId, string clientRef, CancellationToken cancellationToken)
+        IDbConnection connection, long senderId, Secret clientRef, CancellationToken cancellationToken)
         => await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
             "SELECT id FROM messages WHERE sender_id = @senderId AND client_ref = @clientRef",
-            new { senderId, clientRef = Crypto.Encrypt(clientRef) }, cancellationToken: cancellationToken));
+            new { senderId, clientRef }, cancellationToken: cancellationToken));
 
     private static async Task<MessageRow?> LoadRow(
         IDbConnection connection, long messageId, CancellationToken cancellationToken)
@@ -184,7 +176,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         row.ChatId,
         row.SenderId,
         row.ReplyToId,
-        Crypto.Decrypt(row.Text),
+        row.Text,
         ParseState(row.ContentState),
         SqliteTime.Parse(row.SentAt),
         SqliteTime.ParseOrNull(row.DeliveredAt),
@@ -210,7 +202,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         public long ChatId { get; set; }
         public long SenderId { get; set; }
         public long? ReplyToId { get; set; }
-        public string? Text { get; set; }
+        public Secret? Text { get; set; }
         public string ContentState { get; set; } = "";
         public string SentAt { get; set; } = "";
         public string? DeliveredAt { get; set; }

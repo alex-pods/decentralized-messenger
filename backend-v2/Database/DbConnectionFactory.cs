@@ -4,29 +4,18 @@ using Microsoft.Data.Sqlite;
 namespace Messenger.Api.Database;
 
 
-public sealed class DbConnectionFactory
+public sealed class DbConnectionFactory(string path)
 {
-    private readonly string _connectionString;
+    private readonly string connectionString = new SqliteConnectionStringBuilder
+    {
+        DataSource = path,
+        ForeignKeys = true
+    }.ToString();
 
-    public DbConnectionFactory(string path){
-        var settings = new SqliteConnectionStringBuilder{
-            DataSource = path,
-            ForeignKeys = true
-        };
-
-        _connectionString = settings.ToString();
-    }
-
-    public IDbConnection Open(){
-        var connection = new SqliteConnection(_connectionString);
-
-        try{
-            connection.Open();
-            return connection;
-        }
-        catch{
-            connection.Dispose();
-            throw;
-        }
+    public IDbConnection Open()
+    {
+        var c = new SqliteConnection(connectionString);
+        c.Open();
+        return c;
     }
 }

@@ -92,6 +92,11 @@ public static class SelfCheck
         var edited = await b.GetMessages(chatId);
         if (edited.First(m => m.Id == messageId).Text != "привет, уже изменённое")
             throw new Exception("редактирование не сохранилось");
+        var retryAfterEdit = await a.SendMessage(
+            chatId, "привет из проверки", clientRef: clientRef);
+
+        if (retryAfterEdit != messageId)
+            throw new Exception("Повтор после редактирования изменил message_id");
         Console.WriteLine("edit");
 
         var mid2 = await a.SendMessage(chatId, "второе", clientRef: Guid.NewGuid().ToString("N"));
@@ -116,6 +121,11 @@ public static class SelfCheck
         await a.DeleteMessage(messageId, true);
         var deleted = (await b.GetMessages(chatId)).First(m => m.Id == messageId);
         if (deleted.ContentState != "deleted") throw new Exception("удаление для всех не сработало");
+        var retryAfterDelete = await a.SendMessage(
+            chatId, "привет из проверки", clientRef: clientRef);
+
+        if (retryAfterDelete != messageId)
+            throw new Exception("Повтор после удаления изменил message_id");
         Console.WriteLine("delete");
 
         liveB.Dispose();

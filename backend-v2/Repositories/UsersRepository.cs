@@ -1,127 +1,71 @@
 using Dapper;
 using Messenger.Api.Database;
+using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
 
 namespace Messenger.Api.Repositories;
 
 public interface IUsersRepository
 {
-    Task<List<User>> GetAll();
     Task<User?> GetById(long id);
     Task<User?> GetByTag(string tag);
-    Task<long> Insert(string tag, string name, string passwordHash);
+    Task<List<User>> Search(string query, int limit);
+    Task<long> Insert(string tag, Secret name, Secret passwordHash);
+    Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio);
+    Task TouchLastSeen(long id);
 }
 
-/// <summary>Только SQL по таблице users. Никаких правил и HTTP.</summary>
-public sealed class UsersRepository : IUsersRepository
+/// <summary>Database access for users.</summary>
+public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
 {
-    private readonly DbConnectionFactory _db;
+    private const string Columns = "id, tag, name, bio, created_at AS CreatedAt, last_seen_at AS LastSeenAt, password_hash AS PasswordHash";
 
-    public UsersRepository(DbConnectionFactory db){
-        _db = db;
-    }
-
-    public async Task<List<User>> GetAll(){
-        using var connection = _db.Open();
-
-        var users = await connection.QueryAsync<User>(
-            """
-            SELECT
-                id AS Id,
-                tag AS Tag,
-                name AS Name,
-                password_hash AS PasswordHash
-            FROM users
-            ORDER BY id;
-            """
-        );
-
-        return users.ToList();
-    }
-
-    public async Task<User?> GetById(long id){
-        if(id <= 0){
-            throw new ArgumentOutOfRangeException(
-                nameof(id),
-                id,
-                "Идентификатор должен быть положительным."
-            );
-        }
-        using var connection = _db.Open();
-
+    public async Task<User?> GetById(long id)
+    {
+        using var connection = db.Open();
         return await connection.QuerySingleOrDefaultAsync<User>(
-            """
-            SELECT
-                id AS Id,
-                tag AS Tag,
-                name AS Name,
-                password_hash AS PasswordHash
-            FROM users
-            WHERE id = @id;
-            """,
-            new { id }
-        );
+            $"SELECT {Columns} FROM users WHERE id = @id", new { id });
     }
 
-    public async Task<User?> GetByTag(string tag){
-        if(string.IsNullOrWhiteSpace(tag)){
-            throw new ArgumentException(
-                "Тег не должен быть пустым.",
-                nameof(tag)
-            );
-        }
-
-        using var connection = _db.Open();
-
+    public async Task<User?> GetByTag(string tag)
+    {
+        using var connection = db.Open();
         return await connection.QuerySingleOrDefaultAsync<User>(
-            """
-            SELECT
-                id AS Id,
-                tag AS Tag,
-                name AS Name,
-                password_hash AS PasswordHash
-            FROM users
-            WHERE tag = @tag;
-            """,
-            new { tag }
-        );
+            $"SELECT {Columns} FROM users WHERE tag = @tag COLLATE NOCASE", new { tag });
     }
 
-    public async Task<long> Insert(
-        string tag,
-        string name,
-        string passwordHash
-    ){
-        if(string.IsNullOrWhiteSpace(tag)){
-            throw new ArgumentException(
-                "Тег не должен быть пустым.",
-                nameof(tag)
-            );
-        }
+    public async Task<List<User>> Search(string query, int limit)
+    {
+        using var connection = db.Open();
+        var users = await connection.QueryAsync<User>($"SELECT {Columns} FROM users ORDER BY tag");
+        return users
+            .Where(user => user.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                           user.Name.Value.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(limit)
+            .ToList();
+    }
 
-        if(string.IsNullOrWhiteSpace(name)){
-            throw new ArgumentException(
-                "Имя не должно быть пустым.",
-                nameof(name)
-            );
-        }
-
-        if(string.IsNullOrWhiteSpace(passwordHash)){
-            throw new ArgumentException(
-                "Хеш пароля не должен быть пустым.",
-                nameof(passwordHash)
-            );
-        }
-
-        using var connection = _db.Open();
-
+    public async Task<long> Insert(string tag, Secret name, Secret passwordHash)
+    {
+        using var connection = db.Open();
         return await connection.ExecuteScalarAsync<long>(
-            """
-            INSERT INTO users(tag, name, password_hash)
-            VALUES(@tag, @name, @passwordHash)
-            RETURNING id;
-            """,
-            new { tag, name, passwordHash }
-        );
+            "INSERT INTO users(tag, name, password_hash) VALUES(@tag, @name, @passwordHash); SELECT last_insert_rowid()",
+            new { tag, name, passwordHash });
+    }
+
+    public async Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio)
+    {
+        using var connection = db.Open();
+        await connection.ExecuteAsync(
+            "UPDATE users SET name = COALESCE(@name, name), bio = CASE WHEN @updateBio THEN @bio ELSE bio END WHERE id = @id",
+            new { id, name, updateBio, bio });
+    }
+
+    public async Task TouchLastSeen(long id)
+    {
+        using var connection = db.Open();
+        await connection.ExecuteAsync(
+            "UPDATE users SET last_seen_at = CURRENT_TIMESTAMP WHERE id = @id AND (last_seen_at IS NULL OR last_seen_at < datetime('now', '-1 minute'))",
+            new { id });
     }
 }

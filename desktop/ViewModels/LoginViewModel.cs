@@ -15,6 +15,7 @@ public partial class LoginViewModel : ObservableObject
     [ObservableProperty] private string _password = "";
     [ObservableProperty] private string? _error;
     [ObservableProperty] private bool _busy;
+    [ObservableProperty] private bool _showConnection;
 
     public LoginViewModel(Navigator nav, string? server = null, string? error = null)
     {
@@ -29,6 +30,9 @@ public partial class LoginViewModel : ObservableObject
     [RelayCommand]
     Task SignUp() => Auth(register: true);
 
+    [RelayCommand]
+    void ToggleConnection() => ShowConnection = !ShowConnection;
+
     async Task Auth(bool register)
     {
         if (Busy) return;
@@ -38,6 +42,7 @@ public partial class LoginViewModel : ObservableObject
         if (!server.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
             !server.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
+            ShowConnection = true;
             Error = "Адрес сервера должен начинаться с http:// или https://";
             return;
         }

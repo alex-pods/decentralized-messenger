@@ -4,7 +4,7 @@
              xmlns:views="using:MessengerDesktop.Views"
              xmlns:conv="using:MessengerDesktop"
              x:Class="MessengerDesktop.App"
-             RequestedThemeVariant="Dark">
+             RequestedThemeVariant="Light">
   <Application.Resources>
     <conv:InverseBoolConverter x:Key="Not"/>
     <conv:EqConverter x:Key="Eq"/>
@@ -23,9 +23,10 @@
   <Application.Styles>
     <FluentTheme>
       <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Dark" Accent="#FF8B6CFF"/>
+        <ColorPaletteResources x:Key="Light" Accent="#FFF15B22"
+                               RegionColor="#FFCBD0D2" BaseHigh="#FF181E22" BaseMedium="#FF414B52" BaseLow="#FFB6BEC2"/>
       </FluentTheme.Palettes>
     </FluentTheme>
-    <StyleInclude Source="avares://MessengerDesktop/Styles/Glass.axaml"/>
+    <StyleInclude Source="avares://MessengerDesktop/Styles/Theme.axaml"/>
   </Application.Styles>
 </Application>

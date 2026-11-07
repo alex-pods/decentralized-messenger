@@ -16,6 +16,7 @@ public static class MigrationRunner
             .OrderBy(path => path, StringComparer.Ordinal);
 
         using var connection = db.Open();
+        connection.Execute("PRAGMA journal_mode = WAL;");
 
         connection.Execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations(" +

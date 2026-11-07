@@ -39,6 +39,11 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
 
     private static Task WriteError(HttpContext context, int status, string code, string message)
     {
+        if (context.Response.HasStarted)
+        {
+            context.Abort();
+            return Task.CompletedTask;
+        }
         context.Response.StatusCode = status;
         return context.Response.WriteAsJsonAsync(new
         {

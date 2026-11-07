@@ -16,15 +16,18 @@ public interface IMessagesRepository
         long chatId, long viewerId, HistoryQuery query, CancellationToken cancellationToken = default);
     Task<AddMessageResult> AddAsync(NewMessage message, CancellationToken cancellationToken = default);
     Task<MessageRow?> EditAsync(long messageId, string newText, CancellationToken cancellationToken = default);
-    Task<MessageRow?> DeleteAsync(long messageId, CancellationToken cancellationToken = default);
+    Task<DeleteMessageResult?> DeleteAsync(long messageId, CancellationToken cancellationToken = default);
     Task HideAsync(long messageId, long userId, CancellationToken cancellationToken = default);
+    Task MarkDeliveredAsync(long messageId, CancellationToken ct = default);
 }
 
 public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesRepository
 {
     private const string RowSelect = """
-        SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id, m.text, m.content_state,
-               m.sent_at, m.delivered_at, m.edited_at, m.deleted_at, v.read_at
+        SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id,
+            m.text, m.content_state,
+            m.sent_at, m.delivered_at, m.edited_at, m.deleted_at,
+            m.client_ref_payload, v.read_at
         FROM messages m
         LEFT JOIN message_read_at v ON v.message_id = m.id
         """;
@@ -90,62 +93,160 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         return result;
     }
 
-    public async Task<AddMessageResult> AddAsync(NewMessage message, CancellationToken cancellationToken = default)
+    public async Task<AddMessageResult> AddAsync(
+        NewMessage message,
+        CancellationToken cancellationToken = default)
     {
         using var connection = db.Open();
 
-        if (!string.IsNullOrEmpty(message.ClientRef))
+        var fingerprint = MessageFingerprint.Compute(
+            message.ChatId,
+            message.Text,
+            message.ReplyToId);
+
+        if (message.ClientRef is not null)
         {
-            var existingId = await FindByClientRef(connection, message.SenderId, message.ClientRef, cancellationToken);
-            if (existingId is { } id)
-                return new AddMessageResult((await LoadRow(connection, id, cancellationToken))!, false);
+            var existing = await FindDuplicateAsync(
+                connection,
+                message,
+                fingerprint,
+                cancellationToken);
+
+            if (existing is not null)
+                return existing;
         }
 
         try
         {
-            var id = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-                """
-                INSERT INTO messages(chat_id, sender_id, text, reply_to_id, client_ref)
-                VALUES (@ChatId, @SenderId, @Text, @ReplyToId, @ClientRef)
-                RETURNING id
-                """, message, cancellationToken: cancellationToken));
-            return new AddMessageResult((await LoadRow(connection, id, cancellationToken))!, true);
+            var id = await connection.ExecuteScalarAsync<long>(
+                new CommandDefinition(
+                    """
+                    INSERT INTO messages(
+                        chat_id, sender_id, text,
+                        reply_to_id, client_ref, client_ref_payload)
+                    VALUES (
+                        @ChatId, @SenderId, @Text,
+                        @ReplyToId, @ClientRef, @fingerprint)
+                    RETURNING id
+                    """,
+                    new
+                    {
+                        message.ChatId,
+                        message.SenderId,
+                        message.Text,
+                        message.ReplyToId,
+                        message.ClientRef,
+                        fingerprint = message.ClientRef is null
+                            ? null
+                            : fingerprint
+                    },
+                    cancellationToken: cancellationToken));
+
+            return new AddMessageResult(
+                (await LoadRow(connection, id, cancellationToken))!,
+                true);
         }
         catch (SqliteException exception) when (
-            message.ClientRef is not null && IsUniqueViolation(exception))
+            message.ClientRef is not null &&
+            IsUniqueViolation(exception))
         {
-            var existingId = await FindByClientRef(
-                connection, message.SenderId, message.ClientRef, cancellationToken);
-            if (existingId is null) throw;
-            return new AddMessageResult((await LoadRow(connection, existingId.Value, cancellationToken))!, false);
+            var existing = await FindDuplicateAsync(
+                connection,
+                message,
+                fingerprint,
+                cancellationToken);
+
+            if (existing is null)
+                throw;
+
+            return existing;
         }
     }
 
     public async Task<MessageRow?> EditAsync(
-        long messageId, string newText, CancellationToken cancellationToken = default)
+        long messageId,
+        string newText,
+        CancellationToken cancellationToken = default)
     {
         using var connection = db.Open();
+        using var transaction = connection.BeginTransaction();
+
+        await PreserveLegacyFingerprint(
+            connection,
+            messageId,
+            transaction,
+            cancellationToken);
+
+        var changed = await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE messages
+                SET text = @newText, edited_at = CURRENT_TIMESTAMP
+                WHERE id = @messageId AND content_state = 'stored'
+                """,
+                new { messageId, newText },
+                transaction,
+                cancellationToken: cancellationToken));
+
+        var row = changed == 0
+            ? null
+            : await LoadRow(
+                connection,
+                messageId,
+                cancellationToken,
+                transaction);
+
+        transaction.Commit();
+        return row;
+    }
+
+    public async Task<DeleteMessageResult?> DeleteAsync(
+        long messageId,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = db.Open();
+        using var transaction = connection.BeginTransaction();
+        await PreserveLegacyFingerprint(
+            connection,
+            messageId,
+            transaction,
+            cancellationToken);
+
+        var paths = (await connection.QueryAsync<string>(
+            new CommandDefinition(
+                """
+                SELECT storage_path
+                FROM attachments
+                WHERE message_id = @messageId
+                """,
+                new { messageId },
+                transaction,
+                cancellationToken: cancellationToken)))
+            .ToList();
+
         var changed = await connection.ExecuteAsync(new CommandDefinition(
             """
             UPDATE messages
-            SET text = @newText, edited_at = CURRENT_TIMESTAMP
-            WHERE id = @messageId AND content_state = 'stored'
-            """,
-            new { messageId, newText }, cancellationToken: cancellationToken));
-        return changed == 0 ? null : await LoadRow(connection, messageId, cancellationToken);
-    }
-
-    public async Task<MessageRow?> DeleteAsync(long messageId, CancellationToken cancellationToken = default)
-    {
-        using var connection = db.Open();
-        await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE messages
-            SET content_state = 'deleted', deleted_at = CURRENT_TIMESTAMP, text = NULL
+            SET content_state = 'deleted',
+                deleted_at = CURRENT_TIMESTAMP,
+                text = NULL
             WHERE id = @messageId AND content_state <> 'deleted'
             """,
-            new { messageId }, cancellationToken: cancellationToken));
-        return await LoadRow(connection, messageId, cancellationToken);
+            new { messageId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        var row = await LoadRow(
+            connection,
+            messageId,
+            cancellationToken,
+            transaction);
+
+        transaction.Commit();
+
+        return row is null
+            ? null
+            : new DeleteMessageResult(row, changed > 0, paths);
     }
 
     public async Task HideAsync(long messageId, long userId, CancellationToken cancellationToken = default)
@@ -156,18 +257,108 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
             new { userId, messageId }, cancellationToken: cancellationToken));
     }
 
-    private static async Task<long?> FindByClientRef(
-        IDbConnection connection, long senderId, string clientRef, CancellationToken cancellationToken)
-        => await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
-            "SELECT id FROM messages WHERE sender_id = @senderId AND client_ref = @clientRef",
-            new { senderId, clientRef }, cancellationToken: cancellationToken));
+    public async Task MarkDeliveredAsync(long messageId, CancellationToken ct = default)
+    {
+        using var connection = db.Open();
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE messages
+            SET delivered_at = @now
+            WHERE id = @messageId AND delivered_at IS NULL
+            """,
+            new
+            {
+                messageId,
+                now = DateTimeOffset.UtcNow.ToString("O")
+            },
+            cancellationToken: ct));
+    }
+
+    private static async Task<AddMessageResult?> FindDuplicateAsync(
+        IDbConnection connection,
+        NewMessage message,
+        string fingerprint,
+        CancellationToken ct)
+    {
+        var row = await connection.QuerySingleOrDefaultAsync<MessageRowRaw>(
+            new CommandDefinition(
+                $"{RowSelect} WHERE m.sender_id = @SenderId AND m.client_ref = @ClientRef",
+                new
+                {
+                    message.SenderId,
+                    message.ClientRef
+                },
+                cancellationToken: ct));
+
+        if (row is null)
+            return null;
+
+        var matches = row.ClientRefPayload is not null
+            ? row.ClientRefPayload == fingerprint
+            : row.ChatId == message.ChatId &&
+            row.ReplyToId == message.ReplyToId &&
+            (row.ContentState == "deleted" || row.Text == message.Text);
+
+        return new AddMessageResult(
+            MapRow(row),
+            false,
+            matches);
+    }
+
+    private static async Task PreserveLegacyFingerprint(
+        IDbConnection connection,
+        long messageId,
+        IDbTransaction transaction,
+        CancellationToken ct)
+    {
+        var row = await connection.QuerySingleOrDefaultAsync<MessageRowRaw>(
+            new CommandDefinition(
+                $"""
+                {RowSelect}
+                WHERE m.id = @messageId
+                AND m.client_ref IS NOT NULL
+                AND m.client_ref_payload IS NULL
+                AND m.edited_at IS NULL
+                AND m.content_state = 'stored'
+                """,
+                new { messageId },
+                transaction,
+                cancellationToken: ct));
+
+        if (row is null)
+            return;
+
+        var fingerprint = MessageFingerprint.Compute(
+            row.ChatId,
+            row.Text!,
+            row.ReplyToId);
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE messages
+                SET client_ref_payload = @fingerprint
+                WHERE id = @messageId
+                """,
+                new { fingerprint, messageId },
+                transaction,
+                cancellationToken: ct));
+    }
 
     private static async Task<MessageRow?> LoadRow(
-        IDbConnection connection, long messageId, CancellationToken cancellationToken)
+        IDbConnection connection,
+        long messageId,
+        CancellationToken cancellationToken,
+        IDbTransaction? transaction = null)
     {
-        var row = await connection.QuerySingleOrDefaultAsync<MessageRowRaw>(new CommandDefinition(
-            $"{RowSelect} WHERE m.id = @messageId",
-            new { messageId }, cancellationToken: cancellationToken));
+        var row = await connection.QuerySingleOrDefaultAsync<MessageRowRaw>(
+            new CommandDefinition(
+                $"{RowSelect} WHERE m.id = @messageId",
+                new { messageId },
+                transaction: transaction,
+                cancellationToken: cancellationToken));
+
         return row is null ? null : MapRow(row);
     }
 
@@ -209,5 +400,6 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         public string? EditedAt { get; set; }
         public string? DeletedAt { get; set; }
         public string? ReadAt { get; set; }
+        public string? ClientRefPayload { get; set; }
     }
 }

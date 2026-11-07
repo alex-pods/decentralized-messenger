@@ -4,8 +4,8 @@ INSERT INTO users(tag, name, password_hash) VALUES
     ('meganight', 'Меганайт',      'CHANGE_ME');
 
 INSERT INTO avatars(user_id, path, content_type) VALUES
-    (1, '/files/avatars/sergey.png', 'image/png'),
-    (2, '/files/avatars/nikita.png', 'image/png');
+    (1, 'avatars/sergey.png', 'image/png'),
+    (2, 'avatars/nikita.png', 'image/png');
 
 INSERT INTO chats(type, title, created_by) VALUES
     ('group', 'Команда', 1);

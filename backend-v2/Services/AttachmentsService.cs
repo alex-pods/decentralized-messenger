@@ -4,6 +4,7 @@ using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
 using Messenger.Api.Repositories;
 using Messenger.Api.Repositories.Models;
+using Messenger.Api.Realtime;
 
 namespace Messenger.Api.Services;
 
@@ -21,7 +22,8 @@ public sealed class AttachmentsService(
     IMessagesRepository messages,
     IChatMembershipRepository memberships,
     IFileStorage files,
-    ILogger<AttachmentsService> logger) : IAttachmentsService
+    ILogger<AttachmentsService> logger,
+    WsEventPublisher publisher) : IAttachmentsService
 {
     private const long MaxFileBytes = 10 * 1024 * 1024;
     private const int MaxFiles = 10;
@@ -53,9 +55,11 @@ public sealed class AttachmentsService(
             foreach (var file in formFiles)
             {
                 var path = $"attachments/{Guid.NewGuid():N}.bin";
+                uploadedPaths.Add(path);
+                
                 await using (var source = file.OpenReadStream())
                     await files.Write(path, source, cancellationToken);
-                uploadedPaths.Add(path);
+                
 
                 var fileName = Path.GetFileName(file.FileName.Replace('\\', '/'));
                 rows.Add(new Attachment(0, messageId,
@@ -73,8 +77,25 @@ public sealed class AttachmentsService(
         }
 
         var saved = await attachments.GetByMessageIds([messageId]);
-        return saved.Where(a => uploadedPaths.Contains(a.StoragePath))
-            .Select(AttachmentResponse.From).ToList();
+
+        var result = saved
+            .Where(a => uploadedPaths.Contains(a.StoragePath))
+            .Select(AttachmentResponse.From)
+            .ToList();
+
+        foreach (var attachment in result)
+        {
+            await publisher.PublishToChatSafelyAsync(
+                message.ChatId,
+                userId,
+                new WsEventResponse(
+                    "attachment_added",
+                    ChatId: message.ChatId,
+                    MessageId: messageId,
+                    Attachment: attachment));
+        }
+
+        return result;
     }
 
     public async Task<AttachmentDownload> GetDownload(long attachmentId, long userId)

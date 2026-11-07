@@ -29,7 +29,9 @@ public sealed record NewMessage(
     string? ClientRef
 );
 
-public sealed record AddMessageResult(MessageRow Message, bool Created);
+public sealed record AddMessageResult(MessageRow Message, bool Created, bool ContentMatches = true);
+
+public sealed record DeleteMessageResult(MessageRow Message, bool Changed, IReadOnlyList<string> AttachmentPaths);
 
 public sealed record HistoryQuery(int Limit, long? BeforeId, long? AfterId);
 

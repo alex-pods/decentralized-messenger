@@ -2,8 +2,10 @@ using Messenger.Api.Common.Errors;
 using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
 using Messenger.Api.Repositories;
+using Messenger.Api.Realtime;
 
 namespace Messenger.Api.Services;
+
 
 public interface IAvatarsService
 {
@@ -16,29 +18,44 @@ public sealed record AvatarDownload(string Path, string ContentType);
 public sealed class AvatarsService(
     IAvatarsRepository avatars,
     IFileStorage files,
-    ILogger<AvatarsService> logger) : IAvatarsService
+    ILogger<AvatarsService> logger,
+    WsEventPublisher publisher)  : IAvatarsService
 {
     private const long MaxAvatarBytes = 5 * 1024 * 1024;
 
-    public async Task<string> Upload(long userId, IFormFile file, CancellationToken cancellationToken)
+    public async Task<string> Upload(
+        long userId,
+        IFormFile file,
+        CancellationToken cancellationToken)
     {
-        if (file.Length == 0) throw AppException.BadRequest("file must not be empty");
-        if (file.Length > MaxAvatarBytes) throw AppException.PayloadTooLarge("avatar exceeds 5 MB");
-        var oldAvatarPath = (await avatars.GetByUserIds([userId])).GetValueOrDefault(userId)?.Path;
+        if (file.Length == 0)
+            throw AppException.BadRequest("file must not be empty");
+
+        if (file.Length > MaxAvatarBytes)
+            throw AppException.PayloadTooLarge("avatar exceeds 5 MB");
+
+        var oldAvatarPath = (await avatars.GetByUserIds([userId]))
+            .GetValueOrDefault(userId)?.Path;
 
         await using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, cancellationToken);
+
         var bytes = buffer.ToArray();
+
         var (contentType, extension) = DetectImage(bytes)
-            ?? throw AppException.BadRequest("invalid_avatar: only PNG, JPEG and WebP images are supported");
+            ?? throw AppException.BadRequest(
+                "invalid_avatar: only PNG, JPEG and WebP images are supported");
 
         var relativePath = $"avatars/u{userId}_{Guid.NewGuid():N}{extension}";
+
         await using var content = new MemoryStream(bytes, writable: false);
-        await files.Write(relativePath, content, cancellationToken);
 
         try
         {
-            await avatars.Upsert(new Avatar(userId, relativePath, contentType));
+            await files.Write(relativePath, content, cancellationToken);
+
+            await avatars.Upsert(
+                new Avatar(userId, relativePath, contentType));
         }
         catch
         {
@@ -48,6 +65,9 @@ public sealed class AvatarsService(
 
         if (oldAvatarPath is not null && oldAvatarPath != relativePath)
             await DeleteAfterFailure(oldAvatarPath);
+
+        await publisher.PublishAvatarChangedSafelyAsync(userId);
+
         return relativePath;
     }
 

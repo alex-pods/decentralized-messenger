@@ -28,19 +28,19 @@ public sealed class MineAlignConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-/// <summary>Stable flat avatar fill for an id (long) or a name (string). Muted ChatGPT-like solids.</summary>
+/// <summary>Stable avatar fill for an id or a name. Muted instrument tones, one orange.</summary>
 public sealed class AvatarBrushConverter : IValueConverter
 {
     static readonly IBrush[] Palette =
     [
-        Solid("#19C37D"),
-        Solid("#AB68FF"),
-        Solid("#EF4146"),
-        Solid("#F4AC36"),
-        Solid("#3B82F6"),
-        Solid("#0EA5A4"),
-        Solid("#E255A1"),
-        Solid("#6E6E80"),
+        Solid("#314048"),
+        Solid("#5C6A72"),
+        Solid("#8A4E3A"),
+        Solid("#C4542A"),
+        Solid("#3E515C"),
+        Solid("#6E6248"),
+        Solid("#4A5560"),
+        Solid("#7A8490"),
     ];
 
     static IBrush Solid(string hex) => new SolidColorBrush(Color.Parse(hex));

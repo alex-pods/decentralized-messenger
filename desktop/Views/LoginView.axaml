@@ -5,47 +5,58 @@
              x:Class="MessengerDesktop.Views.LoginView"
              Background="Transparent"
              PointerPressed="OnDragAreaPressed">
-  <StackPanel Width="360" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
-    <Border Width="44" Height="44" CornerRadius="22" Background="{DynamicResource LabelPrimary}"
-            HorizontalAlignment="Center">
-      <local:Glyph Data="{StaticResource IcBubble}" Width="24" Height="24" StrokeWidth="2.1" Foreground="#0D0D0D"/>
-    </Border>
-
-    <TextBlock Text="С возвращением" FontSize="26" FontWeight="SemiBold"
-               Foreground="{DynamicResource LabelPrimary}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
-    <TextBlock Text="Войдите, чтобы продолжить общение" Classes="secondary" HorizontalAlignment="Center"/>
-
-    <StackPanel Spacing="10" Margin="0,24,0,0">
-      <TextBox Text="{Binding Server}" Watermark="Сервер, например https://…/messenger"
-               CornerRadius="22" MinHeight="46" Padding="18,0"/>
-      <TextBox Text="{Binding Login}" Watermark="Логин"
-               CornerRadius="22" MinHeight="46" Padding="18,0"/>
-      <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="Пароль"
-               CornerRadius="22" MinHeight="46" Padding="18,0">
-        <TextBox.KeyBindings>
-          <KeyBinding Gesture="Enter" Command="{Binding SignInCommand}"/>
-        </TextBox.KeyBindings>
-      </TextBox>
+  <Grid x:Name="LoginGrid" Classes="login" Margin="{DynamicResource LoginMargin}" ColumnDefinitions="*,340">
+    <StackPanel VerticalAlignment="Top" Margin="0,28,36,0">
+      <TextBlock Classes="engraved" Text="01"/>
+      <TextBlock Text="С возвращением" Classes="display" Margin="0,10,0,0"/>
+      <TextBlock Text="Войдите, чтобы продолжить общение" Classes="secondary" TextWrapping="Wrap" Margin="0,12,0,0"/>
     </StackPanel>
 
-    <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"
-               FontSize="13" Margin="4,4,4,0"
-               IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+    <StackPanel x:Name="LoginForm" Classes="form" Grid.Column="1" Spacing="12">
+      <StackPanel Classes="vents" Orientation="Horizontal" Spacing="3" IsHitTestVisible="False" Margin="4,0,0,2">
+        <Border Classes="vent"/>
+        <Border Classes="vent"/>
+        <Border Classes="vent"/>
+        <Border Classes="vent"/>
+      </StackPanel>
 
-    <Button Classes="accent large" Content="Войти" Command="{Binding SignInCommand}"
-            HorizontalAlignment="Stretch" MinHeight="46" CornerRadius="23" Margin="0,12,0,0"
-            IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+      <StackPanel Classes="keys">
+        <Button Classes="dial" Command="{Binding SignInCommand}"
+                AutomationProperties.Name="Войти"
+                IsEnabled="{Binding Busy, Converter={StaticResource Not}}">
+          <StackPanel Spacing="4" HorizontalAlignment="Center">
+            <local:Glyph Data="{StaticResource IcBubble}" Width="22" Height="22" StrokeWidth="1.8"
+                         Foreground="{DynamicResource InkBrush}" HorizontalAlignment="Center"/>
+            <TextBlock Text="Войти" Classes="engraved" HorizontalAlignment="Center"/>
+          </StackPanel>
+        </Button>
+        <StackPanel Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="или" Classes="engraved" HorizontalAlignment="Center"/>
+          <Button Classes="large" Content="Создать аккаунт" Command="{Binding SignUpCommand}"
+                  IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+        </StackPanel>
+      </StackPanel>
 
-    <Grid ColumnDefinitions="*,Auto,*" Margin="0,8,0,0">
-      <Border Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
-      <TextBlock Grid.Column="1" Text="или" Classes="caption" Margin="12,0"/>
-      <Border Grid.Column="2" Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
-    </Grid>
+      <Border Classes="glass" Padding="12" Margin="0,6,0,0">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="field" Text="Сервер"/>
+          <TextBox Text="{Binding Server}" Watermark="https://…/messenger"/>
+          <TextBlock Classes="field" Text="Логин" Margin="0,4,0,0"/>
+          <TextBox Text="{Binding Login}" Watermark="3–16 символов"/>
+          <TextBlock Classes="field" Text="Пароль" Margin="0,4,0,0"/>
+          <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="минимум 8 символов">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding SignInCommand}"/>
+            </TextBox.KeyBindings>
+          </TextBox>
+        </StackPanel>
+      </Border>
 
-    <Button Classes="large" Content="Создать аккаунт" Command="{Binding SignUpCommand}"
-            HorizontalAlignment="Stretch" MinHeight="46" CornerRadius="23"
-            IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
-    <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" Margin="0,14,0,0"
-               Text="Регистрация создаёт аккаунт и сразу входит. Сессия сохранится на этом компьютере."/>
-  </StackPanel>
+      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"
+                 FontSize="13" Margin="2,0,2,0"
+                 IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+      <TextBlock Classes="caption" TextWrapping="Wrap" Margin="2,4,2,0"
+                 Text="Регистрация создаёт аккаунт и сразу входит. Сессия сохранится на этом компьютере."/>
+    </StackPanel>
+  </Grid>
 </UserControl>

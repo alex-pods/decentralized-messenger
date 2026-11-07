@@ -3,8 +3,18 @@
         x:Class="MessengerDesktop.Views.MainWindow"
         Title="Мессенджер"
         Width="1180" Height="780"
-        MinWidth="880" MinHeight="580"
-        Background="#212121"
+        MinWidth="360" MinHeight="560"
+        Background="#B7BFC2"
         WindowStartupLocation="CenterScreen">
-  <ContentControl Content="{Binding}"/>
+  <Panel x:Name="ChassisFrame" Margin="14">
+    <Border x:Name="Housing" Classes="housing">
+      <ContentControl Content="{Binding}"/>
+    </Border>
+    <Panel x:Name="ScrewLayer" IsHitTestVisible="False" Margin="{DynamicResource ScrewInset}">
+      <Border Classes="screw" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+      <Border Classes="screw" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+      <Border Classes="screw" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+      <Border Classes="screw" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+    </Panel>
+  </Panel>
 </Window>

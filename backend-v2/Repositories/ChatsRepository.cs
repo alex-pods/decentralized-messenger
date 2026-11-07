@@ -20,8 +20,10 @@ public interface IChatsRepository
     Task RemoveMemberAsync(long chatId, long userId, CancellationToken ct = default);
     Task SetRoleAsync(long chatId, long userId, MemberRole role, CancellationToken ct = default);
     Task TransferOwnerAsync(long chatId, long currentOwnerId, long newOwnerId, CancellationToken ct = default);
-    Task<LeaveResult> LeaveGroupAsync(long chatId, long userId, CancellationToken ct = default);
-    Task<long> MarkReadAsync(long chatId, long userId, long messageId, CancellationToken ct = default);
+    Task<LeaveGroupResult> LeaveGroupAsync(long chatId, long userId, CancellationToken ct = default);
+    Task<MarkReadResult> MarkReadAsync(long chatId, long userId, long messageId, CancellationToken ct = default);
+    Task ShowAsync(long chatId, long userId, CancellationToken ct = default);
+    Task<IReadOnlyList<long>> GetPeerUserIdsAsync(long userId,CancellationToken ct = default);
 }
 
 public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
@@ -149,8 +151,6 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
         CancellationToken ct = default)
     {
         var members = otherMemberIds.Where(id => id != creatorId).Distinct().ToList();
-        if (members.Count == 0)
-            throw new ArgumentException("Group must have at least one other member", nameof(otherMemberIds));
 
         using var c = db.Open();
         using var tx = c.BeginTransaction();
@@ -239,7 +239,7 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
         tx.Commit();
     }
 
-    public async Task<LeaveResult> LeaveGroupAsync(long chatId, long userId, CancellationToken ct = default)
+    public async Task<LeaveGroupResult> LeaveGroupAsync(long chatId, long userId, CancellationToken ct = default)
     {
         using var c = db.Open();
         using var tx = c.BeginTransaction();
@@ -258,7 +258,7 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
         if (info is null)
         {
             tx.Commit();
-            return LeaveResult.Left;
+            return new LeaveGroupResult(LeaveResult.Left, Array.Empty<string>());
         }
 
         if (info.Type != "group")
@@ -270,23 +270,41 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
                 "DELETE FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
                 new { chatId, userId }, tx, cancellationToken: ct));
             tx.Commit();
-            return LeaveResult.Left;
+            return new LeaveGroupResult(LeaveResult.Left, Array.Empty<string>());
         }
 
         if (info.MemberCount == 1)
         {
+            var paths = (await c.QueryAsync<string>(new CommandDefinition(
+                """
+                SELECT a.storage_path
+                FROM attachments a
+                JOIN messages m ON m.id = a.message_id
+                WHERE m.chat_id = @chatId
+                """,
+                new { chatId },
+                tx,
+                cancellationToken: ct)))
+                .ToList();
+
             await c.ExecuteAsync(new CommandDefinition(
                 "DELETE FROM chats WHERE id = @chatId",
-                new { chatId }, tx, cancellationToken: ct));
+                new { chatId },
+                tx,
+                cancellationToken: ct));
+
             tx.Commit();
-            return LeaveResult.GroupClosed;
+
+            return new LeaveGroupResult(
+                LeaveResult.GroupClosed,
+                paths);
         }
 
         tx.Commit();
-        return LeaveResult.OwnerTransferRequired;
+        return new LeaveGroupResult(LeaveResult.OwnerTransferRequired, Array.Empty<string>());
     }
 
-    public async Task<long> MarkReadAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
+    public async Task<MarkReadResult> MarkReadAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
     {
         using var c = db.Open();
         var updated = await c.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
@@ -299,14 +317,48 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
             """,
             new { chatId, userId, messageId }, cancellationToken: ct));
         if (updated.HasValue)
-            return updated.Value;
+            return new MarkReadResult(updated.Value, true);
 
         var current = await c.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
             "SELECT last_read_message_id FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
             new { chatId, userId }, cancellationToken: ct));
         if (current is null)
             throw new InvalidOperationException("User is not a member of this chat");
-        return current.Value;
+        return new MarkReadResult(current.Value, false);
+    }
+
+    public async Task ShowAsync(long chatId, long userId, CancellationToken ct = default)
+    {
+        using var c = db.Open();
+
+        await c.ExecuteAsync(new CommandDefinition(
+            """
+            UPDATE users_chats
+            SET hidden_at = NULL
+            WHERE chat_id = @chatId AND user_id = @userId
+            """,
+            new { chatId, userId },
+            cancellationToken: ct));
+    }
+    public async Task<IReadOnlyList<long>> GetPeerUserIdsAsync(
+        long userId,
+        CancellationToken ct = default)
+    {
+        using var c = db.Open();
+
+        var ids = await c.QueryAsync<long>(new CommandDefinition(
+            """
+            SELECT peer.user_id
+            FROM users_chats mine
+            JOIN users_chats peer ON peer.chat_id = mine.chat_id
+            WHERE mine.user_id = @userId
+
+            UNION SELECT @userId
+            """,
+            new { userId },
+            cancellationToken: ct));
+
+        return ids.ToList();
     }
 
     private static ChatAccess MapAccess(AccessRow r) => new(
@@ -364,5 +416,10 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
     private sealed record MemberRowRaw(
         long UserId, string Tag, Secret DisplayName, string Role, string JoinedAt);
 
+<<<<<<< HEAD
     private sealed record LeaveInfoRow(string Role, string Type, int MemberCount);
 }
+=======
+    private sealed record LeaveInfoRow(string Role, string Type, long MemberCount);
+}
+>>>>>>> origin/feature-backend-v2-fix-database

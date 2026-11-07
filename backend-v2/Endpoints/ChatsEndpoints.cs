@@ -157,12 +157,20 @@ public static class ChatsEndpoints
     }
 
     private static async Task<IResult> SendMessageAsync(
-        HttpContext http, long chatId, IMessagesService messages,
-        SendMessageRequest request, CancellationToken ct)
+        HttpContext http,
+        long chatId,
+        IMessagesService messages,
+        SendMessageRequest request,
+        CancellationToken ct)
     {
-        var msg = await messages.SendAsync(chatId, http.User.GetUserId(), request, ct);
+        var result = await messages.SendAsync(
+            chatId, http.User.GetUserId(), request, ct);
 
-        return Results.Json(new MessageIdResponse(msg.Id), statusCode: StatusCodes.Status201Created);
+        return Results.Json(
+            new MessageIdResponse(result.Message.Id),
+            statusCode: result.Created
+                ? StatusCodes.Status201Created
+                : StatusCodes.Status200OK);
     }
 
     private static async Task<IResult> MarkReadAsync(
@@ -185,53 +193,20 @@ public static class ChatsEndpoints
                 lastMessage = await ToMessageResponseAsync(row, viewerId, reactions, attachments, ct);
         }
 
-        if (summary.Type == ChatType.Direct)
-        {
-            var other = summary.OtherUser
-                ?? throw new InvalidOperationException("Direct chat without other user");
-            return new DirectChatResponse(
-                summary.Id, "direct",
-                new UserCardResponse(other.Id, other.Tag, other.DisplayName),
-                summary.CreatedAt, summary.CreatedBy, lastMessage);
-        }
-
-        return new GroupChatResponse(
-            summary.Id, "group", summary.Title,
-            summary.CreatedBy, summary.CreatedAt, lastMessage);
+        return ChatResponseFactory.Create(summary, lastMessage);
     }
 
-    private static async Task<MessageResponse> ToMessageResponseAsync(
-        MessageRow msg, long viewerId, IReactionsService reactions, IAttachmentsRepository attachments,
-        CancellationToken ct)
-    {
-        IReadOnlyList<ReactionRow> rows =
-            msg.ContentState == MessageContentState.Deleted
-                ? Array.Empty<ReactionRow>()
-                : await reactions.GetAsync(msg.Id, viewerId, ct);
-        var files = msg.ContentState == MessageContentState.Deleted
-            ? Array.Empty<AttachmentResponse>()
-            : (await attachments.GetByMessageIds([msg.Id]))
-                .Select(AttachmentResponse.From)
-                .ToArray();
-
-        return new MessageResponse(
-            msg.Id, msg.ChatId, msg.SenderId, msg.ReplyToId, msg.Text,
-            StateToString(msg.ContentState),
-            msg.SentAt, msg.DeliveredAt, msg.EditedAt, msg.ReadAt, msg.DeletedAt,
-            files,
-            rows.Select(r => new ReactionResponse(r.Emoji, r.UserIds)).ToList());
-    }
+    private static Task<MessageResponse> ToMessageResponseAsync(
+    MessageRow msg,
+    long viewerId,
+    IReactionsService reactions,
+    IAttachmentsRepository attachments,
+    CancellationToken ct)
+    => MessageResponseFactory.CreateAsync(
+        msg, viewerId, reactions, attachments, ct);
 
     private static MemberResponse ToMemberResponse(MemberRow m)
         => new(m.UserId, m.Tag, m.DisplayName, RoleToString(m.Role), m.JoinedAt);
-
-    private static string StateToString(MessageContentState state) => state switch
-    {
-        MessageContentState.Stored => "stored",
-        MessageContentState.NotStored => "not_stored",
-        MessageContentState.Deleted => "deleted",
-        _ => throw new ArgumentOutOfRangeException(nameof(state)),
-    };
 
     private static string RoleToString(MemberRole role) => role switch
     {

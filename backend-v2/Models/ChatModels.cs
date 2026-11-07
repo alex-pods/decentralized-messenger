@@ -42,4 +42,12 @@ public sealed record MemberRow(
     DateTimeOffset JoinedAt
 );
 
+public sealed record MarkReadResult(
+    long LastReadMessageId,
+    bool Changed);
+
+public sealed record LeaveGroupResult(
+    LeaveResult Result,
+    IReadOnlyList<string> AttachmentPaths);
+
 public sealed record DirectChatResult(long ChatId, bool Created);

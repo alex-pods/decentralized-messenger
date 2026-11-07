@@ -2,6 +2,9 @@ using Messenger.Api.Common.Errors;
 using Messenger.Api.Repositories;
 using Messenger.Api.Repositories.Models;
 using Messenger.Api.Contracts.Requests;
+using Messenger.Api.Contracts.Responses;
+using Messenger.Api.Realtime;
+using Messenger.Api.Infrastructure;
 
 namespace Messenger.Api.Services;
 
@@ -24,7 +27,10 @@ public interface IChatsService
 public sealed class ChatsService(
     IChatsRepository chats,
     IUsersRepository users,
-    IMessagesRepository messages) : IChatsService
+    IMessagesRepository messages,
+    WsEventPublisher publisher,
+    IFileStorage files,
+    ILogger<ChatsService> logger) : IChatsService
 {
     public Task<IReadOnlyList<ChatSummary>> GetChatsAsync(long viewerId, CancellationToken ct = default)
         => chats.GetVisibleChatsAsync(viewerId, ct);
@@ -44,6 +50,16 @@ public sealed class ChatsService(
             throw new NotFoundException("User not found");
 
         var result = await chats.GetOrCreateDirectAsync(callerId, otherUserId, ct);
+        if (!result.Created)
+        {
+            await chats.ShowAsync(result.ChatId, callerId, ct);
+        }
+        else
+        {
+            await publisher.PublishChatCreatedSafelyAsync(
+                result.ChatId,
+                [callerId, otherUserId]);
+        }
         var summary = await chats.GetSummaryAsync(result.ChatId, callerId, ct)
             ?? throw new NotFoundException("Chat not found");
         return new OpenDirectChatResult(summary, result.Created);
@@ -56,15 +72,18 @@ public sealed class ChatsService(
             throw new ValidationException("Title must be 1..64 characters");
 
         var memberIds = (request.MemberIds ?? Array.Empty<long>())
-            .Where(id => id != creatorId).Distinct().ToList();
-        if (memberIds.Count == 0)
-            throw new ValidationException("At least one other member required");
+                    .Where(id => id > 0 && id != creatorId)
+                    .Distinct()
+                    .ToList();
 
         foreach (var id in memberIds)
             if (await users.GetById(id) is null)
                 throw new NotFoundException($"User {id} not found");
 
         var chatId = await chats.CreateGroupAsync(creatorId, title, memberIds, ct);
+        await publisher.PublishChatCreatedSafelyAsync(
+            chatId,
+            memberIds.Append(creatorId));
         return await chats.GetSummaryAsync(chatId, creatorId, ct)
             ?? throw new NotFoundException("Chat not found");
     }
@@ -73,6 +92,7 @@ public sealed class ChatsService(
     {
         await RequireAccessAsync(chatId, viewerId, ct);
         await chats.HideAsync(chatId, viewerId, ct);
+        await publisher.PublishToUserSafelyAsync(viewerId, new WsEventResponse("chat_hidden", ChatId: chatId));
     }
 
     public async Task<IReadOnlyList<MemberRow>> GetMembersAsync(long chatId, long viewerId, CancellationToken ct = default)
@@ -81,7 +101,11 @@ public sealed class ChatsService(
         return await chats.GetMembersAsync(chatId, ct);
     }
 
-    public async Task<MemberRow> AddMemberAsync(long chatId, long callerId, long userId, CancellationToken ct = default)
+    public async Task<MemberRow> AddMemberAsync(
+        long chatId,
+        long callerId,
+        long userId,
+        CancellationToken ct = default)
     {
         await RequireGroupAdminAsync(chatId, callerId, ct);
 
@@ -89,13 +113,36 @@ public sealed class ChatsService(
             throw new NotFoundException("User not found");
 
         var current = await chats.GetMembersAsync(chatId, ct);
-        if (current.Any(m => m.UserId == userId))
-            throw new ConflictException("User is already a member");
+        var existing = current.SingleOrDefault(m => m.UserId == userId);
 
-        await chats.AddMemberAsync(chatId, userId, ct);
+        if (existing is not null)
+            return existing;
+
+        var added = await chats.AddMemberAsync(chatId, userId, ct);
 
         var refreshed = await chats.GetMembersAsync(chatId, ct);
-        return refreshed.Single(m => m.UserId == userId);
+        var member = refreshed.Single(m => m.UserId == userId);
+
+        if (added)
+        {
+            await publisher.PublishToChatSafelyAsync(
+                chatId,
+                callerId,
+                new WsEventResponse(
+                    "member_added",
+                    ChatId: chatId,
+                    UserId: userId,
+                    User: new UserCardResponse(
+                        userId,
+                        member.Tag,
+                        member.DisplayName)));
+
+            await publisher.PublishChatCreatedSafelyAsync(
+                chatId,
+                [userId]);
+        }
+
+        return member;
     }
 
     public async Task RemoveMemberAsync(long chatId, long callerId, long userId, CancellationToken ct = default)
@@ -116,6 +163,12 @@ public sealed class ChatsService(
             throw new ForbiddenException("Only owner can remove an admin");
 
         await chats.RemoveMemberAsync(chatId, userId, ct);
+        await publisher.PublishToChatSafelyAsync(chatId,callerId,
+                new WsEventResponse(
+                "member_removed",
+                ChatId: chatId,
+                UserId: userId),
+                departedUserId: userId);
     }
 
     public async Task<MemberRow> SetRoleAsync(long chatId, long callerId, long userId, MemberRole role, CancellationToken ct = default)
@@ -136,6 +189,15 @@ public sealed class ChatsService(
             throw new ForbiddenException("Cannot change owner role");
 
         await chats.SetRoleAsync(chatId, userId, role, ct);
+        await publisher.PublishToChatSafelyAsync(
+            chatId,
+            callerId,
+            new WsEventResponse(
+                "member_role_changed",
+                ChatId: chatId,
+                UserId: userId,
+                Role: role == MemberRole.Admin ? "admin" : "member"),
+                requireFollow: false);
 
         var refreshed = await chats.GetMembersAsync(chatId, ct);
         return refreshed.Single(m => m.UserId == userId);
@@ -156,15 +218,64 @@ public sealed class ChatsService(
             throw new NotFoundException("New owner is not a member");
 
         await chats.TransferOwnerAsync(chatId, callerId, newOwnerId, ct);
+        await publisher.PublishToChatSafelyAsync(
+            chatId,
+            callerId,
+            new WsEventResponse(
+                "owner_changed",
+                ChatId: chatId,
+                UserId: newOwnerId),
+            requireFollow: false);
     }
 
-    public async Task<LeaveResult> LeaveAsync(long chatId, long userId, CancellationToken ct = default)
+    public async Task<LeaveResult> LeaveAsync(
+        long chatId,
+        long userId,
+        CancellationToken ct = default)
     {
         var access = await RequireAccessAsync(chatId, userId, ct);
+
         if (access.Type == ChatType.Direct)
             throw new ValidationException("Cannot leave a direct chat");
 
-        return await chats.LeaveGroupAsync(chatId, userId, ct);
+        var result = await chats.LeaveGroupAsync(chatId, userId, ct);
+
+        if (result.Result == LeaveResult.GroupClosed)
+        {
+            await publisher.PublishToUserSafelyAsync(
+                userId,
+                new WsEventResponse(
+                    "chat_deleted",
+                    ChatId: chatId));
+
+            foreach (var path in result.AttachmentPaths)
+            {
+                try
+                {
+                    await files.Delete(path, CancellationToken.None);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogWarning(
+                        exception,
+                        "Failed to remove closed chat attachment {Path}",
+                        path);
+                }
+            }
+        }
+        else if (result.Result == LeaveResult.Left)
+        {
+            await publisher.PublishToChatSafelyAsync(
+                chatId,
+                userId,
+                new WsEventResponse(
+                    "member_left",
+                    ChatId: chatId,
+                    UserId: userId),
+                departedUserId: userId);
+        }
+
+        return result.Result;
     }
 
     public async Task<long> MarkReadAsync(long chatId, long viewerId, long messageId, CancellationToken ct = default)
@@ -177,7 +288,22 @@ public sealed class ChatsService(
         if (message.ChatId != chatId)
             throw new ValidationException("Message does not belong to this chat");
 
-        return await chats.MarkReadAsync(chatId, viewerId, messageId, ct);
+        var result = await chats.MarkReadAsync(
+            chatId, viewerId, messageId, ct);
+
+        if (result.Changed)
+        {
+            await publisher.PublishToChatSafelyAsync(
+                chatId,
+                viewerId,
+                new WsEventResponse(
+                    "read",
+                    ChatId: chatId,
+                    UserId: viewerId,
+                    LastReadMessageId: result.LastReadMessageId));
+        }
+
+        return result.LastReadMessageId;
     }
 
     private async Task<ChatAccess> RequireAccessAsync(long chatId, long userId, CancellationToken ct)

@@ -13,7 +13,7 @@ public interface IChatsRepository
     Task<ChatSummary?> GetSummaryAsync(long chatId, long viewerId, CancellationToken ct = default);
     Task<IReadOnlyList<ChatSummary>> GetVisibleChatsAsync(long userId, CancellationToken ct = default);
     Task<DirectChatResult> GetOrCreateDirectAsync(long callerId, long anotherUserId, CancellationToken ct = default);
-    Task<long> CreateGroupAsync(long creatorId, string title, IReadOnlyCollection<long> otherMemberIds, CancellationToken ct = default);
+    Task<long> CreateGroupAsync(long creatorId, Secret title, IReadOnlyCollection<long> otherMemberIds, CancellationToken ct = default);
     Task HideAsync(long chatId, long userId, CancellationToken ct = default);
     Task<IReadOnlyList<MemberRow>> GetMembersAsync(long chatId, CancellationToken ct = default);
     Task<bool> AddMemberAsync(long chatId, long userId, CancellationToken ct = default);
@@ -146,7 +146,7 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
 
     public async Task<long> CreateGroupAsync(
         long creatorId,
-        string title,
+        Secret title,
         IReadOnlyCollection<long> otherMemberIds,
         CancellationToken ct = default)
     {
@@ -372,14 +372,14 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
         r.CreatedBy,
         SqliteTime.Parse(r.CreatedAt),
         r.OtherUserId is long uid && r.OtherUserTag is not null && r.OtherUserName is not null
-            ? new UserCardRow(uid, r.OtherUserTag, r.OtherUserName)
+            ? new UserCardRow(uid, r.OtherUserTag, r.OtherUserName.Value)
             : null,
         r.LastMessageId);
 
     private static MemberRow MapMember(MemberRowRaw r) => new(
         r.UserId,
         r.Tag,
-        r.DisplayName,
+        r.DisplayName.Value,
         Enum.Parse<MemberRole>(r.Role, true),
         SqliteTime.Parse(r.JoinedAt));
 
@@ -404,17 +404,22 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
     {
         public long Id { get; set; }
         public string Type { get; set; } = "";
-        public string? Title { get; set; }
+        public Secret? Title { get; set; }
         public long? CreatedBy { get; set; }
         public string CreatedAt { get; set; } = "";
         public long? OtherUserId { get; set; }
         public long? LastMessageId { get; set; }
         public string? OtherUserTag { get; set; }
-        public string? OtherUserName { get; set; }
+        public Secret? OtherUserName { get; set; }
     }
 
     private sealed record MemberRowRaw(
-        long UserId, string Tag, string DisplayName, string Role, string JoinedAt);
+        long UserId, string Tag, Secret DisplayName, string Role, string JoinedAt);
 
+<<<<<<< HEAD
+    private sealed record LeaveInfoRow(string Role, string Type, int MemberCount);
+}
+=======
     private sealed record LeaveInfoRow(string Role, string Type, long MemberCount);
 }
+>>>>>>> origin/feature-backend-v2-fix-database

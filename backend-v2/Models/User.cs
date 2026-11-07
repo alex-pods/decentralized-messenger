@@ -1,11 +1,13 @@
+using Messenger.Api.Infrastructure;
+
 namespace Messenger.Api.Models;
 
 /// <summary>A row from the users table.</summary>
 public sealed record User(
     long Id,
     string Tag,
-    string Name,
-    string? Bio,
+    Secret Name,
+    Secret? Bio,
     string CreatedAt,
     string? LastSeenAt,
-    string PasswordHash);
+    Secret PasswordHash);

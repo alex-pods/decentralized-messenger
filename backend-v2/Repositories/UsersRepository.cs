@@ -1,5 +1,6 @@
 using Dapper;
 using Messenger.Api.Database;
+using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
 
 namespace Messenger.Api.Repositories;
@@ -9,8 +10,8 @@ public interface IUsersRepository
     Task<User?> GetById(long id);
     Task<User?> GetByTag(string tag);
     Task<List<User>> Search(string query, int limit);
-    Task<long> Insert(string tag, string name, string passwordHash);
-    Task UpdateProfile(long id, string? name, bool updateBio, string? bio);
+    Task<long> Insert(string tag, Secret name, Secret passwordHash);
+    Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio);
     Task TouchLastSeen(long id);
 }
 
@@ -36,13 +37,15 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
     public async Task<List<User>> Search(string query, int limit)
     {
         using var connection = db.Open();
-        var escaped = $"%{query.Replace("@", "@@").Replace("%", "@%").Replace("_", "@_")}%";
-        return (await connection.QueryAsync<User>(
-            $"SELECT {Columns} FROM users WHERE tag LIKE @query ESCAPE '@' OR name LIKE @query ESCAPE '@' ORDER BY tag LIMIT @limit",
-            new { query = escaped, limit })).ToList();
+        var users = await connection.QueryAsync<User>($"SELECT {Columns} FROM users ORDER BY tag");
+        return users
+            .Where(user => user.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                           user.Name.Value.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(limit)
+            .ToList();
     }
 
-    public async Task<long> Insert(string tag, string name, string passwordHash)
+    public async Task<long> Insert(string tag, Secret name, Secret passwordHash)
     {
         using var connection = db.Open();
         return await connection.ExecuteScalarAsync<long>(
@@ -50,7 +53,7 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
             new { tag, name, passwordHash });
     }
 
-    public async Task UpdateProfile(long id, string? name, bool updateBio, string? bio)
+    public async Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio)
     {
         using var connection = db.Open();
         await connection.ExecuteAsync(

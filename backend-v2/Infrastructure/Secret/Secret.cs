@@ -1,11 +1,15 @@
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using Dapper;
 
 namespace Messenger.Api.Infrastructure;
 
 public sealed record Secret(string Value)
 {
+    [return: NotNullIfNotNull(nameof(value))]
     public static implicit operator Secret?(string? value) => value is null ? null : new Secret(value);
+
+    [return: NotNullIfNotNull(nameof(secret))]
     public static implicit operator string?(Secret? secret) => secret?.Value;
     public override string ToString() => "***";
 }

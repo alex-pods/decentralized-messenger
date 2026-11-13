@@ -1,72 +1,128 @@
-using MessengerBackend;
-using MessengerBackend.Infrastructure;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
-using MessengerBackend.Core;
-using MessengerBackend.Endpoints;
-using MessengerBackend.Hubs;
+using Dapper;
+using Messenger.Api.Common.Errors;
+using Messenger.Api.Database;
+using Messenger.Api.Endpoints;
+using Messenger.Api.Infrastructure;
+using Messenger.Api.Repositories;
+using Messenger.Api.Services;
+using Messenger.Api.Realtime;
+
+SqlMapper.AddTypeHandler(new SecretTypeHandler(new SecretCipher()));
 
 var builder = WebApplication.CreateBuilder(args);
-// Hosting diagnostics include the full query string (WS session tokens).
-builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+var allowedOrigins =
+    (builder.Configuration["MESSENGER_ALLOWED_ORIGINS"] ?? "")
+    .Split(
+        ',',
+        StringSplitOptions.TrimEntries |
+        StringSplitOptions.RemoveEmptyEntries);
 
-builder.WebHost.ConfigureKestrel(o =>
-{
-    o.AddServerHeader = false;
-    o.Limits.MaxRequestBodySize = 64_000_000;
-});
-
-builder.Services.AddStorageSecurity();
-builder.Services.AddRateLimiter(o =>
-{
-    o.AddPolicy("auth", ctx => RateLimitPartition.GetSlidingWindowLimiter(
-        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new SlidingWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6, QueueLimit = 0 }));
-    o.OnRejected = async (ctx, ct) =>
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy =>
     {
-        ctx.HttpContext.Response.StatusCode = 429;
-        ctx.HttpContext.Response.Headers.RetryAfter = "60";
-        await Errors.Err(429, "слишком много запросов, повторите позже").ExecuteAsync(ctx.HttpContext);
-    };
-});
-builder.Services.AddEndpointsApiExplorer();
-// строгий контракт: неизвестные поля JSON-тел отклоняются (400), как и заявлено в схемах
-builder.Services.ConfigureHttpJsonOptions(o =>
-    o.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow);
-builder.Services.AddSwaggerGen(SwaggerSetup.Configure);
-builder.Services.AddSingleton<Hub>();
-builder.Services.AddHostedService<MessengerBackend.Features.Realtime.SessionCleanup>();
-builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-{
-    if (SecurityConfiguration.AllowedOrigins.Length > 0)
-        p.WithOrigins(SecurityConfiguration.AllowedOrigins).AllowAnyHeader().AllowAnyMethod();
-}));
+        if (allowedOrigins.Length > 0)
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
+    }));
+
+// Database
+builder.Services.AddSingleton(new DbConnectionFactory(builder.Configuration["Db"] ?? "messenger.db"));
+
+// Repositories
+builder.Services.AddSingleton<IUsersRepository, UsersRepository>();
+builder.Services.AddSingleton<IAvatarsRepository, AvatarsRepository>();
+builder.Services.AddSingleton<IMessagesRepository, MessagesRepository>();
+builder.Services.AddSingleton<IAttachmentsRepository, AttachmentsRepository>();
+builder.Services.AddSingleton<IChatMembershipRepository, ChatMembershipRepository>();
+builder.Services.AddSingleton<IChatsRepository, ChatsRepository>();
+builder.Services.AddSingleton<IReactionsRepository, ReactionsRepository>();
+builder.Services.AddSingleton<ISessionsRepository, SessionsRepository>();
+builder.Services.AddSingleton<IFileStorage, FileStorage>();
+
+builder.Services.AddSingleton<WsConnectionRegistry>();
+
+// Services
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUsersService, UsersService>();
+builder.Services.AddScoped<IMessagesService, MessagesService>();
+builder.Services.AddScoped<IChatsService, ChatsService>();
+builder.Services.AddScoped<IReactionsService, ReactionsService>();
+builder.Services.AddScoped<IAvatarsService, AvatarsService>();
+builder.Services.AddScoped<IAttachmentsService, AttachmentsService>();
+
+builder.Services.AddScoped<WsEventPublisher>();
+
+builder.Services.AddHostedService<WsSessionMonitor>();
+
+builder.WebHost.ConfigureKestrel(options =>
+    options.Limits.MaxRequestBodySize = 110 * 1024 * 1024);
 
 var app = builder.Build();
 
-var ctx = AppCtx.Resolve(app);
-ErrorMapping.Install(app);
-ctx.Install(app);          // pathbase, swagger, cors, ws, shutdown-обработка
-app.MapAuthEndpoints();
-app.MapProfileEndpoints();
-app.MapChatEndpoints();
-app.MapMessageEndpoints();
-app.MapReactionEndpoints();
-app.MapAttachmentEndpoints();
-app.MapMemberEndpoints();
-app.MapWsEndpoints(); // включая /health и /ws/protocol
+var wsConnections =
+    app.Services.GetRequiredService<WsConnectionRegistry>();
 
-try
+using var shutdownRegistration =
+    app.Lifetime.ApplicationStopping.Register(
+        wsConnections.BeginShutdown);
+
+app.UseMiddleware<ErrorMiddleware>();
+
+var pathBase =
+    builder.Configuration["MESSENGER_PATH_BASE"] ?? "/messenger";
+
+if (!string.IsNullOrWhiteSpace(pathBase) && pathBase != "/")
+    app.UsePathBase(pathBase.TrimEnd('/'));
+
+app.UseRouting();
+app.UseCors();
+
+app.UseWebSockets(new WebSocketOptions
 {
-    StorageEncryption.Configure(app.Services);
-    Db.Init();
-    await StorageEncryption.Migrate(ctx.FilesRoot);
-}
-catch (Exception ex)
+    KeepAliveInterval = TimeSpan.FromSeconds(30)
+});
+
+app.Use(async (context, next) =>
 {
-    app.Logger.LogCritical(ex, "Storage startup failed; no requests will be accepted");
-    await app.DisposeAsync();
-    Environment.ExitCode = 1;
-    return;
-}
+    var isWsEndpoint = string.Equals(
+        context.Request.Path.Value?.TrimEnd('/'),
+        "/ws",
+        StringComparison.OrdinalIgnoreCase);
+
+    if (isWsEndpoint)
+    {
+        var origin = context.Request.Headers.Origin.ToString();
+
+        if (origin.Length > 0 &&
+            !allowedOrigins.Contains(
+                origin,
+                StringComparer.OrdinalIgnoreCase))
+        {
+            throw AppException.Forbidden(
+                "WebSocket origin not allowed");
+        }
+    }
+
+    await next(context);
+});
+
+app.UseMiddleware<SessionAuthenticationMiddleware>();
+
+var dbFactory = app.Services.GetRequiredService<DbConnectionFactory>();
+MigrationRunner.Run(dbFactory);
+await DevSeed.Run(dbFactory);
+
+// Endpoints («ручки»)
+app.MapReactionsEndpoints();
+app.MapWsEndpoints();
+app.MapUsersEndpoints();
+app.MapMessagesEndpoints();
+app.MapAttachmentsEndpoints();
+app.MapChatsEndpoints();
+app.MapAuthEndpoints();
+
 app.Run();

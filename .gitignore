@@ -437,3 +437,9 @@ local_run.log
 swagger_local.json
 keys/
 files/
+
+/backend-v2/**/bin/
+/backend-v2/**/obj/
+/backend-v2/**/.vs/
+/backend-v2/**/*.db
+/backend-v2/**/*.db-*

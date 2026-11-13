@@ -14,6 +14,7 @@ public partial class ShellView : UserControl
     public ShellView()
     {
         InitializeComponent();
+        ChassisWidth.Track(this);
         DataContextChanged += (_, _) => Hook();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
     }

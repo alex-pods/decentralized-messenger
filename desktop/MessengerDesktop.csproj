@@ -13,6 +13,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AvaloniaResource Include="Assets\Fonts\*.ttf" />
+    <Content Include="Assets\Fonts\OFL-*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.1" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.1" />

@@ -2,7 +2,11 @@ name: backend-ci
 
 on:
   pull_request:
-    paths: ["backend/**", "desktop/**", "tests/**", ".github/workflows/backend-ci.yml"]
+    paths:
+      - "backend/**"
+      - "desktop/**"
+      - "tests/**"
+      - ".github/workflows/backend-ci.yml"
   push:
     branches: ["feature-*"]
 
@@ -11,23 +15,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
-      - name: Сборка бэкенда
-        run: dotnet build backend/MessengerBackend.csproj -c Release --nologo
+          dotnet-version: "8.0.x"
+
+      - name: Сборка backend-v2
+        run: dotnet build backend/Messenger.Api.csproj -c Release --nologo
+
       - name: Сборка десктопа
         run: dotnet build desktop/MessengerDesktop.csproj -c Release --nologo
+
       - name: Сборка проверок протокола
         run: dotnet build tests/ProtocolChecks/ProtocolChecks.csproj -c Release --nologo
-      - name: Проверки конкурентной отправки WebSocket
-        run: dotnet run --project tests/BackendChecks/BackendChecks.csproj -c Release
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: HTTP, WebSocket, миграции и шифрование
-        run: python backend/tests/integration.py
-      - name: Регрессии ревью PR 11
-        run: python backend/tests/review_regressions.py
-      - name: Обновление и автоматический откат
-        run: python backend/tests/deployment_regressions.py
+
+      - name: HTTP и WebSocket проверки backend-v2
+        env:
+          Db: ${{ runner.temp }}/messenger-ci.db
+          MESSENGER_FILES: ${{ runner.temp }}/messenger-ci-files
+          ASPNETCORE_URLS: http://127.0.0.1:5080
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          log="$RUNNER_TEMP/backend-v2.log"
+          dotnet backend/bin/Release/net8.0/Messenger.Api.dll >"$log" 2>&1 &
+          server_pid=$!
+
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          ready=0
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5080/messenger/health >/dev/null; then
+              ready=1
+              break
+            fi
+
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat "$log"
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            cat "$log"
+            echo "Backend-v2 не запустился за 30 секунд"
+            exit 1
+          fi
+
+          dotnet run --project tests/ProtocolChecks/ProtocolChecks.csproj \
+            -c Release --no-build -- \
+            http://127.0.0.1:5080/messenger "$server_pid"

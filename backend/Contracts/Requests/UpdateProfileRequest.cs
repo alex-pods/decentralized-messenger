@@ -9,4 +9,7 @@ public sealed record UpdateProfileRequest
 
     [JsonPropertyName("bio")]
     public string? Bio { get; init; }
+
+    [JsonPropertyName("allow_tag_search")]
+    public bool? AllowTagSearch { get; init; }
 }

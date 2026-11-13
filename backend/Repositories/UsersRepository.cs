@@ -11,14 +11,14 @@ public interface IUsersRepository
     Task<User?> GetByTag(string tag);
     Task<List<User>> Search(string query, int limit);
     Task<long> Insert(string tag, Secret name, Secret passwordHash);
-    Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio);
+    Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch);
     Task TouchLastSeen(long id);
 }
 
 /// <summary>Database access for users.</summary>
 public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
 {
-    private const string Columns = "id, tag, name, bio, created_at AS CreatedAt, last_seen_at AS LastSeenAt, password_hash AS PasswordHash";
+    private const string Columns = "id, tag, name, bio, created_at AS CreatedAt, last_seen_at AS LastSeenAt, allow_tag_search AS AllowTagSearch, password_hash AS PasswordHash";
 
     public async Task<User?> GetById(long id)
     {
@@ -37,12 +37,10 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
     public async Task<List<User>> Search(string query, int limit)
     {
         using var connection = db.Open();
-        var users = await connection.QueryAsync<User>($"SELECT {Columns} FROM users ORDER BY tag");
-        return users
-            .Where(user => user.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                           user.Name.Value.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .Take(limit)
-            .ToList();
+        var users = await connection.QueryAsync<User>(
+            $"SELECT {Columns} FROM users WHERE allow_tag_search = 1 AND tag = @query COLLATE NOCASE ORDER BY tag LIMIT @limit",
+            new { query, limit });
+        return users.ToList();
     }
 
     public async Task<long> Insert(string tag, Secret name, Secret passwordHash)
@@ -53,12 +51,12 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
             new { tag, name, passwordHash });
     }
 
-    public async Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio)
+    public async Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch)
     {
         using var connection = db.Open();
         await connection.ExecuteAsync(
-            "UPDATE users SET name = COALESCE(@name, name), bio = CASE WHEN @updateBio THEN @bio ELSE bio END WHERE id = @id",
-            new { id, name, updateBio, bio });
+            "UPDATE users SET name = COALESCE(@name, name), bio = CASE WHEN @updateBio THEN @bio ELSE bio END, allow_tag_search = COALESCE(@allowTagSearch, allow_tag_search) WHERE id = @id",
+            new { id, name, updateBio, bio, allowTagSearch });
     }
 
     public async Task TouchLastSeen(long id)

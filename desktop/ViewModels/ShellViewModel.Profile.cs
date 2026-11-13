@@ -4,7 +4,7 @@ namespace MessengerDesktop;
 
 public partial class ShellViewModel
 {
-    /// <summary>Профиль: имя и bio. Настройки save_history в v4 удалены.</summary>
+    /// <summary>Профиль: имя, bio и доступность поиска по тегу.</summary>
     [RelayCommand]
     async Task ShowProfile()
     {
@@ -19,6 +19,7 @@ public partial class ShellViewModel
                 Header = $"{me.DisplayName}  @{me.Tag}";
                 DisplayName = me.DisplayName;
                 Bio = me.Bio ?? "";
+                AllowTagSearch = me.AllowTagSearch;
             });
         }
         catch (Exception ex) { Error = Friendly(ex); }
@@ -33,7 +34,7 @@ public partial class ShellViewModel
         try
         {
             Error = null;
-            await _api.UpdateProfile(name, Bio);
+            await _api.UpdateProfile(name, Bio, AllowTagSearch);
             var me = await _api.GetMe();
             await Ui(() =>
             {

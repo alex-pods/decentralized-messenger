@@ -25,6 +25,7 @@ public partial class ChatItem : ObservableObject, IDisposable
         }
     }
     [ObservableProperty] private string _preview = "";
+    [ObservableProperty] private string _time = "";
     [ObservableProperty] private bool _unread;
     public bool HasAvatar => Avatar is not null;
     public bool ShowInitial => !IsGroup && !HasAvatar;

@@ -416,10 +416,6 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
     private sealed record MemberRowRaw(
         long UserId, string Tag, Secret DisplayName, string Role, string JoinedAt);
 
-<<<<<<< HEAD
-    private sealed record LeaveInfoRow(string Role, string Type, int MemberCount);
+private sealed record LeaveInfoRow(string Role, string Type, long MemberCount);
+
 }
-=======
-    private sealed record LeaveInfoRow(string Role, string Type, long MemberCount);
-}
->>>>>>> origin/feature-backend-v2-fix-database

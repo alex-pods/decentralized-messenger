@@ -38,9 +38,9 @@ public sealed class UsersService(IUsersRepository users, IAvatarsRepository avat
             throw AppException.BadRequest("display_name must be 1-32 characters");
         if (request.Bio is { Length: > 500 })
             throw AppException.BadRequest("bio must be at most 500 characters");
-        if (name is null && request.Bio is null)
-            throw AppException.BadRequest("provide display_name and/or bio");
+        if (name is null && request.Bio is null && request.AllowTagSearch is null)
+            throw AppException.BadRequest("provide display_name, bio, and/or allow_tag_search");
         await users.UpdateProfile(userId, name, request.Bio is not null,
-            request.Bio is { Length: 0 } ? null : request.Bio);
+            request.Bio is { Length: 0 } ? null : request.Bio, request.AllowTagSearch);
     }
 }

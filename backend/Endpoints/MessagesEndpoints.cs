@@ -31,5 +31,16 @@ public static class MessagesEndpoints
             })
             .WithName("DeleteMessage")
             .WithSummary("Удалить сообщение");
+
+        app.MapPost("/messages/{message_id:long}/forward",
+            async (long message_id, ForwardMessageRequest request, HttpContext context,
+                IMessagesService service, CancellationToken cancellationToken) =>
+            {
+                var forwarded = await service.ForwardAsync(
+                    message_id, CurrentUser.GetId(context), request, cancellationToken);
+                return Results.Json(forwarded, statusCode: StatusCodes.Status201Created);
+            })
+            .WithName("ForwardMessage")
+            .WithSummary("Переслать сообщение в другой чат");
     }
 }

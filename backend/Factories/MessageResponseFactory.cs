@@ -37,6 +37,9 @@ public static class MessageResponseFactory
             state,
             msg.SentAt, msg.DeliveredAt, msg.EditedAt, msg.ReadAt, msg.DeletedAt,
             files,
-            rows.Select(r => new ReactionResponse(r.Emoji, r.UserIds)).ToList());
+            rows.Select(r => new ReactionResponse(r.Emoji, r.UserIds)).ToList(),
+            msg.Forward is { } forward
+                ? new ForwardedFromResponse(forward.AuthorId, forward.AuthorName, forward.OriginalSentAt)
+                : null);
     }
 }

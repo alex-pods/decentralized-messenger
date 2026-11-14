@@ -14,6 +14,7 @@ public partial class ShellViewModel
             var messages = await _api.GetMessages(chat.Id, 50);
             if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
             await Ui(() => Fill(chat, members, messages, replace: true));
+            await LoadPins(chat, gen);
             _live.Follow(chat.Id);
             if (messages.Count > 0)
             {
@@ -37,6 +38,7 @@ public partial class ShellViewModel
         var messages = await _api.GetMessages(chat.Id, 50);
         if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
         await Ui(() => Fill(chat, members, messages, replace: true));
+        await LoadPins(chat, gen);
         if (messages.Count > 0)
         {
             try { await _api.MarkRead(chat.Id, messages[^1].Id); } catch { }
@@ -77,6 +79,8 @@ public partial class ShellViewModel
         foreach (var m in members) _names[m.Id] = m.DisplayName;
         _myRole = members.FirstOrDefault(m => m.Id == _me.Id)?.Role ?? "";
         OnPropertyChanged(nameof(CanDeleteEveryone));
+        OnPropertyChanged(nameof(CanManagePins));
+        OnPropertyChanged(nameof(CanPin));
         if (!replace) return;
         var texts = messages.ToDictionary(m => m.Id, MessageMapper.Body);
         Messages.Clear();
@@ -196,6 +200,132 @@ public partial class ShellViewModel
         }
     }
 
+    async Task LoadPins(ChatItem chat, int gen)
+    {
+        try
+        {
+            var pins = await _api.GetPins(chat.Id);
+            if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
+            await Ui(() => ReplacePins(pins));
+        }
+        catch (Exception ex)
+        {
+            if (gen == _openGen) Error = Friendly(ex);
+        }
+    }
+
+    void ReplacePins(List<PinDto> pins)
+    {
+        _pins.Clear();
+        foreach (var pin in pins)
+        {
+            if (pin.Message is null) continue;
+            _pins.Add(new PinItem
+            {
+                MessageId = pin.MessageId,
+                Text = MessageMapper.Trim(MessageMapper.Body(pin.Message), 90)
+            });
+        }
+        _pinIndex = 0;
+        NotifyPins();
+    }
+
+    void ClearPins()
+    {
+        _pins.Clear();
+        _pinIndex = 0;
+        NotifyPins();
+    }
+
+    void NotifyPins()
+    {
+        OnPropertyChanged(nameof(HasPins));
+        OnPropertyChanged(nameof(PinText));
+        OnPropertyChanged(nameof(PinCounter));
+        OnPropertyChanged(nameof(SelectedIsPinned));
+        OnPropertyChanged(nameof(PinActionLabel));
+    }
+
+    void UpsertPin(MessageDto message)
+    {
+        _pins.RemoveAll(p => p.MessageId == message.Id);
+        _pins.Insert(0, new PinItem
+        {
+            MessageId = message.Id,
+            Text = MessageMapper.Trim(MessageMapper.Body(message), 90)
+        });
+        _pinIndex = 0;
+        NotifyPins();
+    }
+
+    void RemovePin(long messageId)
+    {
+        if (_pins.RemoveAll(p => p.MessageId == messageId) == 0) return;
+        if (_pinIndex >= _pins.Count) _pinIndex = 0;
+        NotifyPins();
+    }
+
+    [RelayCommand]
+    void ShowPinned()
+    {
+        if (_pins.Count == 0) return;
+        var pin = _pins[Math.Clamp(_pinIndex, 0, _pins.Count - 1)];
+        var item = Messages.FirstOrDefault(m => m.Id == pin.MessageId);
+        if (item == null)
+            Error = "Закреплённое сообщение не в загруженной истории";
+        else
+        {
+            SelectedMessage = item;
+            ScrollToMessage?.Invoke(item);
+        }
+        if (_pins.Count > 1)
+            _pinIndex = (_pinIndex + 1) % _pins.Count;
+        NotifyPins();
+    }
+
+    [RelayCommand]
+    async Task UnpinShown()
+    {
+        var chat = SelectedChat;
+        if (chat == null || !CanManagePins || _pins.Count == 0) return;
+        var pin = _pins[Math.Clamp(_pinIndex, 0, _pins.Count - 1)];
+        try
+        {
+            Error = null;
+            await _api.UnpinMessage(chat.Id, pin.MessageId);
+            RemovePin(pin.MessageId);
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+    }
+
+    [RelayCommand]
+    async Task TogglePin()
+    {
+        var chat = SelectedChat;
+        var message = SelectedMessage;
+        if (chat == null || message == null || !CanPin) return;
+        try
+        {
+            Error = null;
+            if (SelectedIsPinned)
+            {
+                await _api.UnpinMessage(chat.Id, message.Id);
+                RemovePin(message.Id);
+            }
+            else
+            {
+                await _api.PinMessage(chat.Id, message.Id);
+                UpsertPin(new MessageDto
+                {
+                    Id = message.Id,
+                    Text = message.Text,
+                    ContentState = message.IsDeleted ? "deleted" : "stored"
+                });
+            }
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+    }
+
     [RelayCommand] void Reply() { if (SelectedMessage != null) { Editing = null; ReplyTo = SelectedMessage; } }
     [RelayCommand] void BeginEdit() { if (CanEdit && SelectedMessage != null) { ReplyTo = null; Editing = SelectedMessage; Draft = SelectedMessage.Text; } }
     [RelayCommand] void CancelCompose() { ReplyTo = null; Editing = null; }
@@ -269,8 +399,25 @@ public partial class ShellViewModel
                 break;
             case "message_edited" when e.Message != null:
                 Incoming(e.ChatId, e.Message, unread: false);
+                if (e.ChatId == SelectedChat?.Id)
+                {
+                    var pinned = _pins.FirstOrDefault(p => p.MessageId == e.Message.Id);
+                    if (pinned != null)
+                    {
+                        pinned.Text = MessageMapper.Trim(MessageMapper.Body(e.Message), 90);
+                        NotifyPins();
+                    }
+                }
+                break;
+            case "message_pinned" when e.ChatId == SelectedChat?.Id && e.Message != null:
+                UpsertPin(e.Message);
+                break;
+            case "message_unpinned" when e.ChatId == SelectedChat?.Id && e.MessageId is { } unpinned:
+                RemovePin(unpinned);
                 break;
             case "message_deleted":
+                if (e.ForEveryone != false && e.MessageId is { } dropped)
+                    RemovePin(dropped);
                 if (e.ForEveryone == false && e.ChatId == SelectedChat?.Id && e.MessageId is { } hid)
                 {
                     var gone = Messages.FirstOrDefault(m => m.Id == hid);

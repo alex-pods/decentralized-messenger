@@ -37,4 +37,10 @@ public sealed record DeleteMessageResult(MessageRow Message, bool Changed, IRead
 
 public sealed record HistoryQuery(int Limit, long? BeforeId, long? AfterId);
 
+public sealed record PinRow(
+    long MessageId,
+    long PinnedBy,
+    DateTimeOffset PinnedAt,
+    MessageRow Message);
+
 public sealed record ReactionRow(string Emoji, IReadOnlyList<long> UserIds);

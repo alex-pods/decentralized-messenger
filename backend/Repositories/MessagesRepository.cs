@@ -25,6 +25,11 @@ public interface IMessagesRepository
         CancellationToken cancellationToken = default);
     Task HideAsync(long messageId, long userId, CancellationToken cancellationToken = default);
     Task MarkDeliveredAsync(long messageId, CancellationToken ct = default);
+    Task<IReadOnlyList<PinRow>> ListPinsAsync(long chatId, long viewerId, CancellationToken ct = default);
+    Task<bool> PinAsync(long chatId, long messageId, long userId, DateTimeOffset pinnedAt, CancellationToken ct = default);
+    Task<bool> UnpinAsync(long chatId, long messageId, CancellationToken ct = default);
+    Task<int> CountPinsAsync(long chatId, CancellationToken ct = default);
+    Task<bool> IsPinnedAsync(long chatId, long messageId, CancellationToken ct = default);
 }
 
 public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesRepository
@@ -353,6 +358,82 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
                 cancellationToken: ct));
     }
 
+    public async Task<IReadOnlyList<PinRow>> ListPinsAsync(
+        long chatId, long viewerId, CancellationToken ct = default)
+    {
+        using var connection = db.Open();
+        var rows = await connection.QueryAsync<PinRowRaw>(new CommandDefinition(
+            """
+            SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id,
+                m.text, m.content_state,
+                m.sent_at, m.delivered_at, m.edited_at, m.deleted_at,
+                m.client_ref_payload, v.read_at,
+                p.pinned_by, p.pinned_at
+            FROM pinned_messages p
+            JOIN messages m ON m.id = p.message_id
+            LEFT JOIN message_read_at v ON v.message_id = m.id
+            WHERE p.chat_id = @chatId
+              AND NOT EXISTS (
+                  SELECT 1 FROM message_hidden h
+                  WHERE h.message_id = m.id AND h.user_id = @viewerId)
+            ORDER BY p.pinned_at DESC, p.message_id DESC
+            """,
+            new { chatId, viewerId },
+            cancellationToken: ct));
+        return rows.Select(row => new PinRow(
+            row.Id,
+            row.PinnedBy,
+            SqliteTime.Parse(row.PinnedAt),
+            MapRow(row))).ToList();
+    }
+
+    public async Task<bool> PinAsync(
+        long chatId, long messageId, long userId, DateTimeOffset pinnedAt, CancellationToken ct = default)
+    {
+        using var connection = db.Open();
+        var inserted = await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO pinned_messages(chat_id, message_id, pinned_by, pinned_at)
+            VALUES (@chatId, @messageId, @userId, @pinnedAt)
+            ON CONFLICT(chat_id, message_id) DO NOTHING
+            """,
+            new { chatId, messageId, userId, pinnedAt = pinnedAt.ToString("o") },
+            cancellationToken: ct));
+        return inserted > 0;
+    }
+
+    public async Task<bool> UnpinAsync(long chatId, long messageId, CancellationToken ct = default)
+    {
+        using var connection = db.Open();
+        var removed = await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM pinned_messages WHERE chat_id = @chatId AND message_id = @messageId",
+            new { chatId, messageId },
+            cancellationToken: ct));
+        return removed > 0;
+    }
+
+    public async Task<int> CountPinsAsync(long chatId, CancellationToken ct = default)
+    {
+        using var connection = db.Open();
+        return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT COUNT(*) FROM pinned_messages WHERE chat_id = @chatId",
+            new { chatId },
+            cancellationToken: ct));
+    }
+
+    public async Task<bool> IsPinnedAsync(long chatId, long messageId, CancellationToken ct = default)
+    {
+        using var connection = db.Open();
+        var count = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            """
+            SELECT COUNT(*) FROM pinned_messages
+            WHERE chat_id = @chatId AND message_id = @messageId
+            """,
+            new { chatId, messageId },
+            cancellationToken: ct));
+        return count > 0;
+    }
+
     private static async Task<MessageRow?> LoadRow(
         IDbConnection connection,
         long messageId,
@@ -394,7 +475,13 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         exception.SqliteErrorCode == 19 &&
         exception.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
 
-    private sealed class MessageRowRaw
+    private sealed class PinRowRaw : MessageRowRaw
+    {
+        public long PinnedBy { get; set; }
+        public string PinnedAt { get; set; } = "";
+    }
+
+    private class MessageRowRaw
     {
         public long Id { get; set; }
         public long ChatId { get; set; }

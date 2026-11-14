@@ -15,6 +15,9 @@ public interface IMessagesService
     Task<AddMessageResult> SendAsync(long chatId, long senderId, SendMessageRequest request, CancellationToken ct = default);
     Task<MessageRow> EditAsync(long messageId, long editorId, EditMessageRequest request, CancellationToken ct = default);
     Task<MessageRow> DeleteAsync(long messageId, long deleterId, bool forEveryone, CancellationToken ct = default);
+    Task<IReadOnlyList<PinRow>> ListPinsAsync(long chatId, long viewerId, CancellationToken ct = default);
+    Task PinAsync(long chatId, long userId, long messageId, CancellationToken ct = default);
+    Task UnpinAsync(long chatId, long userId, long messageId, CancellationToken ct = default);
 }
 
 public sealed class MessagesService(
@@ -183,6 +186,8 @@ public sealed class MessagesService(
             return message;
         }
 
+        var wasPinned = await messages.IsPinnedAsync(message.ChatId, messageId, ct);
+
         var canDelete = message.SenderId == deleterId
             || (access.Type == ChatType.Group && access.Role is MemberRole.Admin or MemberRole.Owner);
 
@@ -208,6 +213,12 @@ public sealed class MessagesService(
             deleterId,
             forEveryone: true);
 
+        if (wasPinned)
+        {
+            await messages.UnpinAsync(message.ChatId, messageId, ct);
+            await PublishPinChangeAsync("message_unpinned", deleted, deleterId);
+        }
+
         foreach (var path in result.AttachmentPaths)
         {
             try
@@ -224,6 +235,77 @@ public sealed class MessagesService(
         }
 
         return deleted;
+    }
+
+    public async Task<IReadOnlyList<PinRow>> ListPinsAsync(
+        long chatId, long viewerId, CancellationToken ct = default)
+    {
+        await RequireAccessAsync(chatId, viewerId, ct);
+        return await messages.ListPinsAsync(chatId, viewerId, ct);
+    }
+
+    public async Task PinAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
+    {
+        var access = await RequireAccessAsync(chatId, userId, ct);
+        RequirePinRight(access);
+        var message = await RequireMessageAsync(messageId, ct);
+        if (message.ChatId != chatId)
+            throw new ValidationException("Message must belong to this chat");
+        if (message.ContentState != MessageContentState.Stored)
+            throw AppException.Conflict("message_not_pinnable", "Only stored messages can be pinned");
+        if (!await messages.IsPinnedAsync(chatId, messageId, ct)
+            && await messages.CountPinsAsync(chatId, ct) >= 20)
+            throw new ValidationException("A chat can have at most 20 pinned messages");
+
+        var created = await messages.PinAsync(chatId, messageId, userId, DateTimeOffset.UtcNow, ct);
+        if (created)
+            await PublishPinChangeAsync("message_pinned", message, userId);
+    }
+
+    public async Task UnpinAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
+    {
+        var access = await RequireAccessAsync(chatId, userId, ct);
+        RequirePinRight(access);
+        var message = await RequireMessageAsync(messageId, ct);
+        if (message.ChatId != chatId)
+            throw new ValidationException("Message must belong to this chat");
+        var removed = await messages.UnpinAsync(chatId, messageId, ct);
+        if (removed)
+            await PublishPinChangeAsync("message_unpinned", message, userId);
+    }
+
+    private static void RequirePinRight(ChatAccess access)
+    {
+        if (access.Type == ChatType.Group && access.Role is not (MemberRole.Admin or MemberRole.Owner))
+            throw new ForbiddenException("Only admins can pin messages");
+    }
+
+    private async Task PublishPinChangeAsync(string eventType, MessageRow message, long actorId)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var response = await MessageResponseFactory.CreateAsync(
+                message, actorId, reactions, attachments, timeout.Token);
+            await publisher.PublishToChatAsync(
+                message.ChatId,
+                actorId,
+                new WsEventResponse(
+                    eventType,
+                    ChatId: message.ChatId,
+                    Message: response,
+                    MessageId: message.Id,
+                    UserId: actorId),
+                timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Failed to publish {EventType} for message {MessageId}",
+                eventType,
+                message.Id);
+        }
     }
 
     private async Task PublishMessageChangeAsync(

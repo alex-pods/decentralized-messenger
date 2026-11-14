@@ -95,6 +95,7 @@
       <StreamGeometry x:Key="IcReply">M9.5,6.5 L4.5,11.5 L9.5,16.5 M4.5,11.5 H13.5 A6,6 0 0 1 19.5,17.5 V18.5</StreamGeometry>
       <StreamGeometry x:Key="IcEdit">M15.8,4.7 A2,2 0 0 1 18.6,7.5 L8.5,17.6 L4.8,18.7 L5.9,15 Z M14,6.5 L16.8,9.3</StreamGeometry>
       <StreamGeometry x:Key="IcTrash">M4.5,7 H19.5 M9.5,7 V5.5 A1,1 0 0 1 10.5,4.5 H13.5 A1,1 0 0 1 14.5,5.5 V7 M6.5,7 L7.3,18.6 A1.5,1.5 0 0 0 8.8,20 H15.2 A1.5,1.5 0 0 0 16.7,18.6 L17.5,7</StreamGeometry>
+      <StreamGeometry x:Key="IcPin">M9,4.5 H15 L13.2,10.2 L12,19.5 L10.8,10.2 Z M12,8.2 V4.5</StreamGeometry>
       <StreamGeometry x:Key="IcChevronUp">M6.5,14.5 L12,9 L17.5,14.5</StreamGeometry>
       <StreamGeometry x:Key="IcBubble">M12,4 C7,4 3.5,7.2 3.5,11.2 C3.5,13.4 4.6,15.4 6.4,16.7 L5.6,20 L9.4,18.1 C10.2,18.3 11.1,18.4 12,18.4 C17,18.4 20.5,15.2 20.5,11.2 C20.5,7.2 17,4 12,4 Z</StreamGeometry>
       <StreamGeometry x:Key="IcSparkle">M12,3 C12.6,8.2 15.8,11.4 21,12 C15.8,12.6 12.6,15.8 12,21 C11.4,15.8 8.2,12.6 3,12 C8.2,11.4 11.4,8.2 12,3 Z</StreamGeometry>

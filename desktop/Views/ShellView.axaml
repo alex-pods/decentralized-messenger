@@ -137,6 +137,29 @@
           </Grid>
 
           <Border Grid.Row="1" Classes="screen" Margin="12,0,12,8">
+            <DockPanel>
+              <Border DockPanel.Dock="Top" Margin="10,8,10,0" Padding="8,6" CornerRadius="4"
+                      Background="#2A3236" IsVisible="{Binding HasPins}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <Button Classes="toolbar" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          Command="{Binding ShowPinnedCommand}" Background="Transparent" BorderThickness="0">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <local:Glyph Data="{StaticResource IcPin}" Width="14" Height="14" StrokeWidth="1.7"
+                                   Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="1" Margin="8,0,8,0" Text="{Binding PinText}"
+                                 Foreground="{DynamicResource OnFieldBrush}"
+                                 TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1"
+                                 VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="2" Text="{Binding PinCounter}" Classes="caption" VerticalAlignment="Center"/>
+                    </Grid>
+                  </Button>
+                  <Button Grid.Column="1" Classes="icon small" ToolTip.Tip="Открепить"
+                          AutomationProperties.Name="Открепить"
+                          Command="{Binding UnpinShownCommand}" IsVisible="{Binding CanManagePins}">
+                    <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
+                  </Button>
+                </Grid>
+              </Border>
             <Panel>
               <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
                           MaxWidth="520" Margin="24"
@@ -274,6 +297,7 @@
                 </StackPanel>
               </Button>
             </Panel>
+            </DockPanel>
           </Border>
 
           <StackPanel Grid.Row="2" Spacing="6" HorizontalAlignment="Center" Margin="12,0,12,0"
@@ -320,6 +344,12 @@
                   <local:Glyph Data="{StaticResource IcSmilePlus}" Width="16" Height="16"/>
                 </Button>
                 <Border Width="1" Margin="4,8" Background="{DynamicResource LineBrush}"/>
+                <Button Classes="toolbar" Command="{Binding TogglePinCommand}" IsVisible="{Binding CanPin}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <local:Glyph Data="{StaticResource IcPin}" Width="14" Height="14"/>
+                    <TextBlock Text="{Binding PinActionLabel}"/>
+                  </StackPanel>
+                </Button>
                 <Button Classes="toolbar" Command="{Binding ReplyCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <local:Glyph Data="{StaticResource IcReply}" Width="14" Height="14"/>

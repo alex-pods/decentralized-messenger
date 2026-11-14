@@ -71,15 +71,20 @@
     <Style Selector="TextBox.loginField:focus /template/ Border#PART_BorderElement">
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     </Style>
+    <Style Selector="Border.cornerScrew">
+      <Setter Property="Width" Value="11"/>
+      <Setter Property="Height" Value="11"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Background" Value="#6A7176"/>
+      <Setter Property="BorderBrush" Value="#C5C9CC"/>
+      <Setter Property="BorderThickness" Value="0.5"/>
+      <Setter Property="BoxShadow" Value="inset 0 1 1 0 #3C4347"/>
+    </Style>
   </UserControl.Styles>
 
-  <Panel Background="#D5D8DA">
+  <Panel>
     <Panel.Background>
-      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-        <GradientStop Offset="0" Color="#ECEEEF"/>
-        <GradientStop Offset="0.45" Color="#D9DCDE"/>
-        <GradientStop Offset="1" Color="#C9CDD0"/>
-      </LinearGradientBrush>
+      <ImageBrush Source="avares://MessengerDesktop/Assets/brushed-metal.png" Stretch="Fill"/>
     </Panel.Background>
 
     <DockPanel>
@@ -178,5 +183,20 @@
         </StackPanel>
       </Border>
     </DockPanel>
+
+    <Panel IsHitTestVisible="False">
+      <Border x:Name="ScrewTL" Classes="cornerScrew" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14,12,0,0">
+        <Border Width="6" Height="1" CornerRadius="0.5" Background="#2C3236" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <Border Classes="cornerScrew" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,12,14,0">
+        <Border Width="6" Height="1" CornerRadius="0.5" Background="#2C3236" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <Border Classes="cornerScrew" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14,0,0,12">
+        <Border Width="6" Height="1" CornerRadius="0.5" Background="#2C3236" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <Border Classes="cornerScrew" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,14,12">
+        <Border Width="6" Height="1" CornerRadius="0.5" Background="#2C3236" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+    </Panel>
   </Panel>
 </UserControl>

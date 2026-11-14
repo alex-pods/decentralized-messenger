@@ -21,9 +21,17 @@ public partial class ShellView : UserControl
 
     void Hook()
     {
-        if (_vm != null) _vm.ScrollToEnd -= Scroll;
+        if (_vm != null)
+        {
+            _vm.ScrollToEnd -= Scroll;
+            _vm.ScrollToMessage -= ScrollTo;
+        }
         _vm = DataContext as ShellViewModel;
-        if (_vm != null) _vm.ScrollToEnd += Scroll;
+        if (_vm != null)
+        {
+            _vm.ScrollToEnd += Scroll;
+            _vm.ScrollToMessage += ScrollTo;
+        }
     }
 
     void Scroll()
@@ -31,6 +39,11 @@ public partial class ShellView : UserControl
         if (_vm == null || _vm.Messages.Count == 0) return;
         if (this.FindControl<ListBox>("Log") is { } list)
             list.ScrollIntoView(_vm.Messages[^1]);
+    }
+
+    void ScrollTo(MessageItem item)
+    {
+        this.FindControl<ListBox>("Log")?.ScrollIntoView(item);
     }
 
     void OnDragAreaPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);

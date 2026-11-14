@@ -100,6 +100,14 @@ public sealed class ChatDto
     [JsonPropertyName("last_message")] public MessageDto? LastMessage { get; set; }
 }
 
+public sealed class PinDto
+{
+    [JsonPropertyName("message_id")] public long MessageId { get; set; }
+    [JsonPropertyName("pinned_by")] public long PinnedBy { get; set; }
+    [JsonPropertyName("pinned_at")] public string? PinnedAt { get; set; }
+    [JsonPropertyName("message")] public MessageDto? Message { get; set; }
+}
+
 public sealed class WsEventDto
 {
     [JsonPropertyName("type")] public string Type { get; set; } = "";

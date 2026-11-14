@@ -117,6 +117,12 @@ public partial class MemberRow : ObservableObject, IDisposable
     public void Dispose() => Avatar = null;
 }
 
+public sealed class PinItem
+{
+    public long MessageId { get; init; }
+    public string Text { get; set; } = "";
+}
+
 public sealed class ReactionChip
 {
     public string Emoji { get; init; } = "";

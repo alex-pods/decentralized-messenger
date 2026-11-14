@@ -121,6 +121,7 @@ app.MapReactionsEndpoints();
 app.MapWsEndpoints();
 app.MapUsersEndpoints();
 app.MapMessagesEndpoints();
+app.MapPinsEndpoints();
 app.MapAttachmentsEndpoints();
 app.MapChatsEndpoints();
 app.MapAuthEndpoints();

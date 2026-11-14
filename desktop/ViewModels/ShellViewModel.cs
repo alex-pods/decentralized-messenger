@@ -23,6 +23,8 @@ public partial class ShellViewModel : ObservableObject
     private readonly ConcurrentDictionary<long, int> _avatarVersions = new();
     private ProfileDto _me;
     private string _myRole = "";
+    private readonly List<PinItem> _pins = new();
+    private int _pinIndex;
     private int _openGen;
     private bool _suppress;
     private bool _closed;
@@ -62,11 +64,16 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsGroup))]
     [NotifyPropertyChangedFor(nameof(HasChat))]
     [NotifyPropertyChangedFor(nameof(ChatTitle))]
+    [NotifyPropertyChangedFor(nameof(CanManagePins))]
+    [NotifyPropertyChangedFor(nameof(CanPin))]
     private ChatItem? _selectedChat;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEdit))]
     [NotifyPropertyChangedFor(nameof(CanDeleteEveryone))]
+    [NotifyPropertyChangedFor(nameof(CanPin))]
+    [NotifyPropertyChangedFor(nameof(SelectedIsPinned))]
+    [NotifyPropertyChangedFor(nameof(PinActionLabel))]
     [NotifyPropertyChangedFor(nameof(HasMessageActions))]
     [NotifyPropertyChangedFor(nameof(SelectionHint))]
     private MessageItem? _selectedMessage;
@@ -109,7 +116,16 @@ public partial class ShellViewModel : ObservableObject
     public bool CanEdit => SelectedMessage is { Mine: true, IsDeleted: false, IsNotStored: false };
     public bool CanDeleteEveryone =>
         SelectedMessage is { IsDeleted: false } && (SelectedMessage.Mine || _myRole is "owner" or "admin");
+    public bool CanManagePins => HasChat && (!IsGroup || _myRole is "owner" or "admin");
+    public bool CanPin => CanManagePins && SelectedMessage is { IsDeleted: false, IsNotStored: false };
+    public bool SelectedIsPinned => SelectedMessage != null && _pins.Any(p => p.MessageId == SelectedMessage.Id);
+    public string PinActionLabel => SelectedIsPinned ? "Открепить" : "Закрепить";
+    public bool HasPins => _pins.Count > 0;
+    public string PinText => _pins.Count == 0 ? "" : _pins[Math.Clamp(_pinIndex, 0, _pins.Count - 1)].Text;
+    public string PinCounter => _pins.Count <= 1 ? "" : $"{Math.Clamp(_pinIndex, 0, _pins.Count - 1) + 1}/{_pins.Count}";
     public string SelectionHint => SelectedMessage is null ? "" : "Выбрано сообщение";
+
+    public event Action<MessageItem>? ScrollToMessage;
     public bool HasComposeHint => ComposeHint != null;
     public string? ComposeHint => Editing != null
         ? "Редактирование сообщения"

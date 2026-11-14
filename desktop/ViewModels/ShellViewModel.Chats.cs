@@ -10,6 +10,7 @@ public partial class ShellViewModel
         SelectedMessage = null;
         ReplyTo = null;
         Editing = null;
+        ClearPins();
         if (value == null)
         {
             Messages.Clear();

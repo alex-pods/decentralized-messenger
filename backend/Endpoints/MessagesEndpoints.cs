@@ -1,5 +1,6 @@
 using Messenger.Api.Common.Errors;
 using Messenger.Api.Contracts.Requests;
+using Messenger.Api.Contracts.Responses;
 using Messenger.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -38,7 +39,7 @@ public static class MessagesEndpoints
             {
                 var forwarded = await service.ForwardAsync(
                     message_id, CurrentUser.GetId(context), request, cancellationToken);
-                return Results.Json(forwarded, statusCode: StatusCodes.Status201Created);
+                return Results.Json(new MessageIdResponse(forwarded.Id), statusCode: StatusCodes.Status201Created);
             })
             .WithName("ForwardMessage")
             .WithSummary("Переслать сообщение в другой чат");

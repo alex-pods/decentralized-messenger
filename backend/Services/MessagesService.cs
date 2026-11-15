@@ -13,7 +13,7 @@ public interface IMessagesService
     Task<IReadOnlyList<MessageRow>> GetHistoryAsync(long chatId, long viewerId, HistoryQuery query, CancellationToken ct = default);
     Task<MessageRow> GetMessageAsync(long messageId, long viewerId, CancellationToken ct = default);
     Task<AddMessageResult> SendAsync(long chatId, long senderId, SendMessageRequest request, CancellationToken ct = default);
-    Task<MessageResponse> ForwardAsync(long messageId, long userId, ForwardMessageRequest request, CancellationToken ct = default);
+    Task<MessageRow> ForwardAsync(long messageId, long userId, ForwardMessageRequest request, CancellationToken ct = default);
     Task<MessageRow> EditAsync(long messageId, long editorId, EditMessageRequest request, CancellationToken ct = default);
     Task<MessageRow> DeleteAsync(long messageId, long deleterId, bool forEveryone, CancellationToken ct = default);
 }
@@ -86,7 +86,7 @@ public sealed class MessagesService(
         return result;
     }
 
-    public async Task<MessageResponse> ForwardAsync(
+    public async Task<MessageRow> ForwardAsync(
         long messageId, long userId, ForwardMessageRequest request, CancellationToken ct = default)
     {
         if (request.ChatId is not long targetChatId || targetChatId < 1)
@@ -97,13 +97,13 @@ public sealed class MessagesService(
         await RequireAccessAsync(targetChatId, userId, ct);
 
         if (source.ContentState != MessageContentState.Stored)
-            throw new ConflictException("Only stored messages can be forwarded");
+            throw AppException.Conflict("message_not_forwardable", "Only stored messages can be forwarded");
 
         var forwarded = await messages.ForwardAsync(messageId, targetChatId, userId, ct)
             ?? throw new NotFoundException("Message not found");
 
         await PublishCreatedAsync(forwarded, userId);
-        return await MessageResponseFactory.CreateAsync(forwarded, userId, reactions, attachments, ct);
+        return forwarded;
     }
 
     public async Task<MessageRow> EditAsync(
@@ -117,7 +117,7 @@ public sealed class MessagesService(
         if (message.ContentState != MessageContentState.Stored)
             throw new ConflictException("Only stored messages can be edited");
         if (message.Forward is not null)
-            throw new ConflictException("Forwarded messages cannot be edited");
+            throw AppException.Conflict("message_forwarded_readonly", "Forwarded messages cannot be edited");
 
         var text = request.Text;
 

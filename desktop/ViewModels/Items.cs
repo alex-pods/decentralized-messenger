@@ -44,10 +44,14 @@ public partial class MessageItem : ObservableObject
     [ObservableProperty] private string _reply = "";
     [ObservableProperty] private bool _isDeleted;
     [ObservableProperty] private bool _isNotStored;
+    [ObservableProperty] private string _forwarded = "";
+    [ObservableProperty] private string _forwardedTip = "";
     public bool HasReply => Reply.Length > 0;
+    public bool IsForwarded => Forwarded.Length > 0;
     public bool ShowSender => !Mine;
 
     partial void OnReplyChanged(string value) => OnPropertyChanged(nameof(HasReply));
+    partial void OnForwardedChanged(string value) => OnPropertyChanged(nameof(IsForwarded));
 
     public long MyId { get; init; }
     public Dictionary<string, HashSet<long>> ReactionUsers { get; private set; } = new();

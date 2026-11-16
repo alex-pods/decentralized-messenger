@@ -6,6 +6,7 @@
              x:Name="Root">
   <UserControl.Resources>
     <StreamGeometry x:Key="IcSmilePlus">M22 11v1a10 10 0 1 1-9-10 M8 14s1.5 2 4 2 4-2 4-2 M8 9a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0Z M15 9a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0Z M16 5h6 M19 2v6</StreamGeometry>
+    <StreamGeometry x:Key="IcForward">m15 14 5-5-5-5 M4 20v-7a4 4 0 0 1 4-4h12</StreamGeometry>
   </UserControl.Resources>
   <Panel>
     <Grid x:Name="ShellGrid" Classes="shell" ColumnDefinitions="288,*">
@@ -189,6 +190,9 @@
                                   </MultiBinding>
                                 </TextBlock.IsVisible>
                               </TextBlock>
+                              <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic"
+                                         Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis"
+                                         ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
                               <Border Background="{DynamicResource ScreenInset}" CornerRadius="4" Padding="0,5,10,5"
                                       IsVisible="{Binding HasReply}">
                                 <Grid ColumnDefinitions="Auto,*">
@@ -227,6 +231,9 @@
                         <Border Classes="bubble mine" HorizontalAlignment="Right" MaxWidth="540" MinWidth="56"
                                 IsVisible="{Binding Mine}">
                           <StackPanel Spacing="4" MaxWidth="512">
+                            <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic"
+                                       Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
                             <Border Background="{DynamicResource ScreenInset}" CornerRadius="4" Padding="0,5,10,5"
                                     IsVisible="{Binding HasReply}">
                               <Grid ColumnDefinitions="Auto,*">
@@ -324,6 +331,12 @@
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <local:Glyph Data="{StaticResource IcReply}" Width="14" Height="14"/>
                     <TextBlock Text="Ответить"/>
+                  </StackPanel>
+                </Button>
+                <Button Classes="toolbar" Command="{Binding ShowForwardCommand}" IsVisible="{Binding CanForward}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <local:Glyph Data="{StaticResource IcForward}" Width="14" Height="14"/>
+                    <TextBlock Text="Переслать"/>
                   </StackPanel>
                 </Button>
                 <Button Classes="toolbar" Command="{Binding BeginEditCommand}" IsVisible="{Binding CanEdit}">
@@ -465,6 +478,32 @@
             <Button Classes="danger" Content="Выйти из группы" Command="{Binding LeaveChatCommand}"
                     IsVisible="{Binding IsGroup}"/>
           </StackPanel>
+
+          <ListBox DockPanel.Dock="Top" Classes="plain" ItemsSource="{Binding Chats}" MaxHeight="360"
+                   IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="row"
+                        Command="{Binding DataContext.ForwardToCommand, ElementName=Root}"
+                        CommandParameter="{Binding}">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border Classes="avatar" Width="30" Height="30" ClipToBounds="True"
+                            Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
+                      <Panel>
+                        <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+                        <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}"
+                                   IsVisible="{Binding ShowInitial}"/>
+                        <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16" StrokeWidth="1.8"
+                                     Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}"/>
+                      </Panel>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="12,0,0,0"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
 
           <DockPanel IsVisible="{Binding ShowPeopleSearch}">
             <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">

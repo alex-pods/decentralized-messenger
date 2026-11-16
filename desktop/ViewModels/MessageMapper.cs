@@ -19,6 +19,13 @@ public static class MessageMapper
         return "";
     }
 
+    public static string FormatDateTime(string? iso)
+    {
+        if (DateTime.TryParse(iso, null, System.Globalization.DateTimeStyles.AdjustToUniversal, out var t))
+            return t.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+        return "";
+    }
+
     public static string Trim(string text, int n)
     {
         text = OneLine(text);
@@ -69,6 +76,8 @@ public static class MessageMapper
             Text = Body(m),
             Meta = meta,
             Reply = reply,
+            Forwarded = m.ForwardedFrom is { } f ? "↪ Переслано от " + f.AuthorName : "",
+            ForwardedTip = m.ForwardedFrom is { } g ? "Отправлено " + FormatDateTime(g.OriginalSentAt) : "",
             IsDeleted = m.ContentState == "deleted",
             IsNotStored = m.ContentState == "not_stored"
         };

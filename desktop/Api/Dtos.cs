@@ -79,6 +79,14 @@ public sealed class MessageDto
     [JsonPropertyName("read_at")] public string? ReadAt { get; set; }
     [JsonPropertyName("deleted_at")] public string? DeletedAt { get; set; }
     [JsonPropertyName("reactions")] public List<ReactionDto>? Reactions { get; set; }
+    [JsonPropertyName("forwarded_from")] public ForwardedFromDto? ForwardedFrom { get; set; }
+}
+
+public sealed class ForwardedFromDto
+{
+    [JsonPropertyName("author_id")] public long? AuthorId { get; set; }
+    [JsonPropertyName("author_name")] public string AuthorName { get; set; } = "";
+    [JsonPropertyName("original_sent_at")] public string? OriginalSentAt { get; set; }
 }
 
 public sealed class MemberDto

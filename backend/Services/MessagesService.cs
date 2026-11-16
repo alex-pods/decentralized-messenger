@@ -13,6 +13,7 @@ public interface IMessagesService
     Task<IReadOnlyList<MessageRow>> GetHistoryAsync(long chatId, long viewerId, HistoryQuery query, CancellationToken ct = default);
     Task<MessageRow> GetMessageAsync(long messageId, long viewerId, CancellationToken ct = default);
     Task<AddMessageResult> SendAsync(long chatId, long senderId, SendMessageRequest request, CancellationToken ct = default);
+    Task<MessageRow> ForwardAsync(long messageId, long userId, ForwardMessageRequest request, CancellationToken ct = default);
     Task<MessageRow> EditAsync(long messageId, long editorId, EditMessageRequest request, CancellationToken ct = default);
     Task<MessageRow> DeleteAsync(long messageId, long deleterId, bool forEveryone, CancellationToken ct = default);
 }
@@ -80,44 +81,29 @@ public sealed class MessagesService(
                 "client_ref_conflict",
                 "ClientRef was already used with different message content");
         if (result.Created)
-        {
-            try
-            {
-                using var timeout =
-                    new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await PublishCreatedAsync(result.Message, senderId);
 
-                var response = await MessageResponseFactory.CreateAsync(
-                    result.Message,
-                    senderId,
-                    reactions,
-                    attachments,
-                    timeout.Token);
+        return result;
+    }
 
-                var delivered = await publisher.PublishToChatAsync(
-                    chatId,
-                    senderId,
-                    new WsEventResponse(
-                        "message",
-                        ChatId: chatId,
-                        Message: response),
-                    timeout.Token);
+    public async Task<MessageRow> ForwardAsync(
+        long messageId, long userId, ForwardMessageRequest request, CancellationToken ct = default)
+    {
+        if (request.ChatId is not long targetChatId || targetChatId < 1)
+            throw new ValidationException("chat_id is required");
 
-                if (delivered > 0)
-                {
-                    await messages.MarkDeliveredAsync(
-                        result.Message.Id, timeout.Token);
-                }
-            }
-            catch (Exception exception)
-            {
-                logger.LogWarning(
-                    exception,
-                    "Failed to publish saved message {MessageId}",
-                    result.Message.Id);
-            }
-        }
+        var source = await RequireMessageAsync(messageId, ct);
+        await RequireAccessAsync(source.ChatId, userId, ct);
+        await RequireAccessAsync(targetChatId, userId, ct);
 
-    return result;
+        if (source.ContentState != MessageContentState.Stored)
+            throw AppException.Conflict("message_not_forwardable", "Only stored messages can be forwarded");
+
+        var forwarded = await messages.ForwardAsync(messageId, targetChatId, userId, ct)
+            ?? throw new NotFoundException("Message not found");
+
+        await PublishCreatedAsync(forwarded, userId);
+        return forwarded;
     }
 
     public async Task<MessageRow> EditAsync(
@@ -130,6 +116,8 @@ public sealed class MessagesService(
             throw new ForbiddenException("Only the author can edit the message");
         if (message.ContentState != MessageContentState.Stored)
             throw new ConflictException("Only stored messages can be edited");
+        if (message.Forward is not null)
+            throw AppException.Conflict("message_forwarded_readonly", "Forwarded messages cannot be edited");
 
         var text = request.Text;
 
@@ -192,7 +180,7 @@ public sealed class MessagesService(
         if (message.ContentState == MessageContentState.Deleted)
             return message;
 
-        
+
 
         var result = await messages.DeleteAsync(messageId, ct)
             ?? throw new NotFoundException("Message not found");
@@ -224,6 +212,41 @@ public sealed class MessagesService(
         }
 
         return deleted;
+    }
+
+    private async Task PublishCreatedAsync(MessageRow message, long senderId)
+    {
+        try
+        {
+            using var timeout =
+                new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+            var response = await MessageResponseFactory.CreateAsync(
+                message,
+                senderId,
+                reactions,
+                attachments,
+                timeout.Token);
+
+            var delivered = await publisher.PublishToChatAsync(
+                message.ChatId,
+                senderId,
+                new WsEventResponse(
+                    "message",
+                    ChatId: message.ChatId,
+                    Message: response),
+                timeout.Token);
+
+            if (delivered > 0)
+                await messages.MarkDeliveredAsync(message.Id, timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Failed to publish saved message {MessageId}",
+                message.Id);
+        }
     }
 
     private async Task PublishMessageChangeAsync(

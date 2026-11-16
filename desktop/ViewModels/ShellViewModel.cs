@@ -67,6 +67,7 @@ public partial class ShellViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEdit))]
+    [NotifyPropertyChangedFor(nameof(CanForward))]
     [NotifyPropertyChangedFor(nameof(CanDeleteEveryone))]
     [NotifyPropertyChangedFor(nameof(HasMessageActions))]
     [NotifyPropertyChangedFor(nameof(SelectionHint))]
@@ -104,10 +105,12 @@ public partial class ShellViewModel : ObservableObject
         "group" => "Новая группа",
         "members" => "Участники",
         "profile" => "Профиль",
+        "forward" => "Переслать в…",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;
-    public bool CanEdit => SelectedMessage is { Mine: true, IsDeleted: false, IsNotStored: false };
+    public bool CanEdit => SelectedMessage is { Mine: true, IsDeleted: false, IsNotStored: false, IsForwarded: false };
+    public bool CanForward => SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public bool CanDeleteEveryone =>
         SelectedMessage is { IsDeleted: false } && (SelectedMessage.Mine || _myRole is "owner" or "admin");
     public string SelectionHint => SelectedMessage is null ? "" : "Выбрано сообщение";

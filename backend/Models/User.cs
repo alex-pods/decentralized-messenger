@@ -10,4 +10,5 @@ public sealed record User(
     Secret? Bio,
     string CreatedAt,
     string? LastSeenAt,
+    long AllowTagSearch,
     Secret PasswordHash);

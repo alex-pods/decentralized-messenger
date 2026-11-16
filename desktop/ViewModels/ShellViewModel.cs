@@ -44,6 +44,7 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _groupTitle = "";
     [ObservableProperty] private string _displayName = "";
     [ObservableProperty] private string _bio = "";
+    [ObservableProperty] private bool _allowTagSearch = true;
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {
@@ -124,6 +125,7 @@ public partial class ShellViewModel : ObservableObject
         Header = $"{me.DisplayName}  @{me.Tag}";
         DisplayName = me.DisplayName;
         Bio = me.Bio ?? "";
+        AllowTagSearch = me.AllowTagSearch;
         _ = LoadAvatar(me.Id, bytes => Avatar = CreateAvatar(bytes));
         _live = new LiveConnection(api);
         _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));

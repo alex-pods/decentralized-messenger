@@ -62,6 +62,7 @@ public sealed class ProfileDto
     [JsonPropertyName("bio")] public string? Bio { get; set; }
     [JsonPropertyName("join_date")] public string? JoinDate { get; set; }
     [JsonPropertyName("last_seen_at")] public string? LastSeenAt { get; set; }
+    [JsonPropertyName("allow_tag_search")] public bool AllowTagSearch { get; set; } = true;
 }
 
 public sealed class MessageDto

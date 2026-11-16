@@ -66,7 +66,7 @@ public partial class ShellViewModel
     async Task Search()
     {
         var q = SearchQuery.Trim();
-        if (q.Length == 0) { Error = "Введите тег или имя"; return; }
+        if (q.Length == 0) { Error = "Введите полный тег"; return; }
         try
         {
             Error = null;

@@ -78,10 +78,14 @@ public sealed class MessengerClient : IDisposable
         await Send<List<UserCardDto>>(HttpMethod.Get, "users/search?query=" + Uri.EscapeDataString(query), null, ct) ?? new();
 
     public Task UpdateProfile(string? displayName, string? bio, CancellationToken ct = default) =>
+        UpdateProfile(displayName, bio, null, ct);
+
+    public Task UpdateProfile(string? displayName, string? bio, bool? allowTagSearch, CancellationToken ct = default) =>
         Send(new HttpMethod("PATCH"), "users/me", new Dictionary<string, object?>
         {
             ["display_name"] = displayName,
-            ["bio"] = bio
+            ["bio"] = bio,
+            ["allow_tag_search"] = allowTagSearch
         }, ct);
 
     public async Task UploadAvatar(string filePath, CancellationToken ct = default)

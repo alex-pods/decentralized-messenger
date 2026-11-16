@@ -422,6 +422,7 @@
             <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>
             <TextBox Text="{Binding Bio}" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap"
                      VerticalContentAlignment="Top"/>
+            <CheckBox Content="Находить меня по тегу" IsChecked="{Binding AllowTagSearch}" Margin="0,8,0,0"/>
             <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,8,0,0"
                        Text="Сообщения всегда сохраняются на сервере."/>
             <Button Classes="primary large" Content="Сохранить" HorizontalAlignment="Right" Padding="26,0"
@@ -468,7 +469,7 @@
           <DockPanel IsVisible="{Binding ShowPeopleSearch}">
             <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
               <Grid ColumnDefinitions="*,Auto">
-                <TextBox Text="{Binding SearchQuery}" Watermark="Тег или имя">
+                <TextBox Text="{Binding SearchQuery}" Watermark="Полный тег">
                   <TextBox.InnerLeftContent>
                     <local:Glyph Data="{StaticResource IcSearch}" Width="15" Height="15" Margin="12,0,0,0"
                                  Foreground="{DynamicResource LabelBrush}"/>

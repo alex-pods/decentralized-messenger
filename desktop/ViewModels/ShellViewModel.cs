@@ -25,6 +25,8 @@ public partial class ShellViewModel : ObservableObject
     private string _myRole = "";
     private readonly List<PinItem> _pins = new();
     private int _pinIndex;
+    private int _pinJump;
+    private int _historyFetch;
     private int _openGen;
     private bool _suppress;
     private bool _closed;

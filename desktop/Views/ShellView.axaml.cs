@@ -43,7 +43,10 @@ public partial class ShellView : UserControl
 
     void ScrollTo(MessageItem item)
     {
-        this.FindControl<ListBox>("Log")?.ScrollIntoView(item);
+        if (this.FindControl<ListBox>("Log") is not { } list) return;
+        if (!list.Items.Contains(item)) return;
+        try { list.ScrollIntoView(item); }
+        catch { /* виртуализатор ещё не догнал новую страницу */ }
     }
 
     void OnDragAreaPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);

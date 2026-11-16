@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 
 namespace MessengerDesktop;
@@ -103,22 +104,39 @@ public partial class ShellViewModel
     {
         var chat = SelectedChat;
         if (chat == null || Messages.Count == 0 || !HasMore || Busy) return;
+        var gen = _openGen;
+        var fetch = ++_historyFetch;
+        var beforeId = Messages[0].Id;
         Busy = true;
         try
         {
-            var page = await _api.GetMessages(chat.Id, 50, beforeId: Messages[0].Id);
+            var page = await _api.GetMessages(chat.Id, 50, beforeId: beforeId);
+            if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return;
             await Ui(() =>
             {
-                var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-                foreach (var m in page) texts[m.Id] = MessageMapper.Body(m);
-                for (var i = 0; i < page.Count; i++)
-                    Messages.Insert(i, MessageMapper.ToItem(page[i], _me.Id, NameOf, texts));
+                if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return;
+                InsertOlder(page);
                 HasMore = page.Count >= 50;
             });
         }
-        catch (Exception ex) { Error = Friendly(ex); }
-        finally { Busy = false; }
+        catch (Exception ex)
+        {
+            if (gen == _openGen) Error = Friendly(ex);
+        }
+        finally { if (fetch == _historyFetch) Busy = false; }
     }
+
+    void InsertOlder(List<MessageDto> page)
+    {
+        if (page.Count == 0) return;
+        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
+        foreach (var m in page) texts[m.Id] = MessageMapper.Body(m);
+        for (var i = 0; i < page.Count; i++)
+            Messages.Insert(i, MessageMapper.ToItem(page[i], _me.Id, NameOf, texts));
+    }
+
+    bool SameChat(int gen, long chatId) =>
+        gen == _openGen && SelectedChat?.Id == chatId;
 
     [RelayCommand]
     async Task Send()
@@ -265,23 +283,112 @@ public partial class ShellViewModel
         NotifyPins();
     }
 
+    /// <summary>
+    /// Переход к закрепу. Если его нет в загруженном окне, история догружается
+    /// страницами по 50 вверх и вставляется в список одним обновлением на UI-потоке.
+    /// Смена чата или новый клик отменяют переход и не двигают ленту закрепов.
+    /// </summary>
     [RelayCommand]
-    void ShowPinned()
+    async Task ShowPinned()
     {
-        if (_pins.Count == 0) return;
-        var pin = _pins[Math.Clamp(_pinIndex, 0, _pins.Count - 1)];
-        var item = Messages.FirstOrDefault(m => m.Id == pin.MessageId);
-        if (item == null)
-            Error = "Закреплённое сообщение не в загруженной истории";
-        else
+        var chat = SelectedChat;
+        if (chat == null || _pins.Count == 0) return;
+        var gen = _openGen;
+        var jump = ++_pinJump;
+        var index = Math.Clamp(_pinIndex, 0, _pins.Count - 1);
+        var messageId = _pins[index].MessageId;
+        Error = null;
+
+        if (Messages.Any(m => m.Id == messageId))
         {
-            SelectedMessage = item;
-            ScrollToMessage?.Invoke(item);
+            RevealPinned(messageId);
+            return;
         }
-        if (_pins.Count > 1)
-            _pinIndex = (_pinIndex + 1) % _pins.Count;
+
+        var fetch = ++_historyFetch;
+        Busy = true;
+        var older = new List<MessageDto>();
+        var hasMore = HasMore;
+        var beforeId = Messages.Count == 0 ? (long?)null : Messages[0].Id;
+        try
+        {
+            while (older.All(m => m.Id != messageId))
+            {
+                if (!SameJump(gen, jump, chat.Id)) return;
+                if (beforeId is null || !hasMore || beforeId <= messageId)
+                    break;
+                var page = await _api.GetMessages(chat.Id, 50, beforeId: beforeId.Value);
+                if (fetch != _historyFetch || !SameJump(gen, jump, chat.Id)) return;
+                if (page.Count == 0 || page[0].Id >= beforeId)
+                {
+                    hasMore = false;
+                    break;
+                }
+                older.InsertRange(0, page);
+                beforeId = page[0].Id;
+                hasMore = page.Count >= 50;
+            }
+
+            await Ui(() =>
+            {
+                if (fetch != _historyFetch || !SameJump(gen, jump, chat.Id)) return;
+                if (older.Count > 0)
+                    PrependMessages(older);
+                HasMore = hasMore;
+                RevealPinned(messageId);
+            });
+        }
+        catch (Exception ex)
+        {
+            if (SameJump(gen, jump, chat.Id))
+                await Ui(() => { if (SameJump(gen, jump, chat.Id)) Error = Friendly(ex); });
+        }
+        finally
+        {
+            if (fetch == _historyFetch)
+                await Ui(() => { if (fetch == _historyFetch) Busy = false; });
+        }
+    }
+
+    void PrependMessages(List<MessageDto> older)
+    {
+        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
+        foreach (var message in older)
+            texts[message.Id] = MessageMapper.Body(message);
+        var items = new List<MessageItem>(older.Count + Messages.Count);
+        foreach (var message in older)
+            items.Add(MessageMapper.ToItem(message, _me.Id, NameOf, texts));
+        items.AddRange(Messages);
+        SelectedMessage = null;
+        Messages.Clear();
+        foreach (var item in items)
+            Messages.Add(item);
+    }
+
+    void RevealPinned(long messageId)
+    {
+        var item = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (item == null)
+        {
+            Error = "Закреплённое сообщение не найдено в истории";
+            return;
+        }
+
+        SelectedMessage = item;
+        var target = item;
+        Dispatcher.UIThread.Post(() =>
+        {
+            try { ScrollToMessage?.Invoke(target); }
+            catch { /* список мог уже смениться */ }
+        }, DispatcherPriority.Background);
+        var at = _pins.FindIndex(p => p.MessageId == messageId);
+        if (at >= 0 && _pins.Count > 1)
+            _pinIndex = (at + 1) % _pins.Count;
         NotifyPins();
     }
+
+    bool SameJump(int gen, int jump, long chatId) =>
+        jump == _pinJump && SameChat(gen, chatId);
 
     [RelayCommand]
     async Task UnpinShown()

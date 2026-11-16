@@ -25,7 +25,10 @@ public sealed class MessengerClient : IDisposable
         _http = new HttpClient
         {
             BaseAddress = new Uri(ServerBase + "/"),
-            Timeout = TimeSpan.FromSeconds(30)
+            Timeout = TimeSpan.FromSeconds(30),
+            // На этом nginx HTTP/2 иногда рвёт TLS посередине ответа.
+            DefaultRequestVersion = HttpVersion.Version11,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower
         };
         if (!string.IsNullOrWhiteSpace(token))
             SetToken(token);

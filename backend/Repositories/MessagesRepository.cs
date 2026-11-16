@@ -376,7 +376,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
               AND NOT EXISTS (
                   SELECT 1 FROM message_hidden h
                   WHERE h.message_id = m.id AND h.user_id = @viewerId)
-            ORDER BY p.pinned_at DESC, p.message_id DESC
+            ORDER BY m.id DESC
             """,
             new { chatId, viewerId },
             cancellationToken: ct));

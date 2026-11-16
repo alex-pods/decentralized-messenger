@@ -235,7 +235,7 @@ public partial class ShellViewModel
     void ReplacePins(List<PinDto> pins)
     {
         _pins.Clear();
-        foreach (var pin in pins)
+        foreach (var pin in pins.OrderByDescending(p => p.MessageId))
         {
             if (pin.Message is null) continue;
             _pins.Add(new PinItem
@@ -267,11 +267,14 @@ public partial class ShellViewModel
     void UpsertPin(MessageDto message)
     {
         _pins.RemoveAll(p => p.MessageId == message.Id);
-        _pins.Insert(0, new PinItem
+        var item = new PinItem
         {
             MessageId = message.Id,
             Text = MessageMapper.Trim(MessageMapper.Body(message), 90)
-        });
+        };
+        var at = _pins.FindIndex(p => p.MessageId < message.Id);
+        if (at < 0) _pins.Add(item);
+        else _pins.Insert(at, item);
         _pinIndex = 0;
         NotifyPins();
     }
@@ -279,7 +282,37 @@ public partial class ShellViewModel
     void RemovePin(long messageId)
     {
         if (_pins.RemoveAll(p => p.MessageId == messageId) == 0) return;
-        if (_pinIndex >= _pins.Count) _pinIndex = 0;
+        if (_pinIndex >= _pins.Count) _pinIndex = Math.Max(0, _pins.Count - 1);
+        NotifyPins();
+    }
+
+    /// <summary>
+    /// Как в Telegram: в полоске — самый нижний ещё не пролистанный закреп.
+    /// После прохода через закреп вверх показывается следующий выше по чату.
+    /// </summary>
+    public void SyncPinToVisible(MessageItem lastVisible)
+    {
+        if (_pins.Count == 0) return;
+        if (Environment.TickCount64 < _pinSyncQuietUntil) return;
+
+        var lastIdx = Messages.IndexOf(lastVisible);
+        if (lastIdx < 0) return;
+
+        var pinMsgIndices = new int[_pins.Count];
+        for (var i = 0; i < _pins.Count; i++)
+        {
+            pinMsgIndices[i] = -1;
+            for (var m = 0; m < Messages.Count; m++)
+            {
+                if (Messages[m].Id != _pins[i].MessageId) continue;
+                pinMsgIndices[i] = m;
+                break;
+            }
+        }
+
+        var next = PinStrip.IndexForScroll(lastIdx, pinMsgIndices);
+        if (next == _pinIndex) return;
+        _pinIndex = next;
         NotifyPins();
     }
 
@@ -352,17 +385,15 @@ public partial class ShellViewModel
 
     void PrependMessages(List<MessageDto> older)
     {
+        // Вставляем в начало, без Clear() всей ленты — меньше шансов сломать раскладку списка.
         var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
         foreach (var message in older)
             texts[message.Id] = MessageMapper.Body(message);
-        var items = new List<MessageItem>(older.Count + Messages.Count);
-        foreach (var message in older)
-            items.Add(MessageMapper.ToItem(message, _me.Id, NameOf, texts));
-        items.AddRange(Messages);
-        SelectedMessage = null;
-        Messages.Clear();
-        foreach (var item in items)
-            Messages.Add(item);
+        var prefix = new MessageItem[older.Count];
+        for (var i = 0; i < older.Count; i++)
+            prefix[i] = MessageMapper.ToItem(older[i], _me.Id, NameOf, texts);
+        for (var i = prefix.Length - 1; i >= 0; i--)
+            Messages.Insert(0, prefix[i]);
     }
 
     void RevealPinned(long messageId)
@@ -376,6 +407,8 @@ public partial class ShellViewModel
 
         SelectedMessage = item;
         var target = item;
+        // ScrollIntoView даёт пачку ScrollChanged — не даём им откатить смену полоски после клика.
+        _pinSyncQuietUntil = Environment.TickCount64 + 450;
         Dispatcher.UIThread.Post(() =>
         {
             try { ScrollToMessage?.Invoke(target); }

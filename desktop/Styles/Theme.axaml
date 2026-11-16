@@ -8,7 +8,6 @@
       <Thickness x:Key="ChromeLeading">12,0,12,0</Thickness>
       <Thickness x:Key="HeaderInset">0</Thickness>
       <Thickness x:Key="LoginMargin">28,22,28,22</Thickness>
-      <Thickness x:Key="ScrewInset">8</Thickness>
 
       <FontFamily x:Key="IndustrialHost">avares://MessengerDesktop/Assets/Fonts#Host Grotesk, Inter</FontFamily>
       <FontFamily x:Key="IndustrialPlex">avares://MessengerDesktop/Assets/Fonts#IBM Plex Mono</FontFamily>
@@ -186,15 +185,6 @@
     <Setter Property="CornerRadius" Value="0"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="BoxShadow" Value="none"/>
-  </Style>
-  <Style Selector="Border.screw">
-    <Setter Property="Width" Value="8"/>
-    <Setter Property="Height" Value="8"/>
-    <Setter Property="CornerRadius" Value="4"/>
-    <Setter Property="Background" Value="#9AA3A8"/>
-    <Setter Property="BorderBrush" Value="#F4F6F6"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="BoxShadow" Value="inset 0 1 1 0 #5C656A"/>
   </Style>
   <Style Selector="Border.vent">
     <Setter Property="Width" Value="3"/>

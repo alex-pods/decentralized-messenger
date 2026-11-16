@@ -15,7 +15,6 @@ public partial class MainWindow : Window
         if (!OperatingSystem.IsMacOS()) return;
 
         // Как в тулбаре macOS: светофоры по центру верхней строки, корпус вплотную к краю окна.
-        // Винты в этом углу убираем — угол занят системными кнопками.
         const double titleBar = 52;
         ExtendClientAreaToDecorationsHint = true;
         ExtendClientAreaChromeHints = ExtendClientAreaChromeHints.PreferSystemChrome
@@ -23,7 +22,6 @@ public partial class MainWindow : Window
         ExtendClientAreaTitleBarHeightHint = titleBar;
         ChassisFrame.Margin = new Thickness(0);
         Housing.Classes.Add("flush");
-        ScrewLayer.IsVisible = false;
         Resources["HeaderInset"] = new Thickness(70, 0, 0, 0);
         Resources["LoginMargin"] = new Thickness(28, 60, 28, 22);
     }

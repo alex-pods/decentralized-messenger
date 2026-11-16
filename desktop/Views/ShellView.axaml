@@ -187,6 +187,13 @@
                        Background="Transparent"
                        Padding="8,12,8,8" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                        IsVisible="{Binding HasChat}">
+                <!-- Без виртуализации: после ScrollIntoView к закрепу VirtualizingStackPanel
+                     иногда рисует два пузыря в одной ячейке при следующей прокрутке. -->
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel/>
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
                 <ListBox.ItemTemplate>
                   <DataTemplate>
                     <!-- Строка растянута на всю ширину, MaxWidth стоит на тексте: иначе при Align=Right

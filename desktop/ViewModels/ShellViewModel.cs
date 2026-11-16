@@ -26,6 +26,7 @@ public partial class ShellViewModel : ObservableObject
     private readonly List<PinItem> _pins = new();
     private int _pinIndex;
     private int _pinJump;
+    private long _pinSyncQuietUntil;
     private int _historyFetch;
     private int _openGen;
     private bool _suppress;

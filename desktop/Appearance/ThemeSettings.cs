@@ -10,8 +10,8 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
 {
     public static readonly ThemeSettings[] Presets =
     [
-        new("Светлая", false, "#F3F4F6", "#FFFFFF", "#24272D", "#3867B2"),
-        new("Тёмная", true, "#202226", "#292B30", "#E9EDF1", "#92B4EF"),
+        new("Светлая", false, "#F0F0E8", "#FFFFFF", "#29352F", "#33755C"),
+        new("Тёмная", true, "#191C20", "#25292D", "#E6EAEE", "#88C7A6"),
         new("Бумага", false, "#F0ECE4", "#FFFCF5", "#38352F", "#87613B"),
         new("Полночь", true, "#111925", "#1B2838", "#E4ECF6", "#80B6F0")
     ];
@@ -79,7 +79,9 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         Set(line, "LineBrush", "SeparatorBrush", "FieldBorder", "GlassEdge", "PanelEdge", "RaisedEdge", "WellEdge");
         Set(hover, "WellBrush", "ElevatedFill", "HoverFill", "GlassFillHover", "GlassFillPressed", "FieldFill", "FieldFillHover", "AccentFillHover", "AccentFillPressed", "SelectionFill", "DialFill");
         Set(accent, "AccentBrush", "OnlineBrush", "SelectionEdge");
-        Set(bubble, "BubbleMine", "AccentFill");
+        Set(Blend(accent, surface, theme.Dark ? .26 : .18), "BubbleMine");
+        Set(bubble, "AccentFill");
+        Set(Blend(accent, surface, theme.Dark ? .16 : .08), "QuoteFill");
         Set(theme.Dark ? Color.Parse("#FF9696") : Color.Parse("#A52835"), "DangerBrush");
         Set(Contrast(accent, Colors.Black) > Contrast(accent, Colors.White) ? Colors.Black : Colors.White, "ActionTextBrush");
         Current = theme;

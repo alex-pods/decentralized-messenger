@@ -59,6 +59,9 @@ public static class Preview
             await Task.Delay(200);
             await Shot(window, "chat-" + Array.IndexOf(Appearance.ThemeSettings.Presets, theme));
         }
+        await Dispatcher.UIThread.InvokeAsync(() => Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0] with { Accent = "#3867B2" }));
+        await Task.Delay(120);
+        await Shot(window, "chat-blue-accent");
         await Dispatcher.UIThread.InvokeAsync(() => Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]));
 
         await Dispatcher.UIThread.InvokeAsync(() =>
@@ -83,6 +86,7 @@ public static class Preview
         await Shot(window, "profile");
 
         await AuditScreens(window, vm);
+        await ReviewGallery(window, vm);
         Dispatcher.UIThread.Post(() => window.Close());
     }
 
@@ -105,12 +109,32 @@ public static class Preview
         ShellViewModel.GroupMessages(grouped);
         if (!grouped[0].StartsDay || grouped[1].StartsRun || !grouped[2].StartsRun || !grouped[3].StartsDay)
             throw new Exception("Message author/day grouping failed");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            foreach (var body in new[] { "Привет", "Длинное сообщение, которое должно переноситься и оставлять место для времени в последней строке", "Первая строка\nВторая строка" })
+            {
+                var text = new TextBlock { Text = body, FontSize = 15, LineHeight = 21, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+                var time = new TextBlock { Text = "14:45 · прочитано", FontSize = 11 };
+                var panel = new MessageTextPanel { Children = { text, time } };
+                panel.Measure(new Size(240, double.PositiveInfinity));
+                panel.Arrange(new Rect(panel.DesiredSize));
+                var last = text.TextLayout.TextLines.Last();
+                if (time.Bounds.Top < text.Bounds.Height && time.Bounds.Left < last.WidthIncludingTrailingWhitespace + 10)
+                    throw new Exception("Message timestamp overlaps the text");
+            }
+        });
+        var multiline = new MessageDto { SenderId = 1, Text = "Первая строка\nВторая строка" };
+        if (!MessageMapper.Body(multiline).Contains('\n') || MessageMapper.Preview(multiline, 2, _ => "Александр").Contains('\n'))
+            throw new Exception("Message body and sidebar newline handling are inconsistent");
         var originalChat = vm.SelectedChat!;
         var otherChat = vm.Chats.First(c => c.Id != originalChat.Id);
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             vm.CloseOverlayCommand.Execute(null);
+            vm.Draft = "   ";
+            if (vm.CanSendDraft) throw new Exception("Empty message can be sent");
             vm.Draft = "Черновик первой беседы";
+            if (!vm.CanSendDraft && !vm.Busy) throw new Exception("Valid draft is disabled");
             vm.SelectedChat = otherChat;
             if (vm.Draft != "") throw new Exception("Draft leaked to another conversation");
             vm.Draft = "Черновик второй беседы";
@@ -278,6 +302,43 @@ public static class Preview
         Console.WriteLine("PASS UI screen matrix and filter selection retention");
     }
 
+    static async Task ReviewGallery(Window window, ShellViewModel vm)
+    {
+        Directory.CreateDirectory(Path.Combine(OutDir, "review"));
+        await Dispatcher.UIThread.InvokeAsync(() => { window.Width = 1440; window.Height = 900; });
+        var colors = new[] { ("green", "#33755C", "#88C7A6"), ("blue", "#3867B2", "#8FB6ED"), ("rose", "#9B5671", "#E4A1BC"), ("graphite", "#56606B", "#B7C2CE") };
+        foreach (var (label, light, dark) in colors)
+        foreach (var isDark in new[] { false, true })
+        {
+            var prefix = "review/" + label + (isDark ? "-dark" : "-light");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[isDark ? 1 : 0] with { Accent = isDark ? dark : light });
+                vm.CloseOverlayCommand.Execute(null);
+                vm.SelectedChat = vm.Chats.First(c => c.Title.StartsWith("Максим"));
+            });
+            await Task.Delay(300);
+            await Dispatcher.UIThread.InvokeAsync(() => vm.Draft = "");
+            await Task.Delay(60);
+            await Shot(window, prefix + "-chat");
+            await Dispatcher.UIThread.InvokeAsync(() => vm.SelectedChat = vm.Chats.First(c => c.Title == "Дизайн-команда"));
+            await Task.Delay(300);
+            await Shot(window, prefix + "-group");
+            await Dispatcher.UIThread.InvokeAsync(() => vm.Overlay = "profile");
+            await Task.Delay(100);
+            await Shot(window, prefix + "-profile");
+            await Dispatcher.UIThread.InvokeAsync(() => { vm.CloseOverlayCommand.Execute(null); vm.ShowGroupCommand.Execute(null); vm.GroupTitle = "Поездка на выходные"; });
+            await Task.Delay(100);
+            await Shot(window, prefix + "-new-group");
+            await Dispatcher.UIThread.InvokeAsync(() => vm.CloseOverlayCommand.Execute(null));
+            var appearance = await Dispatcher.UIThread.InvokeAsync(() => { var dialog = new Appearance.AppearanceWindow(); dialog.Show(window); return dialog; });
+            await Task.Delay(100);
+            await Shot(appearance, prefix + "-appearance");
+            await Dispatcher.UIThread.InvokeAsync(() => appearance.Close());
+        }
+        await Dispatcher.UIThread.InvokeAsync(() => Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]));
+    }
+
     static Task Shot(Control window, string name) => Dispatcher.UIThread.InvokeAsync(() =>
     {
         var size = new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height);
@@ -310,12 +371,22 @@ public static class Preview
         var withMira = await alice.api.CreateDirect(mira.me.Id);
         await alice.api.SendMessage(withMira, "Спасибо за вчерашнее 🙌");
 
+        foreach (var room in new[] { "Бэкенд", "Выходные", "Общее", "Фронтенд" })
+        {
+            var extra = await alice.api.CreateGroup(room, new[] { max.me.Id, eva.me.Id });
+            await max.api.SendMessage(extra, room == "Выходные" ? "Давайте в субботу?" : "Посмотрю вечером и отпишусь");
+        }
         var group = await alice.api.CreateGroup("Дизайн-команда", new[] { max.me.Id, eva.me.Id, mira.me.Id });
         await eva.api.SendMessage(group, "Ребята, я собрала новые макеты главного экрана");
         await max.api.SendMessage(group, "Посмотрел. Поиск стал заметнее, список читается лучше");
         await alice.api.SendMessage(group, "Давайте проверим на ноутбуке и с длинными именами");
         await mira.api.SendMessage(group, "Проверю сегодня вечером");
         await eva.api.SendMessage(group, "Тогда созвон в 19:00?");
+
+        var plan = await alice.api.SendMessage(group, "Да, в семь. Сначала пройдёмся по переписке, потом посмотрим остальные экраны.");
+        await max.api.SendMessage(group, "Я проверю тёмную тему", plan);
+        await mira.api.SendMessage(group, "А я возьму светлую и окно поменьше");
+        await eva.api.SendMessage(group, "Отлично. Замечания соберём здесь, чтобы ничего не потерялось.");
 
         var withMax = await alice.api.CreateDirect(max.me.Id);
         await max.api.SendMessage(withMax, "Привет! Ты видела, что сервер уже поднят?");
@@ -325,6 +396,10 @@ public static class Preview
         await max.api.SendMessage(withMax, "Тогда зову всех наших 🚀", q);
         await alice.api.SendMessage(withMax, "Давай! Я уже сделала группу для команды");
         await max.api.SendMessage(withMax, "Супер, вечером напишу туда");
+
+        await alice.api.SendMessage(withMax, "Посмотри ещё длинные сообщения и ответы.\nНужно, чтобы время и цитаты оставались читаемыми на небольшом экране.");
+        await max.api.SendMessage(withMax, "Хорошо, проверю на ноутбуке и напишу замечания");
+        await alice.api.SendMessage(withMax, "Спасибо, до вечера!");
 
         foreach (var u in new[] { max, eva, lev, mira }) u.api.Dispose();
         return alice;

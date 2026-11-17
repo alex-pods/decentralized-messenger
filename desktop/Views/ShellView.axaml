@@ -1,11 +1,11 @@
 <UserControl xmlns:views="using:MessengerDesktop.Views.Dialogs" xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="MessengerDesktop.Views.ShellView" x:Name="Root" KeyDown="OnShellKeyDown">
   <Panel>
-    <Grid x:Name="ShellGrid" Classes="shell" IsEnabled="{Binding !OverlayOpen}" ColumnDefinitions="320,*">
+    <Grid x:Name="ShellGrid" Classes="shell" IsEnabled="{Binding !OverlayOpen}" ColumnDefinitions="344,*">
       <Border Classes="sidebar" Grid.Column="0" x:Name="ChatSidebar">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Margin="20,22,20,16" Spacing="18">
+          <StackPanel DockPanel.Dock="Top" Margin="24,26,24,18" Spacing="20">
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="Сообщения" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock Text="Сообщения" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <Button Grid.Column="1" Classes="icon" Click="OnNewConversation" ToolTip.Tip="Новый разговор" AutomationProperties.Name="Новый разговор"><local:Glyph Data="{StaticResource IcCompose}"/></Button>
             </Grid>
             <TextBox x:Name="ChatSearch" Classes="search" TextChanged="OnChatFilterChanged" Watermark="Поиск" AutomationProperties.Name="Поиск чатов">
@@ -59,7 +59,7 @@
       </Border>
       <Border x:Name="ScreenBay" Classes="screenbay deck" Grid.Column="1">
         <Grid RowDefinitions="Auto,*,Auto">
-          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="76" Margin="28,0" PointerPressed="OnDragAreaPressed">
+          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="84" Margin="28,0" PointerPressed="OnDragAreaPressed">
             <Button x:Name="BackToChats" Classes="icon" Click="OnShowChats" IsVisible="False" ToolTip.Tip="К чатам">
               <local:Glyph Data="{StaticResource IcReply}"/>
             </Button>
@@ -123,39 +123,40 @@
                   </ListBox.ItemsPanel>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
-                      <Grid RowDefinitions="Auto,Auto" Classes="messageRow" Margin="28,0" ContextRequested="OnMessageContextRequested">
-                        <Grid IsVisible="{Binding StartsDay}" ColumnDefinitions="*,Auto,*" Margin="0,20,0,16">
-                          <Border Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
-                          <TextBlock Grid.Column="1" Text="{Binding DayLabel}" Classes="caption" Margin="16,0"/>
-                          <Border Grid.Column="2" Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
-                        </Grid>
-                        <Grid Grid.Row="1" ColumnDefinitions="42,*,Auto" Margin="0,9" MaxWidth="760" HorizontalAlignment="Stretch">
-                          <Border Classes="avatar" Width="34" Height="34" VerticalAlignment="Top" Margin="0,2,0,0" IsVisible="{Binding StartsRun}" Background="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
-                            <Panel>
-                              <TextBlock Classes="avatarText" Text="{Binding SenderName, Converter={StaticResource Initial}}" FontSize="12" IsVisible="{Binding !Mine}"/>
-                              <TextBlock Classes="avatarText" Text="{Binding DataContext.DisplayName, ElementName=Root, Converter={StaticResource Initial}}" FontSize="12" IsVisible="{Binding Mine}"/>
-                            </Panel>
+                      <Grid RowDefinitions="Auto,Auto" Classes="messageRow" Margin="24,0" ContextRequested="OnMessageContextRequested">
+                        <Border IsVisible="{Binding StartsDay}" Background="{DynamicResource RaisedBrush}" CornerRadius="7" HorizontalAlignment="Center" Padding="12,4" Margin="0,16,0,18">
+                          <TextBlock Text="{Binding DayLabel}" Classes="caption"/>
+                        </Border>
+                        <Grid Grid.Row="1" ColumnDefinitions="Auto,*" HorizontalAlignment="{Binding Mine, Converter={StaticResource Align}}" MaxWidth="600" Margin="0,4">
+                          <Border Classes="avatar" Width="30" Height="30" VerticalAlignment="Bottom" Margin="0,0,8,2" Background="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
+                            <Border.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="!Mine"/><Binding Path="DataContext.IsGroup" ElementName="Root"/></MultiBinding></Border.IsVisible>
+                            <TextBlock Classes="avatarText" Text="{Binding SenderName, Converter={StaticResource Initial}}" FontSize="12"/>
                           </Border>
-                          <StackPanel Grid.Column="1" Spacing="5" Margin="8,0,0,0">
-                            <WrapPanel Orientation="Horizontal" IsVisible="{Binding StartsRun}">
-                              <TextBlock Text="{Binding SenderName}" FontSize="14" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                              <TextBlock Text="{Binding Meta}" Classes="caption" FontSize="11" VerticalAlignment="Center"/>
-                            </WrapPanel>
-                            <TextBlock Text="{Binding Forwarded}" Classes="caption" TextWrapping="Wrap" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
-                            <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2,0,0,0" Padding="10,3" IsVisible="{Binding HasReply}">
-                              <TextBlock Text="{Binding Reply}" Classes="caption" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                            </Border>
-                            <TextBlock ToolTip.Tip="{Binding Meta}" Text="{Binding Text}" FontSize="15" LineHeight="22" TextWrapping="Wrap" Classes.deleted="{Binding IsDeleted}"/>
-                            <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}">
-                              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                              <ItemsControl.ItemTemplate><DataTemplate>
-                                <Border Classes="reaction" Classes.active="{Binding Mine}" Margin="0,0,6,0" Cursor="Hand" PointerPressed="OnChipPressed">
-                                  <StackPanel Orientation="Horizontal" Spacing="5"><local:ReactionIcon Emoji="{Binding Emoji}" Width="16" Height="16"/><TextBlock Text="{Binding Count}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
-                                </Border>
-                              </DataTemplate></ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                          </StackPanel>
-                          <Button Grid.Column="2" Classes="messageMenu icon" VerticalAlignment="Top" Margin="8,0,0,0" Click="OnMessageMenuClick" ToolTip.Tip="Действия с сообщением" AutomationProperties.Name="Действия с сообщением"><local:Glyph Data="{StaticResource IcMore}"/></Button>
+                          <Border Grid.Column="1" Classes="bubble" Classes.mine="{Binding Mine}" Padding="13,9" MinWidth="82">
+                            <StackPanel Spacing="5" MaxWidth="526">
+                              <TextBlock Text="{Binding SenderName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}">
+                                <TextBlock.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="!Mine"/><Binding Path="StartsRun"/><Binding Path="DataContext.IsGroup" ElementName="Root"/></MultiBinding></TextBlock.IsVisible>
+                              </TextBlock>
+                              <TextBlock Text="{Binding Forwarded}" Classes="caption" TextWrapping="Wrap" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
+                              <Border Background="{DynamicResource QuoteFill}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="3,0,0,0" CornerRadius="3" Padding="9,6" IsVisible="{Binding HasReply}">
+                                <TextBlock Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource LabelBrush}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                              </Border>
+                              <local:MessageTextPanel>
+                                <TextBlock Text="{Binding Text}" FontSize="15" LineHeight="21" TextWrapping="Wrap" Classes.deleted="{Binding IsDeleted}"/>
+                                <TextBlock Text="{Binding Meta}" Classes="caption" FontSize="11" TextWrapping="Wrap"/>
+                              </local:MessageTextPanel>
+                              <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                  <Border Classes="reaction" Classes.active="{Binding Mine}" Margin="0,0,5,0" Cursor="Hand" PointerPressed="OnChipPressed">
+                                    <StackPanel Orientation="Horizontal" Spacing="5"><local:ReactionIcon Emoji="{Binding Emoji}" Width="16" Height="16"/><TextBlock Text="{Binding Count}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
+                                  </Border>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                              </ItemsControl>
+
+                            </StackPanel>
+                          </Border>
+                          <Button Grid.Column="1" Classes="messageMenu icon" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-10,-8,0" Click="OnMessageMenuClick" ToolTip.Tip="Действия с сообщением" AutomationProperties.Name="Действия с сообщением"><local:Glyph Data="{StaticResource IcMore}"/></Button>
                         </Grid>
                       </Grid>
                     </DataTemplate>
@@ -170,7 +171,7 @@
               </Panel>
             </DockPanel>
           </Border>
-          <StackPanel Grid.Row="2" Background="{DynamicResource RaisedBrush}" Margin="28,10,28,20" Spacing="8" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
+          <StackPanel Grid.Row="2" Background="Transparent" Margin="24,12,24,20" Spacing="8" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
             <Border Classes="glass" Padding="12,8" IsVisible="{Binding HasComposeHint}">
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="0,0,10,0"/>
@@ -180,6 +181,7 @@
                 </Button>
               </Grid>
             </Border>
+            <TextBlock Text="{Binding DraftLengthHint}" IsVisible="{Binding HasDraftLengthHint}" Classes="caption" HorizontalAlignment="Right"/>
             <Border Classes="composer">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBox x:Name="ComposerInput" Classes="bare" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" Watermark="Напишите сообщение…">
@@ -188,7 +190,7 @@
                     <KeyBinding Gesture="Meta+Enter" Command="{Binding SendCommand}"/>
                   </TextBox.KeyBindings>
                 </TextBox>
-                <Button Grid.Column="1" Classes="send" VerticalAlignment="Bottom" Margin="6,0,2,0" ToolTip.Tip="Отправить · Ctrl+Enter / ⌘Enter" AutomationProperties.Name="Отправить" Command="{Binding SendCommand}" IsEnabled="{Binding !Busy}">
+                <Button Grid.Column="1" Classes="send" VerticalAlignment="Bottom" Margin="6,0,2,0" ToolTip.Tip="Отправить · Ctrl+Enter / ⌘Enter" AutomationProperties.Name="Отправить" Command="{Binding SendCommand}" IsEnabled="{Binding CanSendDraft}">
                   <local:Glyph Data="{StaticResource IcSend}" Width="18" Height="18" StrokeWidth="2.2" Foreground="{DynamicResource ActionTextBrush}"/>
                 </Button>
               </Grid>

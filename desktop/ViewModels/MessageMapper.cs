@@ -9,7 +9,7 @@ public static class MessageMapper
     {
         "deleted" => "Сообщение удалено",
         "not_stored" when string.IsNullOrEmpty(m.Text) => "Текст не сохранён на сервере",
-        _ => OneLine(m.Text ?? "")
+        _ => m.Text ?? ""
     };
 
     public static string FormatTime(string? iso)
@@ -36,7 +36,7 @@ public static class MessageMapper
     public static string Preview(MessageDto m, long myId, Func<long, string> nameOf)
     {
         var who = m.SenderId == myId ? "Вы" : nameOf(m.SenderId);
-        return Trim($"{who}: {Body(m)}", 120);
+        return Trim(who == $"#{m.SenderId}" ? Body(m) : $"{who}: {Body(m)}", 120);
     }
 
     public static ChatItem MapChat(ChatDto c, long myId, Func<long, string> nameOf)

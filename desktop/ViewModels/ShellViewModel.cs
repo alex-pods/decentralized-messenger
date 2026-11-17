@@ -43,8 +43,14 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _header;
     [ObservableProperty] private string _status = "подключение…";
     [ObservableProperty] private string? _error;
-    [ObservableProperty] private bool _busy;
-    [ObservableProperty] private string _draft = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSendDraft))]
+    private bool _busy;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSendDraft))]
+    [NotifyPropertyChangedFor(nameof(DraftLengthHint))]
+    [NotifyPropertyChangedFor(nameof(HasDraftLengthHint))]
+    private string _draft = "";
     [ObservableProperty] private bool _searching;
     [ObservableProperty] private string _searchHint = "";
     private int _searchGeneration;
@@ -70,6 +76,7 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGroup))]
     [NotifyPropertyChangedFor(nameof(HasChat))]
+    [NotifyPropertyChangedFor(nameof(CanSendDraft))]
     [NotifyPropertyChangedFor(nameof(ChatTitle))]
     [NotifyPropertyChangedFor(nameof(CanManagePins))]
     [NotifyPropertyChangedFor(nameof(CanPin))]
@@ -108,6 +115,9 @@ public partial class ShellViewModel : ObservableObject
 
     public bool IsGroup => SelectedChat?.Type == "group";
     public bool HasChat => SelectedChat != null;
+    public string DraftLengthHint => HasDraftLengthHint ? $"{Draft.Trim().Length} / 4096 символов" : "";
+    public bool HasDraftLengthHint => Draft.Trim().Length > 3800;
+    public bool CanSendDraft => HasChat && !Busy && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
     public bool HasAvatar => Avatar is not null;
     public long CurrentUserId => _me.Id;
     public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";

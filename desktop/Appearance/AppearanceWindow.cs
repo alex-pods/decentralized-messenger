@@ -56,6 +56,17 @@ public sealed class AppearanceWindow : Window
         }
         body.Children.Add(choices);
         body.Children.Add(ConversationPreview());
+        var accents = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var (hex, label) in new[] { ("#33755C", "Зелёный"), ("#3867B2", "Синий"), ("#87613B", "Песочный"), ("#9B5671", "Розовый"), ("#675BA2", "Фиолетовый"), ("#56606B", "Графит") })
+        {
+            var swatch = new Button { Width = 38, Height = 38, Padding = new Thickness(6), Margin = new Thickness(0, 0, 8, 0),
+                Content = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = Brush.Parse(hex) } };
+            Avalonia.Automation.AutomationProperties.SetName(swatch, label + " акцент");
+            ToolTip.SetTip(swatch, label + " акцент");
+            swatch.Click += (_, _) => _colors[3].Color = Color.Parse(hex);
+            accents.Children.Add(swatch);
+        }
+        body.Children.Add(new StackPanel { Spacing = 10, Children = { new TextBlock { Text = "Цвет акцента", FontWeight = FontWeight.Medium }, accents } });
         var custom = new StackPanel { Spacing = 14, Margin = new Thickness(0, 14, 0, 0) };
         custom.Children.Add(_name);
         _name.TextChanged += (_, _) => PreviewCustom();
@@ -113,23 +124,17 @@ public sealed class AppearanceWindow : Window
 
     static Border ConversationPreview()
     {
-        StackPanel Message(string name, string time, string text)
+        Border Message(string text, bool mine)
         {
-            var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-            header.Children.Add(new TextBlock { Text = name, FontWeight = FontWeight.SemiBold });
-            header.Children.Add(new TextBlock { Text = time, Classes = { "caption" }, VerticalAlignment = VerticalAlignment.Center });
-            return new StackPanel { Spacing = 5, Children = { header, new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap } } };
+            var bubble = new Border { Padding = new Thickness(12, 9), CornerRadius = new CornerRadius(10),
+                HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                Child = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap } };
+            bubble.Bind(Border.BackgroundProperty, new DynamicResourceExtension(mine ? "BubbleMine" : "RaisedBrush"));
+            return bubble;
         }
-        var preview = new Border
-        {
-            Padding = new Thickness(22), CornerRadius = new CornerRadius(8),
-            Child = new StackPanel { Spacing = 20, Children =
-            {
-                Message("Александра", "18:42", "Встретимся завтра?"),
-                Message("Вы", "18:43", "Да, в семь. До встречи!")
-            }}
-        };
-        preview.Bind(Border.BackgroundProperty, new DynamicResourceExtension("RaisedBrush"));
+        var preview = new Border { Padding = new Thickness(20), CornerRadius = new CornerRadius(8),
+            Child = new StackPanel { Spacing = 12, Children = { Message("Встретимся завтра?", false), Message("Да, в семь. До встречи!", true) } } };
+        preview.Bind(Border.BackgroundProperty, new DynamicResourceExtension("ChassisBrush"));
         return preview;
     }
 

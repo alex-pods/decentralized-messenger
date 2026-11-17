@@ -1,15 +1,15 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.ProfileEditor" x:Name="Root">
   <StackPanel Spacing="10">
     <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding ShowProfileCommand.IsRunning}"/>
-    <StackPanel Orientation="Horizontal" Spacing="18" Margin="0,0,0,14">
+    <WrapPanel Orientation="Horizontal" Margin="0,0,0,14">
       <Border Width="64" Height="64" CornerRadius="32" Background="{Binding CurrentUserId, Converter={StaticResource AvatarBrush}}" ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver" DragDrop.Drop="OnAvatarDrop" BorderBrush="{DynamicResource WellEdge}" BorderThickness="1">
         <Grid>
           <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
           <TextBlock Text="{Binding DisplayName, Converter={StaticResource Initial}}" TextWrapping="Wrap" TextAlignment="Center" FontSize="28" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="14" IsVisible="{Binding !HasAvatar}"/>
         </Grid>
       </Border>
-      <Button Classes="small" Content="Выбрать изображение…" Click="OnChooseAvatarClick" VerticalAlignment="Center"/>
-    </StackPanel>
+      <Button Classes="small" Content="Выбрать фото…" Click="OnChooseAvatarClick" Margin="12,8,0,8" VerticalAlignment="Center"/>
+    </WrapPanel>
     <TextBlock Classes="field" Text="Имя"/>
     <TextBox Text="{Binding DisplayName}" MaxLength="32" AutomationProperties.Name="Имя" IsEnabled="{Binding !ShowProfileCommand.IsRunning}"/>
     <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>

@@ -7,6 +7,16 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, IAuthService auth)
     {
+        if (context.Request.Path.StartsWithSegments("/themes"))
+        {
+            var size = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (size is { IsReadOnly: false }) size.MaxRequestBodySize = 16384;
+            if (context.Request.ContentLength > 16384) throw AppException.PayloadTooLarge("Theme is too large");
+        }
+        if (HttpMethods.IsGet(context.Request.Method) && context.GetEndpoint()?.Metadata.GetMetadata<Messenger.Api.Endpoints.PublicThemeRead>() != null)
+        {
+            await next(context); return;
+        }
         var requestPath = context.Request.Path.Value?.TrimEnd('/');
 
         if (HttpMethods.IsGet(context.Request.Method) &&

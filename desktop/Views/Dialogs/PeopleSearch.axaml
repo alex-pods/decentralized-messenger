@@ -24,7 +24,10 @@
                   <TextBlock Classes="avatarText" Text="{Binding Label, Converter={StaticResource Initial}}" IsVisible="{Binding !HasAvatar}"/>
                 </Panel>
               </Border>
-              <TextBlock Grid.Column="1" Text="{Binding Label}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+              <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="{Binding NameLabel}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding TagLabel}" Classes="caption" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
             </Grid>
           </Button>
         </DataTemplate>

@@ -120,6 +120,7 @@ public partial class ShellViewModel : ObservableObject
     public bool CanSendDraft => HasChat && !Busy && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
     public bool HasAvatar => Avatar is not null;
     public long CurrentUserId => _me.Id;
+    internal MessengerClient ThemeApi => _api;
     public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";
     public bool OverlayOpen => Overlay.Length > 0;
     public bool ShowPeopleSearch => Overlay is "direct" or "group" or "members";

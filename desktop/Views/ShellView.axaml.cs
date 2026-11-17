@@ -120,7 +120,7 @@ public partial class ShellView : UserControl
     async void OnAppearanceClick(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this) is Window owner)
-            await new Appearance.AppearanceWindow().ShowDialog(owner);
+            await new Appearance.AppearanceWindow(_vm?.ThemeApi, _vm?.CurrentUserId).ShowDialog(owner);
     }
 
     void Hook()

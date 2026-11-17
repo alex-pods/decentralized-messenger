@@ -159,6 +159,28 @@
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
     <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
   </Style>
+  <Style Selector="TextBox:not(:disabled) /template/ TextBlock#PART_Watermark">
+    <Setter Property="Foreground" Value="{DynamicResource LabelBrush}"/>
+    <Setter Property="Opacity" Value="1"/>
+  </Style>
+  <Style Selector="Expander">
+    <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
+    <Setter Property="CornerRadius" Value="8"/>
+  </Style>
+  <Style Selector="Expander /template/ ToggleButton#ExpanderHeader">
+    <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}"/>
+  </Style>
+  <Style Selector="Expander /template/ ToggleButton#ExpanderHeader:pointerover">
+    <Setter Property="Background" Value="{DynamicResource HoverFill}"/>
+  </Style>
+  <Style Selector="Button.secondaryAction">
+    <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
   <Style Selector="TextBox.bare">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>

@@ -1,0 +1,114 @@
+using System.Net.Http;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+namespace MessengerDesktop.Appearance;
+
+public sealed partial class AppearanceWindow
+{
+    readonly MessengerClient? _api;
+    readonly long? _owner;
+    ThemeShare? _remote;
+    readonly TextBox _themeLink = new() { Name = "ThemeLink", Watermark = "https://…/themes/…" };
+    readonly TextBlock _exchangeStatus = new() { Name = "ThemeExchangeStatus", TextWrapping = TextWrapping.Wrap, Classes = { "caption" } };
+    readonly Button _updateShared = new() { Content = "Обновить опубликованную", IsVisible = false };
+    StackPanel _exchange = null!;
+
+    Control SharingControls()
+    {
+        _exchange = new StackPanel { Name = "ThemeSharing", Spacing = 10 };
+        _themeLink.TextChanged += (_, _) =>
+        {
+            if (_remote != null && _themeLink.Text?.Trim().TrimEnd('/') != _api?.ServerBase + "/themes/" + _remote.Id)
+            {
+                _remote = null;
+                _updateShared.IsVisible = false;
+            }
+        };
+        _exchange.Children.Add(new TextBlock { Text = "Обмен темами", FontWeight = FontWeight.SemiBold });
+        _exchange.Children.Add(new TextBlock { Text = "Файл можно передать напрямую. Ссылка хранит тему на вашем сервере.", Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
+        var actions = new WrapPanel { Orientation = Orientation.Horizontal };
+        var import = new Button { Content = "Импорт файла", Classes = { "secondaryAction" } };
+        var export = new Button { Content = "Экспорт файла", Classes = { "secondaryAction" } };
+        import.Click += async (_, _) => await Transfer(async () =>
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Импорт темы", AllowMultiple = false,
+                FileTypeFilter = new[] { new FilePickerFileType("Тема Messenger") { Patterns = new[] { "*.json" } } } });
+            if (files.Count == 0) { _exchangeStatus.Text = ""; return; }
+            await using var stream = await files[0].OpenReadAsync();
+            var theme = ThemeExchange.Parse(await ThemeExchange.ReadBounded(stream));
+            if (_closed) return;
+            _remote = null; _updateShared.IsVisible = false; _themeLink.Text = ""; Load(theme); ThemeSettings.Apply(theme);
+            _exchangeStatus.Text = "Предпросмотр импортированной темы. Нажмите «Применить», чтобы сохранить.";
+        });
+        export.Click += async (_, _) => await Transfer(async () =>
+        {
+            var data = ThemeExchange.Export(ThemeSettings.Current);
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Экспорт темы", SuggestedFileName = "messenger-theme.json", DefaultExtension = "json" });
+            if (file == null) { _exchangeStatus.Text = ""; return; }
+            await using var stream = await file.OpenWriteAsync(); stream.SetLength(0); await stream.WriteAsync(data);
+            _exchangeStatus.Text = "Файл темы сохранён.";
+        });
+        actions.Children.Add(import); actions.Children.Add(export); _exchange.Children.Add(actions);
+        _exchange.Children.Add(_themeLink);
+        var links = new WrapPanel { Orientation = Orientation.Horizontal };
+        var load = new Button { Content = "Открыть ссылку" };
+        load.Click += async (_, _) => await Transfer(async () =>
+        {
+            if (!Uri.TryCreate(_themeLink.Text?.Trim(), UriKind.Absolute, out var uri)) throw new InvalidDataException("Проверьте ссылку.");
+            var share = await ThemeExchange.Download(uri);
+            if (_closed) return;
+            _remote = _api != null && uri.AbsoluteUri.TrimEnd('/') == _api.ServerBase + "/themes/" + share.Id ? share : null;
+            _updateShared.IsVisible = _remote?.OwnerId == _owner && _api != null;
+            Load(share.Theme); ThemeSettings.Apply(share.Theme);
+            _exchangeStatus.Text = "Тема открыта в предпросмотре. Можно изменить и сохранить свою копию.";
+        });
+        var publish = new Button { Content = "Опубликовать копию", IsEnabled = _api != null };
+        publish.Click += async (_, _) => await Transfer(async () =>
+        {
+            ThemeExchange.Validate(ThemeSettings.Current);
+            _remote = await _api!.Send<ThemeShare>(HttpMethod.Post, "themes", new ThemeFile(1, ThemeSettings.Current), default);
+            _themeLink.Text = _api.ServerBase + "/themes/" + _remote!.Id;
+            _updateShared.IsVisible = true;
+            _exchangeStatus.Text = "Тема опубликована. Скопируйте ссылку и отправьте её собеседнику.";
+        });
+        _updateShared.Click += async (_, _) => await Transfer(async () =>
+        {
+            if (_remote == null || _api == null) return;
+            ThemeExchange.Validate(ThemeSettings.Current);
+            _remote = await _api.Send<ThemeShare>(HttpMethod.Patch, "themes/" + _remote.Id,
+                new { version = _remote.Version, theme = ThemeSettings.Current }, default);
+            _exchangeStatus.Text = "Тема обновлена по прежней ссылке.";
+        });
+        var copy = new Button { Content = "Копировать ссылку" };
+        copy.Click += async (_, _) => await Transfer(async () =>
+        {
+            if (!Uri.TryCreate(_themeLink.Text?.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != "https")
+                throw new InvalidDataException("Сначала откройте или опубликуйте тему.");
+            if (Clipboard == null) throw new InvalidOperationException("Буфер обмена недоступен.");
+            await Clipboard.SetTextAsync(uri.AbsoluteUri); _exchangeStatus.Text = "Ссылка скопирована.";
+        });
+        foreach (var button in new[] { import, export, load, publish, copy }) button.Margin = new Thickness(0, 0, 8, 8);
+        links.Children.Add(load); links.Children.Add(publish); links.Children.Add(copy);
+        _exchange.Children.Add(links); _exchange.Children.Add(_updateShared); _exchange.Children.Add(_exchangeStatus);
+        return _exchange;
+    }
+    async Task Transfer(Func<Task> action)
+    {
+        _exchange.IsEnabled = false; _exchangeStatus.Text = "Подождите…";
+        try { await action(); }
+        catch (Exception ex) { if (!_closed) _exchangeStatus.Text = ex switch
+            {
+                ApiException { Code: "theme_limit" } => "Достигнут лимит публикаций. Можно обновить существующую тему или передать её файлом.",
+                ApiException { Status: 409 } => "Тема была изменена. Откройте ссылку заново перед обновлением.",
+                ApiException { Status: 403 } => "Изменить эту публикацию может только владелец. Опубликуйте свою копию.",
+                HttpRequestException => "Сервер тем недоступен или ссылка не найдена.",
+                OperationCanceledException => "Сервер не ответил вовремя. Попробуйте ещё раз.",
+                System.Text.Json.JsonException => "Файл не является корректной темой Messenger.",
+                _ => ex.Message
+            }; }
+        finally { if (!_closed) _exchange.IsEnabled = true; }
+    }
+}

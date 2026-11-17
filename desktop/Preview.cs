@@ -11,13 +11,14 @@ namespace MessengerDesktop;
 /// Снимки экранов для проверки дизайна: наполняет сервер демо-перепиской и сохраняет PNG.
 /// Запуск: dotnet run --project desktop -- --preview http://127.0.0.1:5099/messenger /tmp/shots
 /// </summary>
-public static class Preview
+public static partial class Preview
 {
     public static string? Server { get; set; }
     public static string OutDir { get; set; } = ".";
 
     public static async Task Run(Window window, Navigator nav)
     {
+        if (SharingOnly) { await AuditSharing(window); return; }
         var (api, me) = await Seed(Server!);
         await Task.Delay(1500);
         await Shot(window, "login");
@@ -38,6 +39,7 @@ public static class Preview
         });
         await Task.Delay(100);
         await Shot(window, "login-error");
+        await AuditLogin(window);
 
         var vm = await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -86,6 +88,7 @@ public static class Preview
         await Shot(window, "profile");
 
         await AuditScreens(window, vm);
+        await AuditCompactScreens(window, vm);
         await ReviewGallery(window, vm);
         Dispatcher.UIThread.Post(() => window.Close());
     }
@@ -179,7 +182,7 @@ public static class Preview
             await Dispatcher.UIThread.InvokeAsync(() => vm.CancelComposeCommand.Execute(null));
             var appearance = await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var dialog = new Appearance.AppearanceWindow();
+                var dialog = new Appearance.AppearanceWindow(vm.ThemeApi, vm.CurrentUserId);
                 dialog.Show(window);
                 return dialog;
             });
@@ -196,6 +199,9 @@ public static class Preview
             });
             await Task.Delay(120);
             await Shot(appearance, "appearance-custom-" + suffix);
+            await Dispatcher.UIThread.InvokeAsync(() => appearance.GetVisualDescendants().OfType<ScrollViewer>().First().ScrollToEnd());
+            await Task.Delay(150);
+            await Shot(appearance, "appearance-sharing-" + suffix);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 var preset = appearance.GetVisualDescendants().OfType<Button>().First(b => Equals(b.Tag, "Бумага"));

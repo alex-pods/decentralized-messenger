@@ -110,6 +110,8 @@ public partial class MemberRow : ObservableObject, IDisposable
 {
     public long Id { get; init; }
     public string Title { get; init; } = "";
+    public string TagLabel { get; init; } = "";
+    public string Detail => $"{TagLabel} · {RoleLabel}";
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {

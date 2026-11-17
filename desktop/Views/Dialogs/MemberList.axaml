@@ -11,7 +11,7 @@
           </Border>
           <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="6">
             <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding RoleLabel}" Classes="caption"/>
+            <TextBlock Text="{Binding Detail}" Classes="caption" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}"/>
           </StackPanel>
           <Button Classes="icon" Click="OnMemberMenu" IsVisible="{Binding CanKick}" Grid.Column="2" ToolTip.Tip="Управление участником" AutomationProperties.Name="Управление участником">
             <local:Glyph Data="{StaticResource IcMore}"/>

@@ -20,7 +20,7 @@
 | Views/Dialogs/PeopleSearch.axaml | ListBox | {Binding SearchResults} |
 | Views/Dialogs/PeopleSearch.axaml | ListBox |  |
 | Views/Dialogs/PeopleSearch.axaml | Button | {Binding DataContext.PickUserCommand, ElementName=Root} |
-| Views/Dialogs/ProfileEditor.axaml | Button | Выбрать изображение… / OnChooseAvatarClick |
+| Views/Dialogs/ProfileEditor.axaml | Button | Выбрать фото… / OnChooseAvatarClick |
 | Views/Dialogs/ProfileEditor.axaml | TextBox | {Binding DisplayName} / Имя |
 | Views/Dialogs/ProfileEditor.axaml | TextBox | {Binding Bio} / О себе |
 | Views/Dialogs/ProfileEditor.axaml | CheckBox | Находить меня по тегу |
@@ -63,3 +63,5 @@
 
 Динамические меню: новый чат/группа; профиль/оформление/выход; реакции, ответ, пересылка, закреп, редактирование, удаление; роли/исключение/передача владения.
 Оформление: пресеты, имя, переключатель тёмных элементов, четыре color picker, отмена, применение.
+
+Обмен темами: импорт/экспорт файла, поле HTTPS-ссылки, загрузка, публикация копии, копирование ссылки, обновление своей публикации, состояние операции/ошибки.

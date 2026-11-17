@@ -6,11 +6,11 @@ using Avalonia.Media;
 
 namespace MessengerDesktop.Appearance;
 
-public sealed class AppearanceWindow : Window
+public sealed partial class AppearanceWindow : Window
 {
     readonly ThemeSettings _original = ThemeSettings.Current;
     readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
-    readonly TextBox _name = new() { Watermark = "Название темы" };
+    readonly TextBox _name = new() { Watermark = "Название темы", MaxLength = 64 };
     readonly CheckBox _dark = new() { Content = "Тёмное оформление элементов" };
     readonly ColorPicker[] _colors = new ColorPicker[4];
     readonly List<Button> _cards = new();
@@ -18,8 +18,9 @@ public sealed class AppearanceWindow : Window
     bool _saved;
     bool _closed;
 
-    public AppearanceWindow()
+    public AppearanceWindow(MessengerClient? api = null, long? owner = null)
     {
+        _api = api; _owner = owner;
         Title = "Оформление";
         Width = 540;
         Height = 660;
@@ -33,16 +34,16 @@ public sealed class AppearanceWindow : Window
         DockPanel.SetDock(heading, Dock.Top);
         layout.Children.Add(heading);
 
-        var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(0, 20, 0, 0) };
+        var footer = new StackPanel { Spacing = 10, Margin = new Thickness(0, 20, 0, 0) };
+        var footerActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var cancel = new Button { Content = "Отмена", Margin = new Thickness(0, 0, 8, 0) };
         var save = new Button { Content = "Применить", Classes = { "primary" }, Padding = new Thickness(24, 10) };
         cancel.Click += (_, _) => Close();
         save.Click += (_, _) => Save();
-        Grid.SetColumn(cancel, 1);
-        Grid.SetColumn(save, 2);
         footer.Children.Add(_error);
-        footer.Children.Add(cancel);
-        footer.Children.Add(save);
+        footerActions.Children.Add(cancel);
+        footerActions.Children.Add(save);
+        footer.Children.Add(footerActions);
         DockPanel.SetDock(footer, Dock.Bottom);
         layout.Children.Add(footer);
 
@@ -85,7 +86,8 @@ public sealed class AppearanceWindow : Window
             custom.Children.Add(row);
         }
         body.Children.Add(new Expander { Header = "Создать свою тему", Content = custom, HorizontalAlignment = HorizontalAlignment.Stretch });
-        layout.Children.Add(new ScrollViewer { Content = body, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
+        body.Children.Add(SharingControls());
+        layout.Children.Add(new ScrollViewer { Content = body, Padding = new Thickness(0, 0, 8, 0), HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
         Content = layout;
         Load(_original);
         Closed += (_, _) => { _closed = true; if (!_saved) ThemeSettings.Apply(_original); };
@@ -156,6 +158,7 @@ public sealed class AppearanceWindow : Window
             card.Bind(BorderBrushProperty, new DynamicResourceExtension("AccentBrush"));
         }
         _loading = false;
+        UpdateContrastWarning();
     }
 
     void PreviewCustom()
@@ -173,6 +176,11 @@ public sealed class AppearanceWindow : Window
             ((Border)content.Children[0]).BorderThickness = new Thickness(0);
             ((TextBlock)content.Children[1]).Text = card.Tag?.ToString();
         }
+        UpdateContrastWarning();
+    }
+
+    void UpdateContrastWarning()
+    {
         _error.Text = ThemeSettings.Contrast(_colors[2].Color, _colors[0].Color) < 4.5 || ThemeSettings.Contrast(_colors[2].Color, _colors[1].Color) < 4.5
             ? "Текст может быть плохо различим. Увеличьте разницу между цветом текста и фона." : "";
     }
@@ -181,13 +189,14 @@ public sealed class AppearanceWindow : Window
     {
         try
         {
+            ThemeExchange.Validate(ThemeSettings.Current);
             ThemeSettings.Save();
             _saved = true;
             Close();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            _error.Text = "Не удалось сохранить тему.";
+            _error.Text = ex is InvalidDataException ? ex.Message : "Не удалось сохранить тему.";
         }
     }
 }

@@ -14,7 +14,7 @@
                        Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Left"/>
           <TextBlock Text="{Binding AuthTitle}" FontSize="24" FontWeight="SemiBold" LetterSpacing="-0.4"
                      HorizontalAlignment="Left" Margin="0,12,0,0"/>
-          <TextBlock Text="{Binding AuthDescription}" Classes="secondary" FontSize="14"
+          <TextBlock Text="{Binding AuthDescription}" Classes="secondary" FontSize="14" TextWrapping="Wrap"
                      HorizontalAlignment="Left" Margin="0,6,0,18"/>
 
           <TextBlock Classes="field" Text="Логин"/>

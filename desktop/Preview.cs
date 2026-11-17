@@ -49,6 +49,10 @@ public static class Preview
         });
         await Task.Delay(2000);
         await Shot(window, "group");
+        await Dispatcher.UIThread.InvokeAsync(() => window.Width = 520);
+        await Task.Delay(300);
+        await Shot(window, "narrow");
+        await Dispatcher.UIThread.InvokeAsync(() => window.Width = 1180);
 
         await Dispatcher.UIThread.InvokeAsync(() => vm.ShowMembersCommand.Execute(null));
         await Task.Delay(1500);

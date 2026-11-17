@@ -19,11 +19,45 @@ public partial class ShellView : UserControl
     public ShellView()
     {
         InitializeComponent();
-        ChassisWidth.Track(this);
+        SizeChanged += (_, _) => UpdateNavigation();
+        AttachedToVisualTree += (_, _) => UpdateNavigation();
         DataContextChanged += (_, _) => Hook();
+        ChatList.SelectionChanged += (_, _) =>
+        {
+            if (ChatList.SelectedItem == null) return;
+            _showChats = false;
+            UpdateNavigation();
+        };
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
+    }
+
+    bool _showChats = true;
+
+    void OnShowChats(object? sender, RoutedEventArgs e)
+    {
+        _showChats = true;
+        UpdateNavigation();
+    }
+
+    void UpdateNavigation()
+    {
+        bool narrow = Bounds.Width < 850;
+        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "56,*" : "64,320,*");
+        Grid.SetColumn(ChatSidebar, 1);
+        Grid.SetColumn(ScreenBay, narrow ? 1 : 2);
+        ChatSidebar.IsVisible = !narrow || _showChats;
+        ScreenBay.IsVisible = !narrow || !_showChats;
+        BackToChats.IsVisible = narrow;
+    }
+
+    void OnChatFilterChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_vm == null || sender is not TextBox input) return;
+        var query = input.Text?.Trim() ?? "";
+        ChatList.ItemsSource = query.Length == 0 ? _vm.Chats :
+            _vm.Chats.Where(chat => chat.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
     }
 
     async void OnAppearanceClick(object? sender, RoutedEventArgs e)

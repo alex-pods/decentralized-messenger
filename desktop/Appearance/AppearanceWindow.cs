@@ -10,8 +10,8 @@ public sealed class AppearanceWindow : Window
     public AppearanceWindow()
     {
         Title = "Оформление";
-        Width = 420;
-        Height = 590;
+        Width = 480;
+        Height = 740;
         MinWidth = 340;
         MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -62,10 +62,35 @@ public sealed class AppearanceWindow : Window
         };
         cancel.Click += (_, _) => Close();
         Closed += (_, _) => { if (!saved) ThemeSettings.Apply(original); };
+        var sample = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(18),
+            Child = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    new TextBlock { Text = "Предпросмотр переписки", FontWeight = FontWeight.SemiBold },
+                    new TextBlock { Text = "Привет! Как тебе новый цвет?", TextWrapping = TextWrapping.Wrap },
+                    new Border
+                    {
+                        Padding = new Thickness(12),
+                        CornerRadius = new CornerRadius(12),
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Child = new TextBlock { Text = "Выглядит отлично." }
+                    }
+                }
+            }
+        };
+        sample.Bind(Border.BackgroundProperty, new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("ChassisBrush"));
+        var bubble = (Border)((StackPanel)sample.Child!).Children[2];
+        bubble.Bind(Border.BackgroundProperty, new Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("BubbleMine"));
         var panel = new StackPanel { Margin = new Thickness(24), Spacing = 9 };
         panel.Children.Add(new TextBlock { Text = "Оформление", FontSize = 24, FontWeight = FontWeight.SemiBold });
         panel.Children.Add(presets);
         panel.Children.Add(dark);
+        panel.Children.Add(sample);
         foreach (var entry in new[] { ("Фон приложения", background), ("Фон переписки и панелей", surface), ("Основной текст", text), ("Акцент", accent) })
         {
             panel.Children.Add(new TextBlock { Text = entry.Item1, FontSize = 13 });

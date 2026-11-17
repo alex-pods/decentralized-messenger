@@ -128,6 +128,24 @@ public static class SelfCheck
             throw new Exception("Повтор после удаления изменил message_id");
         Console.WriteLine("delete");
 
+        // Закрепы: порядок как в Telegram — снизу вверх по чату (больший id первым).
+        var pinIds = new List<long>();
+        for (var i = 0; i < 12; i++)
+            pinIds.Add(await a.SendMessage(chatId, "pin-msg-" + i, clientRef: Guid.NewGuid().ToString("N")));
+        await a.PinMessage(chatId, pinIds[2]);
+        await a.PinMessage(chatId, pinIds[7]);
+        await a.PinMessage(chatId, pinIds[10]);
+        var pins = await a.GetPins(chatId);
+        var ordered = pins.Select(p => p.MessageId).ToList();
+        var expect = new[] { pinIds[10], pinIds[7], pinIds[2] };
+        if (!ordered.SequenceEqual(expect))
+            throw new Exception("пины должны идти по message_id DESC, получили " + string.Join(",", ordered));
+        var strip = PinStrip.IndexForScroll(11, new[] { 10, 7, 2 });
+        if (strip != 0) throw new Exception("у низа полоска должна показывать первый закреп");
+        if (PinStrip.IndexForScroll(9, new[] { 10, 7, 2 }) != 1)
+            throw new Exception("после пролистывания нижнего закрепа — следующий");
+        Console.WriteLine("pins-order");
+
         liveB.Dispose();
         try { await run.WaitAsync(TimeSpan.FromSeconds(3)); } catch { /* сокет уже закрыт */ }
     }

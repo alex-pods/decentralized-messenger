@@ -10,11 +10,5 @@
     <Border x:Name="Housing" Classes="housing">
       <ContentControl Content="{Binding}"/>
     </Border>
-    <Panel x:Name="ScrewLayer" IsHitTestVisible="False" Margin="{DynamicResource ScrewInset}">
-      <Border Classes="screw" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-      <Border Classes="screw" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-      <Border Classes="screw" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
-      <Border Classes="screw" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
-    </Panel>
   </Panel>
 </Window>

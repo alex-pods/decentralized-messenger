@@ -88,7 +88,20 @@ public static class WsProtocol
                 follow = true,
                 payload = "chat_id, message_id, message, for_everyone",
                 note = "for_everyone=false goes only to that user's " +
-                       "sessions, without follow"
+                       "sessions, without follow. " +
+                       "Deleting for everyone also drops a pin and sends message_unpinned"
+            },
+            new
+            {
+                type = "message_pinned",
+                follow = true,
+                payload = "chat_id, message_id, user_id, message"
+            },
+            new
+            {
+                type = "message_unpinned",
+                follow = true,
+                payload = "chat_id, message_id, user_id, message"
             },
 
             new

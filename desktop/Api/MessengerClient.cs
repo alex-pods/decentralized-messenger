@@ -25,7 +25,10 @@ public sealed class MessengerClient : IDisposable
         _http = new HttpClient
         {
             BaseAddress = new Uri(ServerBase + "/"),
-            Timeout = TimeSpan.FromSeconds(30)
+            Timeout = TimeSpan.FromSeconds(30),
+            // На этом nginx HTTP/2 иногда рвёт TLS посередине ответа.
+            DefaultRequestVersion = HttpVersion.Version11,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower
         };
         if (!string.IsNullOrWhiteSpace(token))
             SetToken(token);
@@ -215,6 +218,18 @@ public sealed class MessengerClient : IDisposable
         {
             ["for_everyone"] = forEveryone
         }, ct);
+    
+    public async Task<List<PinDto>> GetPins(long chatId, CancellationToken ct = default) =>
+        await Send<List<PinDto>>(HttpMethod.Get, $"chats/{chatId}/pins", null, ct) ?? new();
+
+    public Task PinMessage(long chatId, long messageId, CancellationToken ct = default) =>
+        Send(HttpMethod.Post, $"chats/{chatId}/pins", new Dictionary<string, object?>
+        {
+            ["message_id"] = messageId
+        }, ct);
+
+    public Task UnpinMessage(long chatId, long messageId, CancellationToken ct = default) =>
+        Send(HttpMethod.Delete, $"chats/{chatId}/pins/{messageId}", null, ct);
 
     public Task AddReaction(long messageId, string emoji, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"messages/{messageId}/reactions", new Dictionary<string, object?>

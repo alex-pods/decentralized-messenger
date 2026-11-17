@@ -10,6 +10,7 @@ public partial class ShellViewModel
         SelectedMessage = null;
         ReplyTo = null;
         Editing = null;
+        ClearPins();
         if (value == null)
         {
             Messages.Clear();
@@ -23,11 +24,21 @@ public partial class ShellViewModel
     [RelayCommand]
     async Task ReloadChats()
     {
+        var selected = SelectedChat?.Id;
+        var unread = Chats.Where(c => c.Unread).Select(c => c.Id).ToHashSet();
+        List<ChatDto> list;
         try
         {
-            var selected = SelectedChat?.Id;
-            var unread = Chats.Where(c => c.Unread).Select(c => c.Id).ToHashSet();
-            var list = await _api.GetChats();
+            list = await LoadChatList();
+        }
+        catch (Exception ex)
+        {
+            Error = Friendly(ex);
+            return;
+        }
+
+        try
+        {
             await Ui(() =>
             {
                 _suppress = true;
@@ -48,8 +59,24 @@ public partial class ShellViewModel
                 _suppress = false;
                 SelectedChat = selected is { } sid ? Chats.FirstOrDefault(c => c.Id == sid) : null;
             });
+            if (Chats.Count > 0) Error = null;
         }
         catch (Exception ex) { Error = Friendly(ex); }
+    }
+
+    async Task<List<ChatDto>> LoadChatList()
+    {
+        Exception? last = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try { return await _api.GetChats(); }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                last = ex;
+                await Task.Delay(400 * (attempt + 1));
+            }
+        }
+        throw last!;
     }
 
     [RelayCommand] void ShowDirect() { ResetSearch(); Overlay = "direct"; }

@@ -3,24 +3,18 @@
              xmlns:conv="using:Avalonia.Data.Converters"
              xmlns:local="using:MessengerDesktop"
              x:Class="MessengerDesktop.Views.LoginView">
-  <UserControl.Resources>
-    <StreamGeometry x:Key="IcEye">M2,12 C4.5,7.5 8,5 12,5 C16,5 19.5,7.5 22,12 C19.5,16.5 16,19 12,19 C8,19 4.5,16.5 2,12 Z M12,9 A3,3 0 1 1 12,15 A3,3 0 1 1 12,9 Z</StreamGeometry>
-    <StreamGeometry x:Key="IcEyeOff">M3,4 L21,20 M9.5,6.2 C10.3,6 11.1,5.9 12,5.9 C16,5.9 19.5,8.4 22,12.9 C21.1,14.4 20,15.7 18.8,16.8 M14.1,15.2 A3,3 0 0 1 9.2,10.3 M6.2,8.4 C4.6,9.6 3.2,11.1 2,12.9 C3.4,15.2 5.2,17 7.2,18.2</StreamGeometry>
-    <StreamGeometry x:Key="IcChevronRight">M9,6 L15,12 L9,18</StreamGeometry>
-    <StreamGeometry x:Key="IcGear">M12,9.2 A2.8,2.8 0 1 0 12.01,9.2 Z M12,10.6 A1.4,1.4 0 1 1 11.99,10.6 Z M12,3.4 V6.1 M12,17.9 V20.6 M3.4,12 H6.1 M17.9,12 H20.6 M5.9,5.9 L7.8,7.8 M16.2,16.2 L18.1,18.1 M18.1,5.9 L16.2,7.8 M7.8,16.2 L5.9,18.1</StreamGeometry>
-  </UserControl.Resources>
 
 
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <Grid Margin="32,50" RowDefinitions="Auto,*">
       <TextBlock Text="Messenger" FontWeight="SemiBold" FontSize="18" Margin="0,0,0,48"/>
-      <Border Grid.Row="1" MaxWidth="400" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Border Grid.Row="1" MaxWidth="360" HorizontalAlignment="Stretch" VerticalAlignment="Center">
 <StackPanel Spacing="0">
           <local:Glyph Data="{StaticResource IcBubble}" Width="28" Height="28" StrokeWidth="1.7"
                        Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Left"/>
-          <TextBlock Text="Войти в Messenger" FontSize="28" FontWeight="Bold" LetterSpacing="-0.4"
+          <TextBlock Text="{Binding AuthTitle}" FontSize="24" FontWeight="SemiBold" LetterSpacing="-0.4"
                      HorizontalAlignment="Left" Margin="0,12,0,0"/>
-          <TextBlock Text="Войдите, чтобы продолжить общение" Classes="secondary" FontSize="14"
+          <TextBlock Text="{Binding AuthDescription}" Classes="secondary" FontSize="14"
                      HorizontalAlignment="Left" Margin="0,6,0,18"/>
 
           <TextBlock Classes="field" Text="Логин"/>
@@ -42,7 +36,7 @@
               </Button>
             </TextBox.InnerRightContent>
             <TextBox.KeyBindings>
-              <KeyBinding Gesture="Enter" Command="{Binding SignInCommand}"/>
+              <KeyBinding Gesture="Enter" Command="{Binding SubmitCommand}"/>
             </TextBox.KeyBindings>
           </TextBox>
 
@@ -50,20 +44,20 @@
                      FontSize="13" Margin="0,8,0,0"
                      IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
 
-          <Button Classes="primary" Content="Войти" HorizontalAlignment="Stretch" Margin="0,16,0,0"
-                  Command="{Binding SignInCommand}"
+          <Button Classes="primary" Content="{Binding AuthAction}" HorizontalAlignment="Stretch" Margin="0,16,0,0"
+                  Command="{Binding SubmitCommand}"
                   IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
 
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,14,0,0" Spacing="6">
-            <TextBlock Text="Нет аккаунта?" Classes="secondary" FontSize="14" VerticalAlignment="Center"/>
-            <Button Classes="link" Command="{Binding SignUpCommand}" Padding="0"
+            <TextBlock Text="{Binding ModePrompt}" Classes="secondary" FontSize="14" VerticalAlignment="Center"/>
+            <Button Classes="link" Command="{Binding SwitchModeCommand}" Padding="0"
                     VerticalAlignment="Center"
                     IsEnabled="{Binding Busy, Converter={StaticResource Not}}">
-              <TextBlock Text="Создать аккаунт" FontSize="14"/>
+              <TextBlock Text="{Binding ModeAction}" FontSize="14"/>
             </Button>
           </StackPanel>
 
-          <Border Height="1" Background="#D5D8DA" Margin="0,16,0,4"/>
+          <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,16,0,4"/>
 
           <Button Classes="disclosure" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                   Command="{Binding ToggleConnectionCommand}" Padding="0,8">
@@ -87,7 +81,7 @@
             <TextBlock Classes="field" Text="Сервер"/>
             <TextBox  Text="{Binding Server}" Watermark="https://…/messenger"/>
             <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,4,0,0"
-                       Text="Регистрация создаёт аккаунт и сразу входит. Сессия сохранится на этом компьютере."/>
+                       Text="Аккаунты разных серверов независимы."/>
           </StackPanel>
         </StackPanel>
       </Border>

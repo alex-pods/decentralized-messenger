@@ -12,18 +12,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         if (ReduceMotion()) Classes.Add("reduce-motion");
-        if (!OperatingSystem.IsMacOS()) return;
+        // Keep native window controls outside the content on every platform.
 
-        // Как в тулбаре macOS: светофоры по центру верхней строки, корпус вплотную к краю окна.
-        const double titleBar = 52;
-        ExtendClientAreaToDecorationsHint = true;
-        ExtendClientAreaChromeHints = ExtendClientAreaChromeHints.PreferSystemChrome
-            | ExtendClientAreaChromeHints.OSXThickTitleBar;
-        ExtendClientAreaTitleBarHeightHint = titleBar;
-        ChassisFrame.Margin = new Thickness(0);
-        Housing.Classes.Add("flush");
-        Resources["HeaderInset"] = new Thickness(70, 0, 0, 0);
-        Resources["LoginMargin"] = new Thickness(28, 60, 28, 22);
     }
 
     static bool ReduceMotion()

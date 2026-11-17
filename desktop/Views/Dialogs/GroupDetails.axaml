@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.GroupDetails" x:Name="Root">
+  <StackPanel Spacing="6" Margin="0,0,0,12">
+    <TextBlock Classes="field" Text="Название"/>
+    <TextBox Text="{Binding GroupTitle}" Watermark="1–64 символа"/>
+    <ItemsControl ItemsSource="{Binding GroupDraft}" Margin="0,8,0,0">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <WrapPanel/>
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Classes="chip" Margin="0,0,6,6">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="{Binding DisplayName}" MaxWidth="180" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+              <Button Classes="icon small" Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}">
+                <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10"/>
+              </Button>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

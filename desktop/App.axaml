@@ -27,12 +27,8 @@
     </DataTemplate>
   </Application.DataTemplates>
   <Application.Styles>
-    <FluentTheme>
-      <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Light" Accent="#FF237A63"
-                               RegionColor="#FFF5F6F8" BaseHigh="#FF181E22" BaseMedium="#FF414B52" BaseLow="#FFB6BEC2"/>
-      </FluentTheme.Palettes>
-    </FluentTheme>
+    <FluentTheme/>
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
     <StyleInclude Source="avares://MessengerDesktop/Styles/Theme.axaml"/>
   </Application.Styles>
 </Application>

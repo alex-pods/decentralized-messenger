@@ -1,70 +1,55 @@
-<UserControl xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" xmlns="https://github.com/avaloniaui"  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="MessengerDesktop.Views.ShellView" x:Name="Root">
-  <UserControl.Resources>
-    <StreamGeometry x:Key="IcSmilePlus">M22 11v1a10 10 0 1 1-9-10 M8 14s1.5 2 4 2 4-2 4-2 M8 9a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0Z M15 9a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0Z M16 5h6 M19 2v6</StreamGeometry>
-    <StreamGeometry x:Key="IcForward">m15 14 5-5-5-5 M4 20v-7a4 4 0 0 1 4-4h12</StreamGeometry>
-  </UserControl.Resources>
+<UserControl xmlns:views="using:MessengerDesktop.Views.Dialogs" xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="MessengerDesktop.Views.ShellView" x:Name="Root" KeyDown="OnShellKeyDown">
   <Panel>
-    <Grid x:Name="ShellGrid" Classes="shell" ColumnDefinitions="64,320,*">
-      <Border x:Name="NavigationRail" Background="{DynamicResource ChassisBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
-        <DockPanel Margin="10,24,10,16">
-          <StackPanel DockPanel.Dock="Top" Spacing="22">
-            <Border Background="{DynamicResource AccentFill}" CornerRadius="14" Width="44" Height="44">
-              <local:Glyph Data="{StaticResource IcBubble}" Foreground="{DynamicResource AccentBrush}" Width="24" Height="24" />
-            </Border>
-            <Button Classes="icon" Click="OnShowChats" ToolTip.Tip="Все чаты">
-              <local:Glyph Data="{StaticResource IcBubble}" />
-            </Button>
-            <Button Classes="icon" Command="{Binding ShowGroupCommand}" ToolTip.Tip="Новая группа">
-              <local:Glyph Data="{StaticResource IcGroup}" />
-            </Button>
-          </StackPanel>
-          <StackPanel DockPanel.Dock="Bottom" Spacing="12">
-            <Button Classes="icon" Click="OnAppearanceClick" ToolTip.Tip="Оформление">
-              <local:Glyph Data="{StaticResource IcSettings}" />
-            </Button>
-            <Button Classes="icon" Command="{Binding ShowProfileCommand}" ToolTip.Tip="Профиль">
-              <Border Classes="avatar" Width="32" Height="32" Background="{Binding Header, Converter={StaticResource AvatarBrush}}">
-                <TextBlock Classes="avatarText" Text="{Binding Header, Converter={StaticResource Initial}}" />
-              </Border>
-            </Button>
-            <Button Classes="icon" Command="{Binding LogoutCommand}" ToolTip.Tip="Выйти">
-              <local:Glyph Data="{StaticResource IcLogout}" />
-            </Button>
-          </StackPanel>
-          <Border />
-        </DockPanel>
-      </Border>
-      <Border Classes="sidebar" Grid.Column="1" x:Name="ChatSidebar">
+    <Grid x:Name="ShellGrid" Classes="shell" ColumnDefinitions="300,*">
+      <Border Classes="sidebar" Grid.Column="0" x:Name="ChatSidebar">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Margin="20,24,20,16" Spacing="18">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="Сообщения" FontSize="23" FontWeight="SemiBold" />
-              <Button Grid.Column="1" Classes="icon" Command="{Binding ShowDirectCommand}" ToolTip.Tip="Новый чат">
-                <local:Glyph Data="{StaticResource IcCompose}" />
-              </Button>
-            </Grid>
-            <TextBox TextChanged="OnChatFilterChanged" Watermark="Найти чат" AutomationProperties.Name="Поиск чатов" />
-            <Button Classes="link" Content="Создать группу" Command="{Binding ShowGroupCommand}" HorizontalAlignment="Left" />
-          </StackPanel>
-          <ListBox Classes="sidebar" ItemsSource="{Binding Chats}" SelectedItem="{Binding SelectedChat}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" x:Name="ChatList">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,12" Height="40">
+            <TextBox x:Name="ChatSearch" Classes="search" TextChanged="OnChatFilterChanged" Watermark="Поиск чатов" AutomationProperties.Name="Поиск чатов">
+              <TextBox.InnerLeftContent>
+                <local:Glyph Data="{StaticResource IcSearch}" Width="16" Height="16" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/>
+              </TextBox.InnerLeftContent>
+            </TextBox>
+            <Button Grid.Column="1" Classes="icon" Margin="8,0,0,0" Click="OnNewConversation" ToolTip.Tip="Начать разговор" AutomationProperties.Name="Начать разговор">
+              <local:Glyph Data="{StaticResource IcCompose}"/>
+            </Button>
+          </Grid>
+          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="4">
+            <Button Classes="account" Click="OnAccountMenu" HorizontalContentAlignment="Stretch" ToolTip.Tip="Аккаунт и настройки">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="avatar" Width="36" Height="36" Background="{Binding Header, Converter={StaticResource AvatarBrush}}">
+                  <Panel>
+                    <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+                    <TextBlock Classes="avatarText" Text="{Binding DisplayName, Converter={StaticResource Initial}}" IsVisible="{Binding !HasAvatar}"/>
+                  </Panel>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="3">
+                  <TextBlock Text="{Binding DisplayName}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Text="{Binding Status}" Classes="caption"/>
+                </StackPanel>
+                <local:Glyph Grid.Column="2" Data="{StaticResource IcSettings}" Width="18" Height="18" Foreground="{DynamicResource LabelBrush}"/>
+              </Grid>
+            </Button>
+          </Border>
+          <TextBlock x:Name="ChatEmpty" DockPanel.Dock="Bottom" IsVisible="False" Text="Чаты не найдены" Classes="secondary" Margin="24" TextWrapping="Wrap"/>
+          <ListBox Classes="sidebar" ItemsSource="{Binding Chats}" SelectedItem="{Binding SelectedChat, Mode=OneWay}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" x:Name="ChatList">
             <ListBox.ItemTemplate>
               <DataTemplate>
-                <Grid ColumnDefinitions="Auto,*" MinHeight="54" ClipToBounds="True">
+                <Grid ColumnDefinitions="Auto,*" MinHeight="48" ClipToBounds="True">
                   <Border Classes="avatar" Width="44" Height="44" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
                     <Panel>
-                      <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
-                      <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding ShowInitial}" />
-                      <local:Glyph Data="{StaticResource IcGroup}" Width="18" Height="18" StrokeWidth="1.8" Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}" />
+                      <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+                      <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding ShowInitial}"/>
+                      <local:Glyph Data="{StaticResource IcGroup}" Width="18" Height="18" StrokeWidth="1.8" Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}"/>
                     </Panel>
                   </Border>
                   <DockPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" LastChildFill="True">
                     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,1">
-                      <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="Medium" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                      <TextBlock Grid.Column="1" Text="{Binding Time}" Classes="caption" Margin="8,0,0,0" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="Medium" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                      <TextBlock Grid.Column="1" Text="{Binding Time}" Classes="caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="{Binding Preview}" Classes="caption" TextTrimming="CharacterEllipsis" MaxLines="1" TextWrapping="NoWrap" VerticalAlignment="Center" />
-                      <Border Grid.Column="1" Classes="unread" Margin="8,0,0,0" VerticalAlignment="Center" IsVisible="{Binding Unread}" />
+                      <TextBlock Text="{Binding Preview}" Classes="caption" TextTrimming="CharacterEllipsis" MaxLines="1" TextWrapping="NoWrap" VerticalAlignment="Center"/>
+                      <Border Grid.Column="1" Classes="unread" Margin="8,0,0,0" VerticalAlignment="Center" IsVisible="{Binding Unread}"/>
                     </Grid>
                   </DockPanel>
                 </Grid>
@@ -73,208 +58,171 @@
           </ListBox>
         </DockPanel>
       </Border>
-      <Border x:Name="ScreenBay" Classes="screenbay deck" Grid.Column="2">
-        <Grid RowDefinitions="Auto,*,Auto,Auto">
-          <Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="78" Margin="24,0" PointerPressed="OnDragAreaPressed">
+      <Border x:Name="ScreenBay" Classes="screenbay deck" Grid.Column="1">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="64" Margin="20,0" PointerPressed="OnDragAreaPressed">
             <Button x:Name="BackToChats" Classes="icon" Click="OnShowChats" IsVisible="False" ToolTip.Tip="К чатам">
-              <local:Glyph Data="{StaticResource IcReply}" />
+              <local:Glyph Data="{StaticResource IcReply}"/>
             </Button>
             <Border Grid.Column="1" Classes="avatar" Width="32" Height="32" Margin="0,0,10,0" ClipToBounds="True" IsVisible="{Binding HasChat}" Background="{Binding SelectedChat.Id, Converter={StaticResource AvatarBrush}}">
               <Panel>
-                <Image Source="{Binding SelectedChat.Avatar}" Stretch="UniformToFill" IsVisible="{Binding SelectedChat.HasAvatar}" />
-                <TextBlock Classes="avatarText" Text="{Binding SelectedChat.Title, Converter={StaticResource Initial}}" IsVisible="{Binding SelectedChat.ShowInitial}" />
-                <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16" StrokeWidth="1.8" Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}" />
+                <Image Source="{Binding SelectedChat.Avatar}" Stretch="UniformToFill" IsVisible="{Binding SelectedChat.HasAvatar}"/>
+                <TextBlock Classes="avatarText" Text="{Binding SelectedChat.Title, Converter={StaticResource Initial}}" IsVisible="{Binding SelectedChat.ShowInitial}"/>
+                <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16" StrokeWidth="1.8" Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}"/>
               </Panel>
             </Border>
             <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="{Binding ChatTitle}" Classes="title" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding SelectedChat.Kind}" Classes="caption" VerticalAlignment="Center" IsVisible="{Binding HasChat}" />
+              <StackPanel Orientation="Vertical" Spacing="2">
+                <TextBlock Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding SelectedChat.Kind}" Classes="caption" VerticalAlignment="Center" IsVisible="{Binding HasChat}"/>
               </StackPanel>
             </StackPanel>
             <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Участники" AutomationProperties.Name="Участники" Command="{Binding ShowMembersCommand}" VerticalAlignment="Center" IsVisible="{Binding HasChat}">
-              <local:Glyph Data="{StaticResource IcInfo}" />
+              <local:Glyph Data="{StaticResource IcInfo}"/>
             </Button>
-          </Grid>
+          </Grid></Border>
           <Border Grid.Row="1" Classes="screen" Margin="0" BorderThickness="0" CornerRadius="0">
             <DockPanel>
-              <Border DockPanel.Dock="Top" Margin="10,8,10,0" Padding="8,6" CornerRadius="4" Background="{DynamicResource AccentFill}" IsVisible="{Binding HasPins}">
+              <Border DockPanel.Dock="Top" Margin="24,0,24,10" Padding="8" CornerRadius="10" Background="{DynamicResource AccentFill}" IsVisible="{Binding HasPins}">
                 <Grid ColumnDefinitions="*,Auto">
                   <Button Classes="toolbar" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Command="{Binding ShowPinnedCommand}" Background="Transparent" BorderThickness="0">
                     <Grid ColumnDefinitions="Auto,*,Auto">
-                      <local:Glyph Data="{StaticResource IcPin}" Width="14" Height="14" StrokeWidth="1.7" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Margin="8,0,8,0" Text="{Binding PinText}" Foreground="{DynamicResource OnFieldBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="2" Text="{Binding PinCounter}" Classes="caption" VerticalAlignment="Center" />
+                      <local:Glyph Data="{StaticResource IcPin}" Width="14" Height="14" StrokeWidth="1.7" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="1" Margin="8,0,8,0" Text="{Binding PinText}" Foreground="{DynamicResource OnFieldBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" VerticalAlignment="Center"/>
+                      <TextBlock Grid.Column="2" Text="{Binding PinCounter}" Classes="caption" VerticalAlignment="Center"/>
                     </Grid>
                   </Button>
                   <Button Grid.Column="1" Classes="icon small" ToolTip.Tip="Открепить" AutomationProperties.Name="Открепить" Command="{Binding UnpinShownCommand}" IsVisible="{Binding CanManagePins}">
-                    <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12" />
+                    <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
                   </Button>
                 </Grid>
               </Border>
               <Panel>
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520" Margin="24" IsVisible="{Binding !HasChat}">
-                  <TextBlock Text="С кем поговорим?" Classes="display" HorizontalAlignment="Center" />
-                  <TextBlock Text="Выберите чат слева или начните новый" Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center" />
+                  <TextBlock Text="С кем поговорим?" Classes="display" HorizontalAlignment="Center"/>
+                  <TextBlock Text="Выберите чат слева или начните новый" Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"/>
                   <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,14,0,0">
                     <Button Classes="large" Command="{Binding ShowDirectCommand}">
                       <StackPanel Orientation="Horizontal" Spacing="8">
-                        <local:Glyph Data="{StaticResource IcCompose}" Width="16" Height="16" />
-                        <TextBlock Text="Новый чат" VerticalAlignment="Center" />
+                        <local:Glyph Data="{StaticResource IcCompose}" Width="16" Height="16"/>
+                        <TextBlock Text="Новый чат" VerticalAlignment="Center"/>
                       </StackPanel>
                     </Button>
                     <Button Classes="large" Command="{Binding ShowGroupCommand}">
                       <StackPanel Orientation="Horizontal" Spacing="8">
-                        <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16" />
-                        <TextBlock Text="Группа" VerticalAlignment="Center" />
+                        <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16"/>
+                        <TextBlock Text="Группа" VerticalAlignment="Center"/>
                       </StackPanel>
                     </Button>
                   </StackPanel>
                 </StackPanel>
-                <ListBox x:Name="Log" Classes="log" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}" Background="Transparent" Padding="8,12,8,8" ScrollViewer.HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasChat}">
+                <ListBox x:Name="Log" Classes="log" VerticalAlignment="Bottom" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}" Background="Transparent" Padding="0,16,0,12" ScrollViewer.HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasChat}">
                   <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
+                    <ItemsPanelTemplate>
+                      <StackPanel/>
+                    </ItemsPanelTemplate>
                   </ListBox.ItemsPanel>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
-                      <Grid Margin="24,6" HorizontalAlignment="Stretch">
+                      <Grid Margin="24,3" HorizontalAlignment="Stretch" Classes="messageRow" ContextRequested="OnMessageContextRequested">
                         <Grid MaxWidth="768" HorizontalAlignment="Stretch">
                           <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding !Mine}">
-                            <Border Classes="avatar" Width="28" Height="28" VerticalAlignment="Top" Margin="0,6,10,0" Background="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
-                              <TextBlock Classes="avatarText" Text="{Binding SenderName, Converter={StaticResource Initial}}" />
+                            <Border Classes="avatar" Width="28" Height="28" VerticalAlignment="Top" Margin="0,6,8,0" IsVisible="{Binding DataContext.IsGroup, ElementName=Root}" Background="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
+                              <TextBlock Classes="avatarText" Text="{Binding SenderName, Converter={StaticResource Initial}}"/>
                             </Border>
-                            <Border Grid.Column="1" Classes="bubble" HorizontalAlignment="Left" Padding="16,12" CornerRadius="16">
+                            <Border Grid.Column="1" Classes="bubble" HorizontalAlignment="Left" Padding="11,8" CornerRadius="8">
                               <StackPanel Spacing="4" MaxWidth="520">
                                 <TextBlock Text="{Binding SenderName}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource OnFieldBrush}">
                                   <TextBlock.IsVisible>
                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                      <Binding Path="ShowSender" />
-                                      <Binding Path="DataContext.IsGroup" ElementName="Root" />
+                                      <Binding Path="ShowSender"/>
+                                      <Binding Path="DataContext.IsGroup" ElementName="Root"/>
                                     </MultiBinding>
                                   </TextBlock.IsVisible>
                                 </TextBlock>
-                                <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic" Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}" />
+                                <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic" Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
                                 <Border Background="{DynamicResource ScreenInset}" CornerRadius="4" Padding="0,5,10,5" IsVisible="{Binding HasReply}">
                                   <Grid ColumnDefinitions="Auto,*">
-                                    <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="8,0,8,0" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource OnFieldMutedBrush}" MaxWidth="640" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                                    <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="8,0,8,0"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource OnFieldMutedBrush}" MaxWidth="640" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
                                   </Grid>
                                 </Border>
-                                <TextBlock Text="{Binding Text}" FontSize="16" LineHeight="22" MaxWidth="520" TextWrapping="Wrap" Foreground="{DynamicResource OnFieldBrush}" Classes.deleted="{Binding IsDeleted}" />
+                                <TextBlock FontSize="14" LineHeight="20" MaxWidth="520" TextWrapping="Wrap" Foreground="{DynamicResource OnFieldBrush}" Classes.deleted="{Binding IsDeleted}"><Run Text="{Binding Text}"/><Run Text="  "/><Run Text="{Binding Meta}" FontSize="11" Foreground="{DynamicResource OnFieldMutedBrush}"/></TextBlock>
                                 <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}" Margin="0,2,0,0">
                                   <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                      <WrapPanel />
+                                      <WrapPanel/>
                                     </ItemsPanelTemplate>
                                   </ItemsControl.ItemsPanel>
                                   <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                       <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
                                         <StackPanel Orientation="Horizontal" Spacing="5">
-                                          <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15" />
-                                          <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource OnFieldBrush}" VerticalAlignment="Center" />
+                                          <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
+                                          <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource OnFieldBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                       </Border>
                                     </DataTemplate>
                                   </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Text="{Binding Meta}" Classes="caption" />
+
                               </StackPanel>
                             </Border>
                           </Grid>
-                          <Border Classes="bubble mine" HorizontalAlignment="Right" MaxWidth="540" MinWidth="56" IsVisible="{Binding Mine}" Padding="16,12" CornerRadius="16">
+                          <Border Classes="bubble mine" HorizontalAlignment="Right" MaxWidth="540" MinWidth="56" IsVisible="{Binding Mine}" Padding="11,8" CornerRadius="8">
                             <StackPanel Spacing="4" MaxWidth="512">
-                              <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic" Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}" />
+                              <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic" Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
                               <Border Background="{DynamicResource ScreenInset}" CornerRadius="4" Padding="0,5,10,5" IsVisible="{Binding HasReply}">
                                 <Grid ColumnDefinitions="Auto,*">
-                                  <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="8,0,8,0" />
-                                  <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource OnFieldMutedBrush}" MaxWidth="480" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                                  <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="8,0,8,0"/>
+                                  <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource OnFieldMutedBrush}" MaxWidth="480" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
                                 </Grid>
                               </Border>
-                              <TextBlock Text="{Binding Text}" FontSize="16" LineHeight="22" MaxWidth="512" TextWrapping="Wrap" Foreground="{DynamicResource OnFieldBrush}" Classes.deleted="{Binding IsDeleted}" />
+                              <TextBlock FontSize="14" LineHeight="20" MaxWidth="512" TextWrapping="Wrap" Foreground="{DynamicResource OnFieldBrush}" Classes.deleted="{Binding IsDeleted}"><Run Text="{Binding Text}"/><Run Text="  "/><Run Text="{Binding Meta}" FontSize="11" Foreground="{DynamicResource OnFieldMutedBrush}"/></TextBlock>
                               <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}" Margin="0,2,0,0">
                                 <ItemsControl.ItemsPanel>
                                   <ItemsPanelTemplate>
-                                    <WrapPanel />
+                                    <WrapPanel/>
                                   </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                   <DataTemplate>
                                     <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
                                       <StackPanel Orientation="Horizontal" Spacing="5">
-                                        <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15" />
-                                        <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource OnFieldBrush}" VerticalAlignment="Center" />
+                                        <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
+                                        <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource OnFieldBrush}" VerticalAlignment="Center"/>
                                       </StackPanel>
                                     </Border>
                                   </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                               </ItemsControl>
-                              <TextBlock Text="{Binding Meta}" Classes="caption" HorizontalAlignment="Right" />
+
                             </StackPanel>
                           </Border>
                         </Grid>
+                        <Button Classes="messageMenu icon" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" Click="OnMessageMenuClick" ToolTip.Tip="Действия с сообщением" AutomationProperties.Name="Действия с сообщением">
+                          <local:Glyph Data="{StaticResource IcMore}"/>
+                        </Button>
                       </Grid>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
                 <Button HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0" Classes="small" Command="{Binding LoadOlderCommand}" IsVisible="{Binding HasMore}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
-                    <local:Glyph Data="{StaticResource IcChevronUp}" Width="12" Height="12" StrokeWidth="2" />
-                    <TextBlock Text="Показать раньше" />
+                    <local:Glyph Data="{StaticResource IcChevronUp}" Width="12" Height="12" StrokeWidth="2"/>
+                    <TextBlock Text="Показать раньше"/>
                   </StackPanel>
                 </Button>
               </Panel>
             </DockPanel>
           </Border>
-          <StackPanel Grid.Row="2" Spacing="6" HorizontalAlignment="Center" Margin="12,0,12,0" IsVisible="{Binding HasMessageActions}">
-            <Border Classes="capsule" HorizontalAlignment="Center" IsVisible="{Binding ShowMoreReactions}">
-              <ItemsControl ItemsSource="{Binding MoreReactions}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Button Classes="toolbar" Command="{Binding DataContext.ToggleReactionCommand, ElementName=Root}" CommandParameter="{Binding}">
-                      <local:ReactionIcon Emoji="{Binding}" Width="18" Height="18" />
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </Border>
-            <Border Classes="capsule" HorizontalAlignment="Stretch" Margin="8,0">
-              <WrapPanel Orientation="Horizontal">
-                <ItemsControl ItemsSource="{Binding QuickReactions}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <Button Classes="toolbar" Command="{Binding DataContext.ToggleReactionCommand, ElementName=Root}" CommandParameter="{Binding}">
-                        <local:ReactionIcon Emoji="{Binding}" Width="18" Height="18" />
-                      </Button>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <Button Classes="toolbar" ToolTip.Tip="Ещё реакции" AutomationProperties.Name="Ещё реакции" Command="{Binding ToggleMoreReactionsCommand}">
-                  <local:Glyph Data="{StaticResource IcSmilePlus}" Width="16" Height="16" />
-                </Button>
-                <Border Width="1" Margin="4,8" Background="{DynamicResource LineBrush}" />
-                <Button Classes="icon" Command="{Binding TogglePinCommand}" IsVisible="{Binding CanPin}" ToolTip.Tip="Закрепить / открепить" AutomationProperties.Name="Закрепить / открепить"><local:Glyph Data="{StaticResource IcPin}" Width="14" Height="14" /></Button>
-                <Button Classes="icon" Command="{Binding ReplyCommand}" ToolTip.Tip="Ответить" AutomationProperties.Name="Ответить"><local:Glyph Data="{StaticResource IcReply}" Width="14" Height="14" /></Button>
-                <Button Classes="icon" Command="{Binding ShowForwardCommand}" IsVisible="{Binding CanForward}" ToolTip.Tip="Переслать" AutomationProperties.Name="Переслать"><local:Glyph Data="{StaticResource IcForward}" Width="14" Height="14" /></Button>
-                <Button Classes="icon" Command="{Binding BeginEditCommand}" IsVisible="{Binding CanEdit}" ToolTip.Tip="Изменить" AutomationProperties.Name="Изменить"><local:Glyph Data="{StaticResource IcEdit}" Width="14" Height="14" /></Button>
-                <Button Classes="icon" Command="{Binding DeleteForMeCommand}" ToolTip.Tip="Удалить у себя" AutomationProperties.Name="Удалить у себя"><local:Glyph Data="{StaticResource IcTrash}" Width="14" Height="14" /></Button>
-                <Button Classes="icon danger" Command="{Binding DeleteForEveryoneCommand}" IsVisible="{Binding CanDeleteEveryone}" ToolTip.Tip="Удалить у всех" AutomationProperties.Name="Удалить у всех"><local:Glyph Data="{StaticResource IcTrash}" Width="14" Height="14" /></Button>
-              </WrapPanel>
-            </Border>
-          </StackPanel>
-          <StackPanel Grid.Row="3" Margin="24,14,24,22" Spacing="8" MaxWidth="768" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
+          <StackPanel Grid.Row="2" Background="{DynamicResource RaisedBrush}" Margin="0" Spacing="0" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
             <Border Classes="glass" Padding="12,8" IsVisible="{Binding HasComposeHint}">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="0,0,10,0" />
-                <TextBlock Grid.Column="1" Text="{Binding ComposeHint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="0,0,10,0"/>
+                <TextBlock Grid.Column="1" Text="{Binding ComposeHint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 <Button Grid.Column="2" Classes="icon small" Margin="8,0,0,0" AutomationProperties.Name="Отменить" Command="{Binding CancelComposeCommand}">
-                  <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12" />
+                  <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
                 </Button>
               </Grid>
             </Border>
@@ -282,12 +230,12 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBox Classes="bare" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" Watermark="Напишите сообщение…">
                   <TextBox.KeyBindings>
-                    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
-                    <KeyBinding Gesture="Meta+Enter" Command="{Binding SendCommand}" />
+                    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}"/>
+                    <KeyBinding Gesture="Meta+Enter" Command="{Binding SendCommand}"/>
                   </TextBox.KeyBindings>
                 </TextBox>
-                <Button Grid.Column="1" Classes="send" VerticalAlignment="Bottom" Margin="6,0,2,2" ToolTip.Tip="Отправить (⌘↩)" AutomationProperties.Name="Отправить" Command="{Binding SendCommand}" IsEnabled="{Binding !Busy}">
-                  <local:Glyph Data="{StaticResource IcSend}" Width="18" Height="18" StrokeWidth="2.2" Foreground="{DynamicResource InkBrush}" />
+                <Button Grid.Column="1" Classes="send" VerticalAlignment="Bottom" Margin="6,0,2,0" ToolTip.Tip="Отправить · Ctrl+Enter / ⌘Enter" AutomationProperties.Name="Отправить" Command="{Binding SendCommand}" IsEnabled="{Binding !Busy}">
+                  <local:Glyph Data="{StaticResource IcSend}" Width="18" Height="18" StrokeWidth="2.2" Foreground="{DynamicResource ActionTextBrush}"/>
                 </Button>
               </Grid>
             </Border>
@@ -296,150 +244,44 @@
       </Border>
     </Grid>
     <Border Classes="scrim" Background="{DynamicResource DimBrush}" IsVisible="{Binding OverlayOpen}">
-      <Border Classes="sheet" Width="460" MaxHeight="640" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
-        <DockPanel>
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,18">
-            <StackPanel Spacing="2" VerticalAlignment="Center">
-              <TextBlock Classes="engraved" Text="" />
-              <TextBlock Text="{Binding OverlayTitle}" FontSize="22" FontWeight="Bold" LetterSpacing="-0.4" />
+      <Border Classes="sheet" MaxHeight="680" Padding="24" HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="480" Margin="20" x:Name="OverlaySheet">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <DockPanel>
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,18">
+              <StackPanel Spacing="2" VerticalAlignment="Center">
+
+                <TextBlock Text="{Binding OverlayTitle}" FontSize="18" FontWeight="SemiBold"/>
+              </StackPanel>
+              <Button Grid.Column="1" Classes="icon" ToolTip.Tip="Закрыть" AutomationProperties.Name="Закрыть" Command="{Binding CloseOverlayCommand}">
+                <local:Glyph Data="{StaticResource IcClose}" Width="14" Height="14"/>
+              </Button>
+            </Grid>
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+            <Button Classes="primary large" Content="Создать группу" HorizontalAlignment="Right" Padding="22,0" Command="{Binding CreateGroupCommand}" DockPanel.Dock="Bottom" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}" Margin="0,20,0,0" MinHeight="42"/>
+            <ContentControl DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}">
+              <views:ProfileEditor/>
+            </ContentControl>
+            <views:GroupDetails DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}"/>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,16,0,0" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}">
+              <Button Content="Скрыть чат у себя" Command="{Binding HideChatCommand}"/>
+              <Button Classes="danger" Content="Выйти из группы" Command="{Binding LeaveChatCommand}" IsVisible="{Binding IsGroup}"/>
             </StackPanel>
-            <Button Grid.Column="1" Classes="icon" ToolTip.Tip="Закрыть" AutomationProperties.Name="Закрыть" Command="{Binding CloseOverlayCommand}">
-              <local:Glyph Data="{StaticResource IcClose}" Width="14" Height="14" />
-            </Button>
-          </Grid>
-          <StackPanel DockPanel.Dock="Top" Spacing="6" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}">
-            <StackPanel HorizontalAlignment="Center" Spacing="10" Margin="0,0,0,8">
-              <Border Width="112" Height="112" CornerRadius="4" Background="{Binding Header, Converter={StaticResource AvatarBrush}}" ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver" DragDrop.Drop="OnAvatarDrop" BorderBrush="{DynamicResource WellEdge}" BorderThickness="1">
-                <Grid>
-                  <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
-                  <TextBlock Text="Перетащите картинку" TextWrapping="Wrap" TextAlignment="Center" FontSize="13" Foreground="{DynamicResource OnFieldBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="14" IsVisible="{Binding !HasAvatar}" />
-                </Grid>
-              </Border>
-              <Button Classes="small" Content="Выбрать изображение…" Click="OnChooseAvatarClick" HorizontalAlignment="Center" />
-            </StackPanel>
-            <Button Content="Оформление…" Click="OnAppearanceClick" Margin="0,0,0,12" />
-            <TextBlock Classes="field" Text="Имя" />
-            <TextBox Text="{Binding DisplayName}" />
-            <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0" />
-            <TextBox Text="{Binding Bio}" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap" VerticalContentAlignment="Top" />
-            <CheckBox Content="Находить меня по тегу" IsChecked="{Binding AllowTagSearch}" Margin="0,8,0,0" />
-            <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,8,0,0" Text="Сообщения всегда сохраняются на сервере." />
-            <Button Classes="primary large" Content="Сохранить" HorizontalAlignment="Right" Padding="26,0" Margin="0,14,0,0" Command="{Binding SaveProfileCommand}" />
-          </StackPanel>
-          <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}">
-            <TextBlock Classes="field" Text="Название" />
-            <TextBox Text="{Binding GroupTitle}" Watermark="1–64 символа" />
-            <ItemsControl ItemsSource="{Binding GroupDraft}" Margin="0,8,0,0">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <WrapPanel />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Classes="chip" Margin="0,0,6,6">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                      <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
-                      <Button Classes="icon small" Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}">
-                        <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10" />
-                      </Button>
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Button Classes="primary large" Content="Создать группу" HorizontalAlignment="Right" Padding="22,0" Command="{Binding CreateGroupCommand}" />
-          </StackPanel>
-          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,16,0,0" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}">
-            <Button Content="Скрыть чат у себя" Command="{Binding HideChatCommand}" />
-            <Button Classes="danger" Content="Выйти из группы" Command="{Binding LeaveChatCommand}" IsVisible="{Binding IsGroup}" />
-          </StackPanel>
-          <ListBox DockPanel.Dock="Top" Classes="plain" ItemsSource="{Binding Chats}" MaxHeight="360" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Button Classes="row" Command="{Binding DataContext.ForwardToCommand, ElementName=Root}" CommandParameter="{Binding}">
-                  <Grid ColumnDefinitions="Auto,*">
-                    <Border Classes="avatar" Width="30" Height="30" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
-                      <Panel>
-                        <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
-                        <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding ShowInitial}" />
-                        <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16" StrokeWidth="1.8" Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}" />
-                      </Panel>
-                    </Border>
-                    <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                  </Grid>
-                </Button>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <DockPanel IsVisible="{Binding ShowPeopleSearch}">
-            <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBox Text="{Binding SearchQuery}" Watermark="Полный тег">
-                  <TextBox.InnerLeftContent>
-                    <local:Glyph Data="{StaticResource IcSearch}" Width="15" Height="15" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}" />
-                  </TextBox.InnerLeftContent>
-                  <TextBox.KeyBindings>
-                    <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
-                  </TextBox.KeyBindings>
-                </TextBox>
-                <Button Grid.Column="1" Classes="primary" Content="Найти" Margin="8,0,0,0" MinHeight="40" Command="{Binding SearchCommand}" />
-              </Grid>
-              <ListBox Classes="plain" ItemsSource="{Binding SearchResults}" MaxHeight="190">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <Button Classes="row" Command="{Binding DataContext.PickUserCommand, ElementName=Root}" CommandParameter="{Binding}">
-                      <Grid ColumnDefinitions="Auto,*">
-                        <Border Classes="avatar" Width="30" Height="30" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
-                          <Panel>
-                            <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
-                            <TextBlock Classes="avatarText" Text="{Binding Label, Converter={StaticResource Initial}}" IsVisible="{Binding !HasAvatar}" />
-                          </Panel>
-                        </Border>
-                        <TextBlock Grid.Column="1" Text="{Binding Label}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                      </Grid>
-                    </Button>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-            </StackPanel>
-            <ListBox Classes="plain" ItemsSource="{Binding Members}" MaxHeight="360" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}">
-              <ListBox.ItemTemplate>
-                <DataTemplate>
-                  <Grid ColumnDefinitions="Auto,*" Margin="0,7">
-                    <Border Classes="avatar" Width="34" Height="34" VerticalAlignment="Top" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
-                      <Panel>
-                        <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}" />
-                        <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding !HasAvatar}" />
-                      </Panel>
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="6">
-                      <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="{Binding Title}" FontWeight="Medium" VerticalAlignment="Center" />
-                        <Border Classes="badge">
-                          <TextBlock Text="{Binding RoleLabel}" />
-                        </Border>
-                      </StackPanel>
-                      <WrapPanel>
-                        <Button Margin="0,0,6,6" Classes="small danger" Content="Исключить" IsVisible="{Binding CanKick}" Command="{Binding DataContext.KickCommand, ElementName=Root}" CommandParameter="{Binding}" />
-                        <Button Margin="0,0,6,6" Classes="small" Content="{Binding PromoteLabel}" IsVisible="{Binding CanPromote}" Command="{Binding DataContext.ToggleAdminCommand, ElementName=Root}" CommandParameter="{Binding}" />
-                        <Button Margin="0,0,6,6" Classes="small" Content="Сделать владельцем" IsVisible="{Binding CanTransfer}" Command="{Binding DataContext.TransferCommand, ElementName=Root}" CommandParameter="{Binding}" />
-                      </WrapPanel>
-                    </StackPanel>
-                  </Grid>
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
+            <views:ForwardPicker DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>
+            <DockPanel IsVisible="{Binding ShowPeopleSearch}">
+              <views:PeopleSearch DockPanel.Dock="Top"/>
+              <views:MemberList IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}"/>
+            </DockPanel>
           </DockPanel>
-        </DockPanel>
+        </ScrollViewer>
       </Border>
     </Border>
-    <Border Classes="toast" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" MaxWidth="520" IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}">
+    <Border Classes="toast" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" MaxWidth="520">
+      <Border.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="Error" Converter="{x:Static conv:StringConverters.IsNotNullOrEmpty}"/><Binding Path="!OverlayOpen"/></MultiBinding></Border.IsVisible>
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource DangerBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
-        <TextBlock Grid.Column="1" Text="{Binding Error}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource DangerBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="1" Text="{Binding Error}" TextWrapping="Wrap" VerticalAlignment="Center"/>
         <Button Grid.Column="2" Classes="icon small" Margin="10,0,0,0" AutomationProperties.Name="Закрыть ошибку" Command="{Binding DismissErrorCommand}">
-          <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10" />
+          <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10"/>
         </Button>
       </Grid>
     </Border>

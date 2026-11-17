@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.MemberList" x:Name="Root">
+  <ListBox Classes="plain" ItemsSource="{Binding Members}" MaxHeight="360">
+    <ListBox.ItemTemplate>
+      <DataTemplate>
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,9">
+          <Border Classes="avatar" Width="34" Height="34" VerticalAlignment="Top" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
+            <Panel>
+              <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
+              <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding !HasAvatar}"/>
+            </Panel>
+          </Border>
+          <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="6">
+            <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding RoleLabel}" Classes="caption"/>
+          </StackPanel>
+          <Button Classes="icon" Click="OnMemberMenu" IsVisible="{Binding CanKick}" Grid.Column="2" ToolTip.Tip="Управление участником" AutomationProperties.Name="Управление участником">
+            <local:Glyph Data="{StaticResource IcMore}"/>
+          </Button>
+        </Grid>
+      </DataTemplate>
+    </ListBox.ItemTemplate>
+  </ListBox>
+</UserControl>

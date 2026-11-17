@@ -24,13 +24,25 @@ public partial class ShellView : UserControl
         DataContextChanged += (_, _) => Hook();
         ChatList.SelectionChanged += (_, _) =>
         {
-            if (ChatList.SelectedItem == null) return;
+            if (_filtering || ChatList.SelectedItem is not ChatItem chat) return;
+            if (_vm != null) _vm.SelectedChat = chat;
             _showChats = false;
             UpdateNavigation();
         };
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
+    }
+
+    void OnShellKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _vm != null)
+        {
+            if (_vm.OverlayOpen) _vm.CloseOverlayCommand.Execute(null);
+            else if (_vm.HasComposeHint) _vm.CancelComposeCommand.Execute(null);
+            else _vm.SelectedMessage = null;
+            e.Handled = true;
+        }
     }
 
     bool _showChats = true;
@@ -43,21 +55,46 @@ public partial class ShellView : UserControl
 
     void UpdateNavigation()
     {
-        bool narrow = Bounds.Width < 850;
-        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "56,*" : "64,320,*");
-        Grid.SetColumn(ChatSidebar, 1);
-        Grid.SetColumn(ScreenBay, narrow ? 1 : 2);
+        bool narrow = Bounds.Width < 780;
+        OverlaySheet.MaxHeight = Math.Max(220, Bounds.Height - 40);
+        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "300,*");
+        Grid.SetColumn(ChatSidebar, 0);
+        Grid.SetColumn(ScreenBay, narrow ? 0 : 1);
         ChatSidebar.IsVisible = !narrow || _showChats;
         ScreenBay.IsVisible = !narrow || !_showChats;
         BackToChats.IsVisible = narrow;
     }
 
-    void OnChatFilterChanged(object? sender, TextChangedEventArgs e)
+    bool _filtering;
+
+    void OnChatFilterChanged(object? sender, TextChangedEventArgs e) => FilterChats();
+
+    void FilterChats()
     {
-        if (_vm == null || sender is not TextBox input) return;
-        var query = input.Text?.Trim() ?? "";
-        ChatList.ItemsSource = query.Length == 0 ? _vm.Chats :
-            _vm.Chats.Where(chat => chat.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (_vm == null) return;
+        _filtering = true;
+        try
+        {
+            var query = ChatSearch.Text?.Trim() ?? "";
+            var visible = _vm.Chats.Where(chat => chat.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+            ChatList.ItemsSource = visible;
+            ChatList.SelectedItem = visible.Contains(_vm.SelectedChat) ? _vm.SelectedChat : null;
+            ChatEmpty.IsVisible = visible.Length == 0;
+            ChatEmpty.Text = query.Length == 0 ? "Здесь появятся ваши разговоры" : "Чаты не найдены";
+        }
+        finally { _filtering = false; }
+    }
+
+    void OnChatsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => FilterChats();
+
+    void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ShellViewModel.SelectedChat))
+        {
+            FilterChats();
+            if (_vm?.HasChat == true) _showChats = false;
+            UpdateNavigation();
+        }
     }
 
     async void OnAppearanceClick(object? sender, RoutedEventArgs e)
@@ -70,12 +107,17 @@ public partial class ShellView : UserControl
     {
         if (_vm != null)
         {
+            _vm.Chats.CollectionChanged -= OnChatsChanged;
+            _vm.PropertyChanged -= OnShellPropertyChanged;
             _vm.ScrollToEnd -= Scroll;
             _vm.ScrollToMessage -= ScrollTo;
         }
         _vm = DataContext as ShellViewModel;
         if (_vm != null)
         {
+            _vm.Chats.CollectionChanged += OnChatsChanged;
+            _vm.PropertyChanged += OnShellPropertyChanged;
+            FilterChats();
             _vm.ScrollToEnd += Scroll;
             _vm.ScrollToMessage += ScrollTo;
         }
@@ -219,42 +261,4 @@ public partial class ShellView : UserControl
 
         e.Handled = true;
     }
-    async void OnChooseAvatarClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
-        if (storage == null) return;
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Выберите изображение для аватара",
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType("Изображения")
-                {
-                    Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"]
-                }
-            ]
-        });
-        if (files.Count > 0)
-            await UploadAvatarFromPath(files[0].Path.LocalPath);
-    }
-
-    void OnAvatarDragOver(object? sender, DragEventArgs e)
-    {
-        e.DragEffects = e.Data.GetFiles()?.Any(file => file.Path.IsFile) == true
-            ? DragDropEffects.Copy
-            : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    async void OnAvatarDrop(object? sender, DragEventArgs e)
-    {
-        var file = e.Data.GetFiles()?.FirstOrDefault(item => item.Path.IsFile);
-        if (file != null)
-            await UploadAvatarFromPath(file.Path.LocalPath);
-        e.Handled = true;
-    }
-
-    Task UploadAvatarFromPath(string path) =>
-        _vm?.UploadAvatarAsync(path) ?? Task.CompletedTask;
 }

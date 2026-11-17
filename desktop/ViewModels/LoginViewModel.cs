@@ -14,7 +14,9 @@ public partial class LoginViewModel : ObservableObject
     [ObservableProperty] private string _login = "";
     [ObservableProperty] private string _password = "";
     [ObservableProperty] private string? _error;
-    [ObservableProperty] private bool _busy;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AuthAction))]
+    private bool _busy;
     [ObservableProperty] private bool _showConnection;
 
     public LoginViewModel(Navigator nav, string? server = null, string? error = null)
@@ -23,6 +25,23 @@ public partial class LoginViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(server)) Server = server;
         Error = error;
     }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AuthTitle))]
+    [NotifyPropertyChangedFor(nameof(AuthDescription))]
+    [NotifyPropertyChangedFor(nameof(AuthAction))]
+    [NotifyPropertyChangedFor(nameof(ModePrompt))]
+    [NotifyPropertyChangedFor(nameof(ModeAction))]
+    private bool _isRegistration;
+
+    public string AuthTitle => IsRegistration ? "Создать аккаунт" : "Войти в Messenger";
+    public string AuthDescription => IsRegistration ? "Придумайте логин и пароль для этого сервера" : "Введите данные вашего аккаунта";
+    public string AuthAction => Busy ? "Подождите…" : IsRegistration ? "Создать аккаунт" : "Войти";
+    public string ModePrompt => IsRegistration ? "Уже есть аккаунт?" : "Нет аккаунта?";
+    public string ModeAction => IsRegistration ? "Войти" : "Создать аккаунт";
+
+    [RelayCommand] void SwitchMode() { IsRegistration = !IsRegistration; Error = null; }
+    [RelayCommand] Task Submit() => Auth(IsRegistration);
 
     [RelayCommand]
     Task SignIn() => Auth(register: false);

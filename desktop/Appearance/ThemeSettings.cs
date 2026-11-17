@@ -2,6 +2,7 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
 
 namespace MessengerDesktop.Appearance;
 
@@ -9,8 +10,8 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
 {
     public static readonly ThemeSettings[] Presets =
     [
-        new("Светлая", false, "#F5F6F8", "#FFFFFF", "#20272D", "#237A63"),
-        new("Тёмная", true, "#171B20", "#20262D", "#E9EDF1", "#72C7AC"),
+        new("Светлая", false, "#F0F1F2", "#FFFFFF", "#252A30", "#426D89"),
+        new("Тёмная", true, "#1B1D20", "#25282C", "#E9EDF1", "#89B5CE"),
         new("Бумага", false, "#F0ECE4", "#FFFCF5", "#38352F", "#87613B"),
         new("Полночь", true, "#111925", "#1B2838", "#E4ECF6", "#80B6F0")
     ];
@@ -24,7 +25,7 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         try
         {
             Apply(File.Exists(FilePath)
-                ? JsonSerializer.Deserialize<ThemeSettings>(File.ReadAllText(FilePath)) ?? Presets[0]
+                ? ReadFrom(FilePath)
                 : Presets[0]);
         }
         catch (Exception ex) when (ex is IOException or JsonException or FormatException or UnauthorizedAccessException or ArgumentException)
@@ -33,12 +34,17 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         }
     }
 
-    public static void Save()
+    public static void Save() => SaveTo(FilePath);
+
+    internal static ThemeSettings ReadFrom(string path) =>
+        JsonSerializer.Deserialize<ThemeSettings>(File.ReadAllText(path)) ?? Presets[0];
+
+    internal static void SaveTo(string path)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        var temporary = FilePath + ".tmp";
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temporary = path + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(Current));
-        File.Move(temporary, FilePath, true);
+        File.Move(temporary, path, true);
     }
 
     public static void Apply(ThemeSettings theme)
@@ -53,6 +59,15 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         var bubble = Blend(accent, surface, .14);
         var app = Application.Current!;
         app.RequestedThemeVariant = theme.Dark ? ThemeVariant.Dark : ThemeVariant.Light;
+        foreach (var fluent in app.Styles.OfType<FluentTheme>())
+        {
+            foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+            {
+                if (!fluent.Palettes.TryGetValue(variant, out var palette))
+                    fluent.Palettes[variant] = palette = new ColorPaletteResources();
+                palette.Accent = accent;
+            }
+        }
         void Set(Color color, params string[] keys)
         {
             foreach (var key in keys) app.Resources[key] = new SolidColorBrush(color);
@@ -66,6 +81,7 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         Set(accent, "AccentBrush", "OnlineBrush", "SelectionEdge");
         Set(bubble, "BubbleMine", "AccentFill");
         Set(theme.Dark ? Color.Parse("#FF9696") : Color.Parse("#A52835"), "DangerBrush");
+        Set(accent.R * .299 + accent.G * .587 + accent.B * .114 > 150 ? Colors.Black : Colors.White, "ActionTextBrush");
         Current = theme;
     }
 

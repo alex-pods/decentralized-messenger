@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using MessengerDesktop.Views;
 
 namespace MessengerDesktop;
 
@@ -19,6 +21,23 @@ public static class Preview
         var (api, me) = await Seed(Server!);
         await Task.Delay(1500);
         await Shot(window, "login");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (window.DataContext is LoginViewModel login) login.SwitchModeCommand.Execute(null);
+        });
+        await Task.Delay(100);
+        await Shot(window, "register");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (window.DataContext is LoginViewModel login)
+            {
+                login.SwitchModeCommand.Execute(null);
+                login.ShowConnection = true;
+                login.Error = "Не удалось подключиться к серверу. Проверьте адрес.";
+            }
+        });
+        await Task.Delay(100);
+        await Shot(window, "login-error");
 
         var vm = await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -63,10 +82,154 @@ public static class Preview
         await Task.Delay(1200);
         await Shot(window, "profile");
 
+        await AuditScreens(window, vm);
         Dispatcher.UIThread.Post(() => window.Close());
     }
 
-    static Task Shot(Window window, string name) => Dispatcher.UIThread.InvokeAsync(() =>
+    static async Task AuditScreens(Window window, ShellViewModel vm)
+    {
+        var shell = await Dispatcher.UIThread.InvokeAsync(() => window.GetVisualDescendants().OfType<ShellView>().Single());
+        foreach (var theme in Appearance.ThemeSettings.Presets.Take(2))
+        {
+            var suffix = theme.Dark ? "dark" : "light";
+            await Dispatcher.UIThread.InvokeAsync(() => Appearance.ThemeSettings.Apply(theme));
+            foreach (var screen in new[] { "direct", "group", "profile", "members", "forward" })
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    vm.Error = null;
+                    vm.Overlay = screen;
+                });
+                await Task.Delay(120);
+                await Shot(window, screen + "-" + suffix);
+            }
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                vm.CloseOverlayCommand.Execute(null);
+                vm.SelectedMessage = vm.Messages.First();
+                vm.ReplyCommand.Execute(null);
+            });
+            await Task.Delay(120);
+            await Shot(window, "reply-" + suffix);
+            await Dispatcher.UIThread.InvokeAsync(() => vm.CancelComposeCommand.Execute(null));
+            var appearance = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var dialog = new Appearance.AppearanceWindow();
+                dialog.Show(window);
+                return dialog;
+            });
+            await Task.Delay(180);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!appearance.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "✓ " + theme.Name))
+                    throw new Exception("Current theme is not marked in appearance settings");
+            });
+            await Shot(appearance, "appearance-" + suffix);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                appearance.GetVisualDescendants().OfType<Expander>().Single().IsExpanded = true;
+            });
+            await Task.Delay(120);
+            await Shot(appearance, "appearance-custom-" + suffix);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var preset = appearance.GetVisualDescendants().OfType<Button>().First(b => Equals(b.Tag, "Бумага"));
+                preset.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                if (Appearance.ThemeSettings.Current.Name != "Бумага") throw new Exception("Preset did not apply");
+                var path = Path.Combine(Path.GetTempPath(), "messenger-theme-" + Guid.NewGuid().ToString("N"), "appearance.json");
+                try
+                {
+                    Appearance.ThemeSettings.SaveTo(path);
+                    if (Appearance.ThemeSettings.ReadFrom(path) != Appearance.ThemeSettings.Current)
+                        throw new Exception("Appearance persistence failed");
+                }
+                finally { Directory.Delete(Path.GetDirectoryName(path)!, true); }
+                appearance.Close();
+                if (Appearance.ThemeSettings.Current != theme) throw new Exception("Cancel failed to restore theme");
+            });
+            await Task.Delay(150);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (Appearance.ThemeSettings.Current != theme) throw new Exception("Closed appearance window changed the theme asynchronously");
+            });
+        }
+
+        var menu = await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.CloseOverlayCommand.Execute(null);
+            var message = vm.Messages.First(m => m.Mine);
+            shell.OpenMessageMenu(shell.FindControl<ListBox>("Log")!, message);
+            return shell.ActiveMessageMenu!;
+        });
+        await Task.Delay(200);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (!menu.Items.OfType<MenuItem>().Any(item => Equals(item.Header, "Редактировать")))
+                throw new Exception("Own message edit action is missing");
+        });
+        await Shot(menu, "message-menu");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            menu.Close();
+            vm.CloseOverlayCommand.Execute(null);
+            var selected = vm.SelectedChat;
+            shell.FindControl<TextBox>("ChatSearch")!.Text = "not-a-chat";
+            if (vm.SelectedChat != selected) throw new Exception("Filtering changed the active chat");
+
+        });
+        await Task.Delay(150);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (!shell.FindControl<TextBlock>("ChatEmpty")!.IsVisible) throw new Exception("Missing empty-search state");
+        });
+        await Shot(window, "search-empty");
+        await Dispatcher.UIThread.InvokeAsync(() => shell.FindControl<TextBox>("ChatSearch")!.Text = "");
+        foreach (var width in new[] { 360, 520 })
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                window.Width = width;
+                window.Height = 600;
+                vm.Overlay = "profile";
+            });
+            await Task.Delay(150);
+            await Shot(window, "profile-" + width);
+        }
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            window.Width = 1180;
+            window.Height = 780;
+            vm.CloseOverlayCommand.Execute(null);
+            Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]);
+        });
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.ShowGroupCommand.Execute(null);
+            vm.GroupTitle = "Поездка на выходные";
+            vm.GroupDraft.Add(new UserCardDto { Id = -101, DisplayName = "Очень длинное имя участника группы для проверки переноса", Tag = "preview" });
+            vm.SearchResults.Add(new UserCardDto { Id = -102, DisplayName = "Мария Александрова", Tag = "maria" });
+        });
+        await Task.Delay(150);
+        await Shot(window, "group-filled");
+        await Dispatcher.UIThread.InvokeAsync(() => window.Width = 360);
+        await Task.Delay(150);
+        await Shot(window, "group-filled-360");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.RemoveDraftCommand.Execute(vm.GroupDraft.Single());
+            if (vm.GroupDraft.Count != 0) throw new Exception("Removing a selected group member failed");
+            vm.SearchResults.Clear();
+            vm.CloseOverlayCommand.Execute(null);
+            window.Width = 1180;
+            shell.OpenMessageMenu(shell.FindControl<ListBox>("Log")!, vm.Messages.First(m => !m.Mine));
+            if (shell.ActiveMessageMenu!.Items.OfType<MenuItem>().Any(item => Equals(item.Header, "Редактировать")))
+                throw new Exception("Foreign message exposes edit action");
+            shell.ActiveMessageMenu.Close();
+        });
+        Console.WriteLine("PASS UI screen matrix and filter selection retention");
+    }
+
+    static Task Shot(Control window, string name) => Dispatcher.UIThread.InvokeAsync(() =>
     {
         var size = new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height);
         using var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
@@ -100,9 +263,9 @@ public static class Preview
 
         var group = await alice.api.CreateGroup("Дизайн-команда", new[] { max.me.Id, eva.me.Id, mira.me.Id });
         await eva.api.SendMessage(group, "Ребята, я собрала новые макеты главного экрана");
-        await max.api.SendMessage(group, "Огонь. Стекло с градиентом смотрится прям дорого");
-        await alice.api.SendMessage(group, "Согласна! Давайте ещё анимацию появления сообщений добавим");
-        await mira.api.SendMessage(group, "Уже в работе ✨");
+        await max.api.SendMessage(group, "Посмотрел. Поиск стал заметнее, список читается лучше");
+        await alice.api.SendMessage(group, "Давайте проверим на ноутбуке и с длинными именами");
+        await mira.api.SendMessage(group, "Проверю сегодня вечером");
         await eva.api.SendMessage(group, "Тогда созвон в 19:00?");
 
         var withMax = await alice.api.CreateDirect(max.me.Id);

@@ -1,22 +1,21 @@
 <UserControl xmlns:views="using:MessengerDesktop.Views.Dialogs" xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="MessengerDesktop.Views.ShellView" x:Name="Root" KeyDown="OnShellKeyDown">
   <Panel>
-    <Grid x:Name="ShellGrid" Classes="shell" IsEnabled="{Binding !OverlayOpen}" ColumnDefinitions="300,*">
+    <Grid x:Name="ShellGrid" Classes="shell" IsEnabled="{Binding !OverlayOpen}" ColumnDefinitions="320,*">
       <Border Classes="sidebar" Grid.Column="0" x:Name="ChatSidebar">
         <DockPanel>
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,12" Height="40">
-            <TextBox x:Name="ChatSearch" Classes="search" TextChanged="OnChatFilterChanged" Watermark="Поиск чатов" AutomationProperties.Name="Поиск чатов">
-              <TextBox.InnerLeftContent>
-                <local:Glyph Data="{StaticResource IcSearch}" Width="16" Height="16" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/>
-              </TextBox.InnerLeftContent>
+          <StackPanel DockPanel.Dock="Top" Margin="20,22,20,16" Spacing="18">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Сообщения" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <Button Grid.Column="1" Classes="icon" Click="OnNewConversation" ToolTip.Tip="Новый разговор" AutomationProperties.Name="Новый разговор"><local:Glyph Data="{StaticResource IcCompose}"/></Button>
+            </Grid>
+            <TextBox x:Name="ChatSearch" Classes="search" TextChanged="OnChatFilterChanged" Watermark="Поиск" AutomationProperties.Name="Поиск чатов">
+              <TextBox.InnerLeftContent><local:Glyph Data="{StaticResource IcSearch}" Width="16" Height="16" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/></TextBox.InnerLeftContent>
             </TextBox>
-            <Button Grid.Column="1" Classes="icon" Margin="8,0,0,0" Click="OnNewConversation" ToolTip.Tip="Начать разговор" AutomationProperties.Name="Начать разговор">
-              <local:Glyph Data="{StaticResource IcCompose}"/>
-            </Button>
-          </Grid>
+          </StackPanel>
           <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="4">
             <Button Classes="account" Click="OnAccountMenu" HorizontalContentAlignment="Stretch" ToolTip.Tip="Аккаунт и настройки">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <Border Classes="avatar" Width="36" Height="36" Background="{Binding Header, Converter={StaticResource AvatarBrush}}">
+                <Border Classes="avatar" Width="36" Height="36" Background="{Binding CurrentUserId, Converter={StaticResource AvatarBrush}}">
                   <Panel>
                     <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
                     <TextBlock Classes="avatarText" Text="{Binding DisplayName, Converter={StaticResource Initial}}" IsVisible="{Binding !HasAvatar}"/>
@@ -34,8 +33,8 @@
           <ListBox Classes="sidebar" ItemsSource="{Binding Chats}" SelectedItem="{Binding SelectedChat, Mode=OneWay}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" x:Name="ChatList">
             <ListBox.ItemTemplate>
               <DataTemplate>
-                <Grid ColumnDefinitions="Auto,*" MinHeight="48" ClipToBounds="True">
-                  <Border Classes="avatar" Width="44" Height="44" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
+                <Grid ColumnDefinitions="Auto,*" MinHeight="52" ClipToBounds="True">
+                  <Border Classes="avatar" Width="46" Height="46" ClipToBounds="True" Background="{Binding AvatarColorKey, Converter={StaticResource AvatarBrush}}">
                     <Panel>
                       <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
                       <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding ShowInitial}"/>
@@ -43,7 +42,7 @@
                     </Panel>
                   </Border>
                   <DockPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" LastChildFill="True">
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,1">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,5">
                       <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="Medium" TextTrimming="CharacterEllipsis" MaxLines="1"/>
                       <TextBlock Grid.Column="1" Text="{Binding Time}" Classes="caption" Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </Grid>
@@ -60,11 +59,11 @@
       </Border>
       <Border x:Name="ScreenBay" Classes="screenbay deck" Grid.Column="1">
         <Grid RowDefinitions="Auto,*,Auto">
-          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="64" Margin="20,0" PointerPressed="OnDragAreaPressed">
+          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="76" Margin="28,0" PointerPressed="OnDragAreaPressed">
             <Button x:Name="BackToChats" Classes="icon" Click="OnShowChats" IsVisible="False" ToolTip.Tip="К чатам">
               <local:Glyph Data="{StaticResource IcReply}"/>
             </Button>
-            <Border Grid.Column="1" Classes="avatar" Width="32" Height="32" Margin="0,0,10,0" ClipToBounds="True" IsVisible="{Binding HasChat}" Background="{Binding SelectedChat.Id, Converter={StaticResource AvatarBrush}}">
+            <Border Grid.Column="1" Classes="avatar" Width="40" Height="40" Margin="0,0,12,0" ClipToBounds="True" IsVisible="{Binding HasChat}" Background="{Binding SelectedChat.AvatarColorKey, Converter={StaticResource AvatarBrush}}">
               <Panel>
                 <Image Source="{Binding SelectedChat.Avatar}" Stretch="UniformToFill" IsVisible="{Binding SelectedChat.HasAvatar}"/>
                 <TextBlock Classes="avatarText" Text="{Binding SelectedChat.Title, Converter={StaticResource Initial}}" IsVisible="{Binding SelectedChat.ShowInitial}"/>
@@ -73,7 +72,7 @@
             </Border>
             <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
               <StackPanel Orientation="Vertical" Spacing="2">
-                <TextBlock Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ChatTitle}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding SelectedChat.Kind}" Classes="caption" VerticalAlignment="Center" IsVisible="{Binding HasChat}"/>
               </StackPanel>
             </StackPanel>
@@ -124,85 +123,40 @@
                   </ListBox.ItemsPanel>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
-                      <Grid Margin="24,3" HorizontalAlignment="Stretch" Classes="messageRow" ContextRequested="OnMessageContextRequested">
-                        <Grid MaxWidth="768" HorizontalAlignment="Stretch">
-                          <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding !Mine}">
-                            <Border Classes="avatar" Width="28" Height="28" VerticalAlignment="Top" Margin="0,6,8,0" IsVisible="{Binding DataContext.IsGroup, ElementName=Root}" Background="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
-                              <TextBlock Classes="avatarText" Text="{Binding SenderName, Converter={StaticResource Initial}}"/>
-                            </Border>
-                            <Border Grid.Column="1" Classes="bubble" HorizontalAlignment="Left" Padding="11,8" CornerRadius="8">
-                              <StackPanel Spacing="4" MaxWidth="520">
-                                <TextBlock Text="{Binding SenderName}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource OnFieldBrush}">
-                                  <TextBlock.IsVisible>
-                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                      <Binding Path="ShowSender"/>
-                                      <Binding Path="DataContext.IsGroup" ElementName="Root"/>
-                                    </MultiBinding>
-                                  </TextBlock.IsVisible>
-                                </TextBlock>
-                                <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic" Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
-                                <Border Background="{DynamicResource ScreenInset}" CornerRadius="4" Padding="0,5,10,5" IsVisible="{Binding HasReply}">
-                                  <Grid ColumnDefinitions="Auto,*">
-                                    <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="8,0,8,0"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource OnFieldMutedBrush}" MaxWidth="640" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                                  </Grid>
-                                </Border>
-                                <TextBlock FontSize="15" LineHeight="21" MaxWidth="520" TextWrapping="Wrap" Foreground="{DynamicResource OnFieldBrush}" Classes.deleted="{Binding IsDeleted}"><Run Text="{Binding Text}"/><Run Text="  "/><Run Text="{Binding Meta}" FontSize="11" Foreground="{DynamicResource OnFieldMutedBrush}"/></TextBlock>
-                                <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}" Margin="0,2,0,0">
-                                  <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                      <WrapPanel/>
-                                    </ItemsPanelTemplate>
-                                  </ItemsControl.ItemsPanel>
-                                  <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                      <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
-                                        <StackPanel Orientation="Horizontal" Spacing="5">
-                                          <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
-                                          <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource OnFieldBrush}" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                      </Border>
-                                    </DataTemplate>
-                                  </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                              </StackPanel>
-                            </Border>
-                          </Grid>
-                          <Border Classes="bubble mine" HorizontalAlignment="Right" MaxWidth="540" MinWidth="56" IsVisible="{Binding Mine}" Padding="11,8" CornerRadius="8">
-                            <StackPanel Spacing="4" MaxWidth="512">
-                              <TextBlock Text="{Binding Forwarded}" FontSize="13" FontStyle="Italic" Foreground="{DynamicResource OnFieldMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
-                              <Border Background="{DynamicResource ScreenInset}" CornerRadius="4" Padding="0,5,10,5" IsVisible="{Binding HasReply}">
-                                <Grid ColumnDefinitions="Auto,*">
-                                  <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="8,0,8,0"/>
-                                  <TextBlock Grid.Column="1" Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource OnFieldMutedBrush}" MaxWidth="480" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-                                </Grid>
-                              </Border>
-                              <TextBlock FontSize="15" LineHeight="21" MaxWidth="512" TextWrapping="Wrap" Foreground="{DynamicResource OnFieldBrush}" Classes.deleted="{Binding IsDeleted}"><Run Text="{Binding Text}"/><Run Text="  "/><Run Text="{Binding Meta}" FontSize="11" Foreground="{DynamicResource OnFieldMutedBrush}"/></TextBlock>
-                              <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}" Margin="0,2,0,0">
-                                <ItemsControl.ItemsPanel>
-                                  <ItemsPanelTemplate>
-                                    <WrapPanel/>
-                                  </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                  <DataTemplate>
-                                    <Border Classes="reaction" Classes.active="{Binding Mine}" Cursor="Hand" PointerPressed="OnChipPressed">
-                                      <StackPanel Orientation="Horizontal" Spacing="5">
-                                        <local:ReactionIcon Emoji="{Binding Emoji}" Width="15" Height="15"/>
-                                        <TextBlock Text="{Binding Count}" FontSize="12" Foreground="{DynamicResource OnFieldBrush}" VerticalAlignment="Center"/>
-                                      </StackPanel>
-                                    </Border>
-                                  </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                              </ItemsControl>
-
-                            </StackPanel>
-                          </Border>
+                      <Grid RowDefinitions="Auto,Auto" Classes="messageRow" Margin="28,0" ContextRequested="OnMessageContextRequested">
+                        <Grid IsVisible="{Binding StartsDay}" ColumnDefinitions="*,Auto,*" Margin="0,20,0,16">
+                          <Border Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
+                          <TextBlock Grid.Column="1" Text="{Binding DayLabel}" Classes="caption" Margin="16,0"/>
+                          <Border Grid.Column="2" Height="1" Background="{DynamicResource LineBrush}" VerticalAlignment="Center"/>
                         </Grid>
-                        <Button Classes="messageMenu icon" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" Click="OnMessageMenuClick" ToolTip.Tip="Действия с сообщением" AutomationProperties.Name="Действия с сообщением">
-                          <local:Glyph Data="{StaticResource IcMore}"/>
-                        </Button>
+                        <Grid Grid.Row="1" ColumnDefinitions="42,*,Auto" Margin="0,9" MaxWidth="760" HorizontalAlignment="Stretch">
+                          <Border Classes="avatar" Width="34" Height="34" VerticalAlignment="Top" Margin="0,2,0,0" IsVisible="{Binding StartsRun}" Background="{Binding SenderId, Converter={StaticResource AvatarBrush}}">
+                            <Panel>
+                              <TextBlock Classes="avatarText" Text="{Binding SenderName, Converter={StaticResource Initial}}" FontSize="12" IsVisible="{Binding !Mine}"/>
+                              <TextBlock Classes="avatarText" Text="{Binding DataContext.DisplayName, ElementName=Root, Converter={StaticResource Initial}}" FontSize="12" IsVisible="{Binding Mine}"/>
+                            </Panel>
+                          </Border>
+                          <StackPanel Grid.Column="1" Spacing="5" Margin="8,0,0,0">
+                            <WrapPanel Orientation="Horizontal" IsVisible="{Binding StartsRun}">
+                              <TextBlock Text="{Binding SenderName}" FontSize="14" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                              <TextBlock Text="{Binding Meta}" Classes="caption" FontSize="11" VerticalAlignment="Center"/>
+                            </WrapPanel>
+                            <TextBlock Text="{Binding Forwarded}" Classes="caption" TextWrapping="Wrap" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
+                            <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2,0,0,0" Padding="10,3" IsVisible="{Binding HasReply}">
+                              <TextBlock Text="{Binding Reply}" Classes="caption" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                            </Border>
+                            <TextBlock ToolTip.Tip="{Binding Meta}" Text="{Binding Text}" FontSize="15" LineHeight="22" TextWrapping="Wrap" Classes.deleted="{Binding IsDeleted}"/>
+                            <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}">
+                              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate><DataTemplate>
+                                <Border Classes="reaction" Classes.active="{Binding Mine}" Margin="0,0,6,0" Cursor="Hand" PointerPressed="OnChipPressed">
+                                  <StackPanel Orientation="Horizontal" Spacing="5"><local:ReactionIcon Emoji="{Binding Emoji}" Width="16" Height="16"/><TextBlock Text="{Binding Count}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
+                                </Border>
+                              </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </StackPanel>
+                          <Button Grid.Column="2" Classes="messageMenu icon" VerticalAlignment="Top" Margin="8,0,0,0" Click="OnMessageMenuClick" ToolTip.Tip="Действия с сообщением" AutomationProperties.Name="Действия с сообщением"><local:Glyph Data="{StaticResource IcMore}"/></Button>
+                        </Grid>
                       </Grid>
                     </DataTemplate>
                   </ListBox.ItemTemplate>
@@ -216,7 +170,7 @@
               </Panel>
             </DockPanel>
           </Border>
-          <StackPanel Grid.Row="2" Background="{DynamicResource RaisedBrush}" Margin="0" Spacing="0" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
+          <StackPanel Grid.Row="2" Background="{DynamicResource RaisedBrush}" Margin="28,10,28,20" Spacing="8" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
             <Border Classes="glass" Padding="12,8" IsVisible="{Binding HasComposeHint}">
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="0,0,10,0"/>

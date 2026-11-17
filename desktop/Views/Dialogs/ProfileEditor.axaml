@@ -2,7 +2,7 @@
   <StackPanel Spacing="10">
     <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding ShowProfileCommand.IsRunning}"/>
     <StackPanel Orientation="Horizontal" Spacing="18" Margin="0,0,0,14">
-      <Border Width="64" Height="64" CornerRadius="32" Background="{Binding Header, Converter={StaticResource AvatarBrush}}" ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver" DragDrop.Drop="OnAvatarDrop" BorderBrush="{DynamicResource WellEdge}" BorderThickness="1">
+      <Border Width="64" Height="64" CornerRadius="32" Background="{Binding CurrentUserId, Converter={StaticResource AvatarBrush}}" ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver" DragDrop.Drop="OnAvatarDrop" BorderBrush="{DynamicResource WellEdge}" BorderThickness="1">
         <Grid>
           <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
           <TextBlock Text="{Binding DisplayName, Converter={StaticResource Initial}}" TextWrapping="Wrap" TextAlignment="Center" FontSize="28" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="14" IsVisible="{Binding !HasAvatar}"/>

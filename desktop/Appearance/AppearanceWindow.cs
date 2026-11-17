@@ -113,30 +113,23 @@ public sealed class AppearanceWindow : Window
 
     static Border ConversationPreview()
     {
-        var incoming = new Border
+        StackPanel Message(string name, string time, string text)
         {
-            Padding = new Thickness(14, 10), CornerRadius = new CornerRadius(8),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Child = new TextBlock { Text = "Встретимся завтра?", TextWrapping = TextWrapping.Wrap }
-        };
-        incoming.Bind(Border.BackgroundProperty, new DynamicResourceExtension("RaisedBrush"));
-        var outgoing = new Border
-        {
-            Padding = new Thickness(14, 10), CornerRadius = new CornerRadius(8),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Child = new TextBlock { Text = "Да, в семь. До встречи!", TextWrapping = TextWrapping.Wrap }
-        };
-        outgoing.Bind(Border.BackgroundProperty, new DynamicResourceExtension("BubbleMine"));
+            var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+            header.Children.Add(new TextBlock { Text = name, FontWeight = FontWeight.SemiBold });
+            header.Children.Add(new TextBlock { Text = time, Classes = { "caption" }, VerticalAlignment = VerticalAlignment.Center });
+            return new StackPanel { Spacing = 5, Children = { header, new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap } } };
+        }
         var preview = new Border
         {
             Padding = new Thickness(22), CornerRadius = new CornerRadius(8),
-            Child = new StackPanel { Spacing = 16, Children =
+            Child = new StackPanel { Spacing = 20, Children =
             {
-                new TextBlock { Text = "Так будет выглядеть переписка", Classes = { "caption" } },
-                incoming, outgoing
+                Message("Александра", "18:42", "Встретимся завтра?"),
+                Message("Вы", "18:43", "Да, в семь. До встречи!")
             }}
         };
-        preview.Bind(Border.BackgroundProperty, new DynamicResourceExtension("ChassisBrush"));
+        preview.Bind(Border.BackgroundProperty, new DynamicResourceExtension("RaisedBrush"));
         return preview;
     }
 

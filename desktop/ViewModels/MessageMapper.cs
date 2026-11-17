@@ -69,6 +69,7 @@ public static class MessageMapper
         var item = new MessageItem
         {
             Id = m.Id,
+            SentAt = DateTimeOffset.TryParse(m.SentAt, out var sentAt) ? sentAt : null,
             SenderId = m.SenderId,
             SenderName = m.SenderId == myId ? "Вы" : nameOf(m.SenderId),
             Mine = m.SenderId == myId,

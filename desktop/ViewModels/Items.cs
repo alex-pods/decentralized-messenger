@@ -11,6 +11,7 @@ public partial class ChatItem : ObservableObject, IDisposable
     public string Kind { get; init; } = "";
     public bool IsGroup => Type == "group";
     public long? AvatarUserId { get; init; }
+    public long AvatarColorKey => AvatarUserId ?? Id;
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {
@@ -35,6 +36,17 @@ public partial class ChatItem : ObservableObject, IDisposable
 
 public partial class MessageItem : ObservableObject
 {
+    public DateTimeOffset? SentAt { get; init; }
+    [ObservableProperty] private bool _startsDay;
+    [ObservableProperty] private bool _startsRun = true;
+    public string DayLabel => SentAt?.LocalDateTime.Date switch
+    {
+        null => "",
+        var date when date == DateTime.Today => "Сегодня",
+        var date when date == DateTime.Today.AddDays(-1) => "Вчера",
+        var date => date.Value.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"))
+    };
+
     public long Id { get; init; }
     public long SenderId { get; init; }
     public string SenderName { get; init; } = "";

@@ -109,6 +109,7 @@ public partial class ShellViewModel : ObservableObject
     public bool IsGroup => SelectedChat?.Type == "group";
     public bool HasChat => SelectedChat != null;
     public bool HasAvatar => Avatar is not null;
+    public long CurrentUserId => _me.Id;
     public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";
     public bool OverlayOpen => Overlay.Length > 0;
     public bool ShowPeopleSearch => Overlay is "direct" or "group" or "members";
@@ -143,6 +144,7 @@ public partial class ShellViewModel : ObservableObject
 
     public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me)
     {
+        Messages.CollectionChanged += (_, _) => UpdateMessageGroups();
         _nav = nav;
         _api = api;
         _me = me;

@@ -94,6 +94,17 @@ public static class Preview
             if (Appearance.ThemeSettings.Contrast(Avalonia.Media.Color.Parse(preset.Text), Avalonia.Media.Color.Parse(preset.Surface)) < 4.5)
                 throw new Exception("Preset text contrast is insufficient");
         }
+        var start = new DateTimeOffset(DateTime.Today.AddHours(12));
+        var grouped = new[]
+        {
+            new MessageItem { SenderId = 1, SentAt = start },
+            new MessageItem { SenderId = 1, SentAt = start.AddMinutes(1) },
+            new MessageItem { SenderId = 2, SentAt = start.AddMinutes(2) },
+            new MessageItem { SenderId = 2, SentAt = start.AddDays(1) }
+        };
+        ShellViewModel.GroupMessages(grouped);
+        if (!grouped[0].StartsDay || grouped[1].StartsRun || !grouped[2].StartsRun || !grouped[3].StartsDay)
+            throw new Exception("Message author/day grouping failed");
         var originalChat = vm.SelectedChat!;
         var otherChat = vm.Chats.First(c => c.Id != originalChat.Id);
         await Dispatcher.UIThread.InvokeAsync(() =>

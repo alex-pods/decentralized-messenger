@@ -39,12 +39,12 @@
     <Setter Property="Height" Value="20"/>
   </Style>
   <Style Selector="Border.sidebar">
-    <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource ChassisBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
     <Setter Property="BorderThickness" Value="0,0,1,0"/>
   </Style>
   <Style Selector="Border.screen, Border.deck">
-    <Setter Property="Background" Value="{DynamicResource ChassisBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
   </Style>
   <Style Selector="Border.avatar">
     <Setter Property="CornerRadius" Value="24"/>
@@ -58,11 +58,11 @@
     <Setter Property="Background" Value="{DynamicResource BubbleMine}"/>
   </Style>
   <Style Selector="Border.composer">
-    <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
-    <Setter Property="CornerRadius" Value="0"/>
-    <Setter Property="Padding" Value="16,8"/>
+    <Setter Property="Background" Value="{DynamicResource ChassisBrush}"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="8"/>
     <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
-    <Setter Property="BorderThickness" Value="0,1,0,0"/>
+    <Setter Property="BorderThickness" Value="1"/>
   </Style>
   <Style Selector="Border.sheet">
     <Setter Property="Background" Value="{DynamicResource RaisedBrush}"/>
@@ -173,8 +173,8 @@
   </Style>
   <Style Selector="ListBox.sidebar ListBoxItem">
     <Setter Property="Padding" Value="16,9"/>
-    <Setter Property="Margin" Value="0"/>
-    <Setter Property="CornerRadius" Value="0"/>
+    <Setter Property="Margin" Value="10,2"/>
+    <Setter Property="CornerRadius" Value="7"/>
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
   </Style>
   <Style Selector="ListBox.sidebar ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
@@ -219,6 +219,8 @@
   <Style Selector="ListBox.sidebar ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-    <Setter Property="BorderThickness" Value="3,0,0,0"/>
+    <Setter Property="BorderThickness" Value="0"/>
   </Style>
+  <Style Selector="Grid.messageRow:pointerover"><Setter Property="Background" Value="{DynamicResource HoverFill}"/></Style>
+  <Style Selector="TextBlock.deleted"><Setter Property="FontStyle" Value="Italic"/><Setter Property="Foreground" Value="{DynamicResource LabelBrush}"/></Style>
 </Styles>

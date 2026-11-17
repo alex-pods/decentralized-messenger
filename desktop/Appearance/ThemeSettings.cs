@@ -10,8 +10,8 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
 {
     public static readonly ThemeSettings[] Presets =
     [
-        new("Светлая", false, "#F0F1F2", "#FFFFFF", "#252A30", "#426D89"),
-        new("Тёмная", true, "#1B1D20", "#25282C", "#E9EDF1", "#89B5CE"),
+        new("Светлая", false, "#F3F4F6", "#FFFFFF", "#24272D", "#3867B2"),
+        new("Тёмная", true, "#202226", "#292B30", "#E9EDF1", "#92B4EF"),
         new("Бумага", false, "#F0ECE4", "#FFFCF5", "#38352F", "#87613B"),
         new("Полночь", true, "#111925", "#1B2838", "#E4ECF6", "#80B6F0")
     ];

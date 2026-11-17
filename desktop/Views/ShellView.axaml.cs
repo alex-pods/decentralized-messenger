@@ -64,7 +64,7 @@ public partial class ShellView : UserControl
     {
         bool narrow = Bounds.Width < 780;
         OverlaySheet.MaxHeight = Math.Max(220, Bounds.Height - 40);
-        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "300,*");
+        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "320,*");
         Grid.SetColumn(ChatSidebar, 0);
         Grid.SetColumn(ScreenBay, narrow ? 0 : 1);
         ChatSidebar.IsVisible = !narrow || _showChats;

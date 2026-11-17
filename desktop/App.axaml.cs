@@ -14,6 +14,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            Appearance.ThemeSettings.Restore();
             var window = new MainWindow();
             var nav = new Navigator(window);
             desktop.MainWindow = window;

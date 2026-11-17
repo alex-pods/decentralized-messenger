@@ -26,6 +26,12 @@ public partial class ShellView : UserControl
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
     }
 
+    async void OnAppearanceClick(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is Window owner)
+            await new Appearance.AppearanceWindow().ShowDialog(owner);
+    }
+
     void Hook()
     {
         if (_vm != null)

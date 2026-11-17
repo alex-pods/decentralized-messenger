@@ -4,9 +4,9 @@
         Title="Мессенджер"
         Width="1180" Height="780"
         MinWidth="360" MinHeight="560"
-        Background="#B7BFC2"
+        Background="{DynamicResource ChassisBrush}"
         WindowStartupLocation="CenterScreen">
-  <Panel x:Name="ChassisFrame" Margin="14">
+  <Panel x:Name="ChassisFrame" Margin="0">
     <Border x:Name="Housing" Classes="housing">
       <ContentControl Content="{Binding}"/>
     </Border>

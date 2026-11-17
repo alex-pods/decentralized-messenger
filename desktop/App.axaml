@@ -6,11 +6,17 @@
              x:Class="MessengerDesktop.App"
              RequestedThemeVariant="Light">
   <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/Styles/Palette.axaml"/>
+        <ResourceInclude Source="/Styles/Icons.axaml"/>
+      </ResourceDictionary.MergedDictionaries>
     <conv:InverseBoolConverter x:Key="Not"/>
     <conv:EqConverter x:Key="Eq"/>
     <conv:MineAlignConverter x:Key="Align"/>
     <conv:AvatarBrushConverter x:Key="AvatarBrush"/>
     <conv:InitialConverter x:Key="Initial"/>
+  </ResourceDictionary>
   </Application.Resources>
   <Application.DataTemplates>
     <DataTemplate DataType="vm:LoginViewModel">
@@ -23,8 +29,8 @@
   <Application.Styles>
     <FluentTheme>
       <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Light" Accent="#FFF15B22"
-                               RegionColor="#FFCBD0D2" BaseHigh="#FF181E22" BaseMedium="#FF414B52" BaseLow="#FFB6BEC2"/>
+        <ColorPaletteResources x:Key="Light" Accent="#FF237A63"
+                               RegionColor="#FFF5F6F8" BaseHigh="#FF181E22" BaseMedium="#FF414B52" BaseLow="#FFB6BEC2"/>
       </FluentTheme.Palettes>
     </FluentTheme>
     <StyleInclude Source="avares://MessengerDesktop/Styles/Theme.axaml"/>

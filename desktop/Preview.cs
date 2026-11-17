@@ -34,6 +34,13 @@ public static class Preview
         await Dispatcher.UIThread.InvokeAsync(() => vm.SelectedMessage = vm.Messages.Last(m => m.Mine));
         await Task.Delay(800);
         await Shot(window, "chat");
+        foreach (var theme in Appearance.ThemeSettings.Presets.Skip(1))
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => Appearance.ThemeSettings.Apply(theme));
+            await Task.Delay(200);
+            await Shot(window, "chat-" + Array.IndexOf(Appearance.ThemeSettings.Presets, theme));
+        }
+        await Dispatcher.UIThread.InvokeAsync(() => Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]));
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {

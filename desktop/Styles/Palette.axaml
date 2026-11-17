@@ -1,0 +1,68 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+      <x:Double x:Key="ControlContentThemeFontSize">17</x:Double>
+      <Thickness x:Key="ChromeLeading">12,0,12,0</Thickness>
+      <Thickness x:Key="HeaderInset">0</Thickness>
+      <Thickness x:Key="LoginMargin">28,22,28,22</Thickness>
+
+      <FontFamily x:Key="BodyFont">avares://Avalonia.Fonts.Inter/Assets#Inter</FontFamily>
+      <FontFamily x:Key="LabelFont">avares://Avalonia.Fonts.Inter/Assets#Inter</FontFamily>
+
+      <Color x:Key="Chassis">#F5F6F8</Color>
+      <Color x:Key="Raised">#FFFFFF</Color>
+      <Color x:Key="Well">#E8ECEF</Color>
+      <Color x:Key="Ink">#20272D</Color>
+      <Color x:Key="Label">#68747E</Color>
+      <Color x:Key="Field">#FFFFFF</Color>
+      <Color x:Key="OnField">#20272D</Color>
+      <Color x:Key="OnFieldMuted">#74808A</Color>
+      <Color x:Key="Accent">#237A63</Color>
+
+      <SolidColorBrush x:Key="ChassisBrush" Color="{StaticResource Chassis}"/>
+      <SolidColorBrush x:Key="RaisedBrush" Color="{StaticResource Raised}"/>
+      <SolidColorBrush x:Key="WellBrush" Color="{StaticResource Well}"/>
+      <SolidColorBrush x:Key="InkBrush" Color="{StaticResource Ink}"/>
+      <SolidColorBrush x:Key="LabelBrush" Color="{StaticResource Label}"/>
+      <SolidColorBrush x:Key="FieldBrush" Color="{StaticResource Field}"/>
+      <SolidColorBrush x:Key="OnFieldBrush" Color="{StaticResource OnField}"/>
+      <SolidColorBrush x:Key="OnFieldMutedBrush" Color="{StaticResource OnFieldMuted}"/>
+      <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource Accent}"/>
+
+
+      <SolidColorBrush x:Key="MainFill" Color="{StaticResource Chassis}"/>
+      <SolidColorBrush x:Key="SidebarFill" Color="{StaticResource Raised}"/>
+      <SolidColorBrush x:Key="ElevatedFill" Color="{StaticResource Well}"/>
+      <SolidColorBrush x:Key="HoverFill" Color="#F4F6F6"/>
+      <SolidColorBrush x:Key="LineBrush" Color="#DCE2E6"/>
+      <SolidColorBrush x:Key="LabelPrimary" Color="{StaticResource Ink}"/>
+      <SolidColorBrush x:Key="LabelSecondary" Color="{StaticResource Label}"/>
+      <SolidColorBrush x:Key="LabelTertiary" Color="{StaticResource Label}"/>
+      <SolidColorBrush x:Key="DangerBrush" Color="#9E2B2B"/>
+      <SolidColorBrush x:Key="OnlineBrush" Color="{StaticResource Accent}"/>
+      <SolidColorBrush x:Key="SeparatorBrush" Color="#E3E7EB"/>
+      <SolidColorBrush x:Key="PanelFill" Color="{StaticResource Chassis}"/>
+      <SolidColorBrush x:Key="GlassFill" Color="{StaticResource Raised}"/>
+      <SolidColorBrush x:Key="GlassFillHover" Color="#F4F6F6"/>
+      <SolidColorBrush x:Key="GlassFillPressed" Color="{StaticResource Well}"/>
+      <SolidColorBrush x:Key="RowHover" Color="{StaticResource Chassis}"/>
+      <SolidColorBrush x:Key="SheetFill" Color="{StaticResource Raised}"/>
+      <SolidColorBrush x:Key="ToastFill" Color="{StaticResource Raised}"/>
+      <SolidColorBrush x:Key="FieldFill" Color="{StaticResource Well}"/>
+      <SolidColorBrush x:Key="FieldFillHover" Color="#C5CCCF"/>
+      <SolidColorBrush x:Key="FieldBorder" Color="#DCE2E6"/>
+      <SolidColorBrush x:Key="DimBrush" Color="#B3181E22"/>
+      <SolidColorBrush x:Key="BubbleTheirs" Color="Transparent"/>
+      <SolidColorBrush x:Key="BubbleMine" Color="#E7F2ED"/>
+      <SolidColorBrush x:Key="ScreenInset" Color="#FAFBFC"/>
+      <SolidColorBrush x:Key="GlassEdge" Color="#DCE2E6"/>
+      <SolidColorBrush x:Key="PanelEdge" Color="#DCE2E6"/>
+      <SolidColorBrush x:Key="AccentFill" Color="{StaticResource Raised}"/>
+      <SolidColorBrush x:Key="AccentFillHover" Color="#F4F6F6"/>
+      <SolidColorBrush x:Key="AccentFillPressed" Color="{StaticResource Well}"/>
+      <SolidColorBrush x:Key="SelectionFill" Color="{StaticResource Well}"/>
+      <SolidColorBrush x:Key="SelectionEdge" Color="{StaticResource Accent}"/>
+      <SolidColorBrush x:Key="TitleText" Color="{StaticResource Ink}"/>
+
+      <SolidColorBrush x:Key="RaisedEdge" Color="#E3E7EB"/>
+      <SolidColorBrush x:Key="WellEdge" Color="#E3E7EB"/>
+      <SolidColorBrush x:Key="DialFill" Color="#E3E7EB"/>
+    </ResourceDictionary>

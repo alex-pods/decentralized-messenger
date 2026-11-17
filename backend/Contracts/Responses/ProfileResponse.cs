@@ -11,9 +11,10 @@ public sealed record ProfileResponse(
     [property: JsonPropertyName("path_to_avatar_file")] string? AvatarPath,
     [property: JsonPropertyName("bio")] string? Bio,
     [property: JsonPropertyName("join_date")] DateTimeOffset? JoinedAt,
-    [property: JsonPropertyName("last_seen_at")] DateTimeOffset? LastSeenAt)
+    [property: JsonPropertyName("last_seen_at")] DateTimeOffset? LastSeenAt,
+    [property: JsonPropertyName("allow_tag_search")] bool AllowTagSearch)
 {
     public static ProfileResponse From(User user, string? avatarPath) =>
         new(user.Id, user.Tag, user.Name, avatarPath, user.Bio,
-            SqliteTime.Parse(user.CreatedAt), SqliteTime.ParseOrNull(user.LastSeenAt));
+            SqliteTime.Parse(user.CreatedAt), SqliteTime.ParseOrNull(user.LastSeenAt), user.AllowTagSearch != 0);
 }

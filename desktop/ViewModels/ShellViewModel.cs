@@ -49,6 +49,7 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _groupTitle = "";
     [ObservableProperty] private string _displayName = "";
     [ObservableProperty] private string _bio = "";
+    [ObservableProperty] private bool _allowTagSearch = true;
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {
@@ -73,6 +74,7 @@ public partial class ShellViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEdit))]
+    [NotifyPropertyChangedFor(nameof(CanForward))]
     [NotifyPropertyChangedFor(nameof(CanDeleteEveryone))]
     [NotifyPropertyChangedFor(nameof(CanPin))]
     [NotifyPropertyChangedFor(nameof(SelectedIsPinned))]
@@ -113,10 +115,12 @@ public partial class ShellViewModel : ObservableObject
         "group" => "Новая группа",
         "members" => "Участники",
         "profile" => "Профиль",
+        "forward" => "Переслать в…",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;
-    public bool CanEdit => SelectedMessage is { Mine: true, IsDeleted: false, IsNotStored: false };
+    public bool CanEdit => SelectedMessage is { Mine: true, IsDeleted: false, IsNotStored: false, IsForwarded: false };
+    public bool CanForward => SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public bool CanDeleteEveryone =>
         SelectedMessage is { IsDeleted: false } && (SelectedMessage.Mine || _myRole is "owner" or "admin");
     public bool CanManagePins => HasChat && (!IsGroup || _myRole is "owner" or "admin");
@@ -143,6 +147,7 @@ public partial class ShellViewModel : ObservableObject
         Header = $"{me.DisplayName}  @{me.Tag}";
         DisplayName = me.DisplayName;
         Bio = me.Bio ?? "";
+        AllowTagSearch = me.AllowTagSearch;
         _ = LoadAvatar(me.Id, bytes => Avatar = CreateAvatar(bytes));
         _live = new LiveConnection(api);
         _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));

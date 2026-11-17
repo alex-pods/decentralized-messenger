@@ -81,10 +81,14 @@ public sealed class MessengerClient : IDisposable
         await Send<List<UserCardDto>>(HttpMethod.Get, "users/search?query=" + Uri.EscapeDataString(query), null, ct) ?? new();
 
     public Task UpdateProfile(string? displayName, string? bio, CancellationToken ct = default) =>
+        UpdateProfile(displayName, bio, null, ct);
+
+    public Task UpdateProfile(string? displayName, string? bio, bool? allowTagSearch, CancellationToken ct = default) =>
         Send(new HttpMethod("PATCH"), "users/me", new Dictionary<string, object?>
         {
             ["display_name"] = displayName,
-            ["bio"] = bio
+            ["bio"] = bio,
+            ["allow_tag_search"] = allowTagSearch
         }, ct);
 
     public async Task UploadAvatar(string filePath, CancellationToken ct = default)
@@ -188,6 +192,15 @@ public sealed class MessengerClient : IDisposable
         return dto?.MessageId ?? throw new ApiException(500, "Сервер не вернул message_id");
     }
 
+    public async Task<long> ForwardMessage(long messageId, long chatId, CancellationToken ct = default)
+    {
+        var dto = await Send<MessageIdDto>(HttpMethod.Post, $"messages/{messageId}/forward", new Dictionary<string, object?>
+        {
+            ["chat_id"] = chatId
+        }, ct);
+        return dto?.MessageId ?? throw new ApiException(500, "Сервер не вернул message_id");
+    }
+
     public Task MarkRead(long chatId, long messageId, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"chats/{chatId}/read", new Dictionary<string, object?>
         {
@@ -244,13 +257,20 @@ public sealed class MessengerClient : IDisposable
     public async Task Send(HttpMethod method, string path, object? body, CancellationToken ct) =>
         await Send<object>(method, path, body, ct);
 
+    static string? Localized(string? code) => code switch
+    {
+        "message_not_forwardable" => "Это сообщение нельзя переслать",
+        "message_forwarded_readonly" => "Пересланное сообщение нельзя изменить",
+        _ => null
+    };
+
     static ApiException ParseError(string body, HttpStatusCode status)
     {
         try
         {
             var err = JsonSerializer.Deserialize<ErrorDto>(body, Json);
             if (err != null && (!string.IsNullOrWhiteSpace(err.Error) || !string.IsNullOrWhiteSpace(err.Code)))
-                return new ApiException((int)status, err.Error ?? err.Code ?? $"Ошибка {(int)status}", err.Code);
+                return new ApiException((int)status, Localized(err.Code) ?? err.Error ?? err.Code ?? $"Ошибка {(int)status}", err.Code);
         }
         catch { /* не JSON */ }
         return new ApiException((int)status,

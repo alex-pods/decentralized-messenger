@@ -15,6 +15,11 @@ public interface IMessagesRepository
     Task<IReadOnlyList<MessageRow>> GetHistoryAsync(
         long chatId, long viewerId, HistoryQuery query, CancellationToken cancellationToken = default);
     Task<AddMessageResult> AddAsync(NewMessage message, CancellationToken cancellationToken = default);
+    Task<MessageRow?> ForwardAsync(
+        long sourceMessageId,
+        long targetChatId,
+        long senderId,
+        CancellationToken cancellationToken = default);
     Task<MessageRow?> EditAsync(
         long messageId,
         Secret newText,
@@ -38,9 +43,12 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id,
             m.text, m.content_state,
             m.sent_at, m.delivered_at, m.edited_at, m.deleted_at,
-            m.client_ref_payload, v.read_at
+            m.client_ref_payload, v.read_at,
+            f.author_id AS forward_author_id, f.author_name AS forward_author_name,
+            f.original_sent_at AS forward_sent_at
         FROM messages m
         LEFT JOIN message_read_at v ON v.message_id = m.id
+        LEFT JOIN message_forwards f ON f.message_id = m.id
         """;
 
     public async Task<MessageRow?> GetByIdAsync(long messageId, CancellationToken cancellationToken = default)
@@ -172,6 +180,58 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
 
             return existing;
         }
+    }
+
+    public async Task<MessageRow?> ForwardAsync(
+        long sourceMessageId,
+        long targetChatId,
+        long senderId,
+        CancellationToken cancellationToken = default)
+    {
+        using var connection = db.Open();
+        using var transaction = connection.BeginTransaction();
+
+        var newId = await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
+            """
+            INSERT INTO messages(chat_id, sender_id, text)
+            SELECT @targetChatId, @senderId, src.text
+            FROM messages src
+            WHERE src.id = @sourceMessageId
+              AND src.content_state = 'stored'
+              AND EXISTS (
+                  SELECT 1 FROM users_chats uc
+                  WHERE uc.chat_id = src.chat_id AND uc.user_id = @senderId)
+              AND NOT EXISTS (
+                  SELECT 1 FROM message_hidden h
+                  WHERE h.message_id = src.id AND h.user_id = @senderId)
+            RETURNING id
+            """,
+            new { targetChatId, senderId, sourceMessageId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        if (newId is null)
+            return null;
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO message_forwards(message_id, author_id, author_name, original_sent_at)
+            SELECT @newId,
+                   CASE WHEN f.message_id IS NULL THEN src.sender_id ELSE f.author_id END,
+                   CASE WHEN f.message_id IS NULL THEN u.name ELSE f.author_name END,
+                   CASE WHEN f.message_id IS NULL THEN src.sent_at ELSE f.original_sent_at END
+            FROM messages src
+            JOIN users u ON u.id = src.sender_id
+            LEFT JOIN message_forwards f ON f.message_id = src.id
+            WHERE src.id = @sourceMessageId
+            """,
+            new { newId, sourceMessageId },
+            transaction,
+            cancellationToken: cancellationToken));
+
+        var row = await LoadRow(connection, newId.Value, cancellationToken, transaction);
+        transaction.Commit();
+        return row;
     }
 
     public async Task<MessageRow?> EditAsync(
@@ -461,7 +521,13 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         SqliteTime.ParseOrNull(row.DeliveredAt),
         SqliteTime.ParseOrNull(row.EditedAt),
         SqliteTime.ParseOrNull(row.ReadAt),
-        SqliteTime.ParseOrNull(row.DeletedAt));
+        SqliteTime.ParseOrNull(row.DeletedAt),
+        MapForward(row));
+
+    private static ForwardInfo? MapForward(MessageRowRaw row) =>
+        row.ForwardAuthorName is { } name
+            ? new ForwardInfo(row.ForwardAuthorId, name.Value, SqliteTime.Parse(row.ForwardSentAt!))
+            : null;
 
     private static MessageContentState ParseState(string value) => value switch
     {
@@ -495,5 +561,8 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         public string? DeletedAt { get; set; }
         public string? ReadAt { get; set; }
         public string? ClientRefPayload { get; set; }
+        public long? ForwardAuthorId { get; set; }
+        public Secret? ForwardAuthorName { get; set; }
+        public string? ForwardSentAt { get; set; }
     }
 }

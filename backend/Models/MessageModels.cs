@@ -20,8 +20,11 @@ public sealed record MessageRow(
     DateTimeOffset? DeliveredAt,
     DateTimeOffset? EditedAt,
     DateTimeOffset? ReadAt,
-    DateTimeOffset? DeletedAt
+    DateTimeOffset? DeletedAt,
+    ForwardInfo? Forward = null
 );
+
+public sealed record ForwardInfo(long? AuthorId, string AuthorName, DateTimeOffset OriginalSentAt);
 
 public sealed record NewMessage(
     long ChatId,

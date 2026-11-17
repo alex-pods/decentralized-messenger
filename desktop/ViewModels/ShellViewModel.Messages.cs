@@ -171,6 +171,24 @@ public partial class ShellViewModel
         finally { Busy = false; }
     }
 
+    [RelayCommand]
+    async Task ForwardTo(ChatItem? target)
+    {
+        var source = SelectedMessage;
+        if (target == null || source == null || !CanForward || Busy) return;
+        Busy = true;
+        try
+        {
+            Error = null;
+            var id = await _api.ForwardMessage(source.Id, target.Id);
+            Overlay = "";
+            if (SelectedChat?.Id == target.Id) await MergeAfter(target, afterId: id - 1);
+            else await ReloadChats();
+        }
+        catch (Exception ex) { Error = Friendly(ex); }
+        finally { Busy = false; }
+    }
+
     async Task MergeAfter(ChatItem chat, long afterId)
     {
         var gen = _openGen;
@@ -207,6 +225,8 @@ public partial class ShellViewModel
                 existing.Text = fresh.Text;
                 existing.Meta = fresh.Meta;
                 existing.Reply = fresh.Reply;
+                existing.Forwarded = fresh.Forwarded;
+                existing.ForwardedTip = fresh.ForwardedTip;
                 existing.IsDeleted = fresh.IsDeleted;
                 existing.IsNotStored = fresh.IsNotStored;
             }
@@ -468,6 +488,7 @@ public partial class ShellViewModel
 
     [RelayCommand] void Reply() { if (SelectedMessage != null) { Editing = null; ReplyTo = SelectedMessage; } }
     [RelayCommand] void BeginEdit() { if (CanEdit && SelectedMessage != null) { ReplyTo = null; Editing = SelectedMessage; Draft = SelectedMessage.Text; } }
+    [RelayCommand] void ShowForward() { if (CanForward) Overlay = "forward"; }
     [RelayCommand] void CancelCompose() { ReplyTo = null; Editing = null; }
     [RelayCommand] void ToggleMoreReactions() => ShowMoreReactions = !ShowMoreReactions;
 
@@ -641,6 +662,8 @@ public partial class ShellViewModel
             existing.Text = fresh.Text;
             existing.Meta = fresh.Meta;
             existing.Reply = fresh.Reply;
+            existing.Forwarded = fresh.Forwarded;
+            existing.ForwardedTip = fresh.ForwardedTip;
             existing.IsDeleted = fresh.IsDeleted;
             existing.IsNotStored = fresh.IsNotStored;
             existing.SetReactions(fresh.ReactionUsers);

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.ProfileEditor" x:Name="Root">
   <StackPanel Spacing="10">
+    <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding ShowProfileCommand.IsRunning}"/>
     <StackPanel Orientation="Horizontal" Spacing="18" Margin="0,0,0,14">
       <Border Width="64" Height="64" CornerRadius="32" Background="{Binding Header, Converter={StaticResource AvatarBrush}}" ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver" DragDrop.Drop="OnAvatarDrop" BorderBrush="{DynamicResource WellEdge}" BorderThickness="1">
         <Grid>
@@ -10,9 +11,9 @@
       <Button Classes="small" Content="Выбрать изображение…" Click="OnChooseAvatarClick" VerticalAlignment="Center"/>
     </StackPanel>
     <TextBlock Classes="field" Text="Имя"/>
-    <TextBox Text="{Binding DisplayName}"/>
+    <TextBox Text="{Binding DisplayName}" MaxLength="32" AutomationProperties.Name="Имя" IsEnabled="{Binding !ShowProfileCommand.IsRunning}"/>
     <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>
-    <TextBox Text="{Binding Bio}" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap" VerticalContentAlignment="Top"/>
+    <TextBox Text="{Binding Bio}" MaxLength="500" AutomationProperties.Name="О себе" IsEnabled="{Binding !ShowProfileCommand.IsRunning}" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap" VerticalContentAlignment="Top"/>
     <CheckBox Content="Находить меня по тегу" IsChecked="{Binding AllowTagSearch}" Margin="0,8,0,0"/>
     <Button Classes="primary large" Content="Сохранить" HorizontalAlignment="Right" Padding="26,0" Margin="0,14,0,0" Command="{Binding SaveProfileCommand}"/>
   </StackPanel>

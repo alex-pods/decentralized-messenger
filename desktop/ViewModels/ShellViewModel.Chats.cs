@@ -10,6 +10,7 @@ public partial class ShellViewModel
         SelectedMessage = null;
         ReplyTo = null;
         Editing = null;
+        RestoreDraft(value);
         ClearPins();
         if (value == null)
         {
@@ -92,27 +93,30 @@ public partial class ShellViewModel
     [RelayCommand]
     async Task Search()
     {
-        var q = SearchQuery.Trim();
-        if (q.Length == 0) { Error = "Введите полный тег"; return; }
+        var q = SearchQuery.Trim().TrimStart('@');
+        if (q.Length == 0) { SearchHint = "Введите полный тег пользователя"; return; }
+        var generation = ++_searchGeneration;
+        var overlay = Overlay;
+        Searching = true;
+        SearchHint = "Ищем…";
+        Error = null;
         try
         {
-            Error = null;
             var users = await _api.Search(q);
-            await Ui(() =>
+            if (generation != _searchGeneration || overlay != Overlay) return;
+            DisposeItems(SearchResults, GroupDraft);
+            foreach (var u in users)
             {
-                DisposeItems(SearchResults, GroupDraft);
-                foreach (var u in users)
+                SearchResults.Add(u);
+                _ = LoadAvatar(u.Id, image =>
                 {
-                    SearchResults.Add(u);
-                    _ = LoadAvatar(u.Id, image =>
-                    {
-                        if (SearchResults.Contains(u) || GroupDraft.Contains(u)) u.Avatar = CreateAvatar(image);
-                    });
-                }
-                if (users.Count == 0) Error = "Никого не нашли";
-            });
+                    if (SearchResults.Contains(u) || GroupDraft.Contains(u)) u.Avatar = CreateAvatar(image);
+                });
+            }
+            SearchHint = users.Count == 0 ? "Никого не нашли. Проверьте полный тег." : "Выберите человека в списке";
         }
-        catch (Exception ex) { Error = Friendly(ex); }
+        catch (Exception ex) { if (generation == _searchGeneration && overlay == Overlay) { Error = Friendly(ex); SearchHint = ""; } }
+        finally { if (generation == _searchGeneration) Searching = false; }
     }
 
     [RelayCommand]

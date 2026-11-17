@@ -89,6 +89,32 @@ public static class Preview
     static async Task AuditScreens(Window window, ShellViewModel vm)
     {
         var shell = await Dispatcher.UIThread.InvokeAsync(() => window.GetVisualDescendants().OfType<ShellView>().Single());
+        foreach (var preset in Appearance.ThemeSettings.Presets)
+        {
+            if (Appearance.ThemeSettings.Contrast(Avalonia.Media.Color.Parse(preset.Text), Avalonia.Media.Color.Parse(preset.Surface)) < 4.5)
+                throw new Exception("Preset text contrast is insufficient");
+        }
+        var originalChat = vm.SelectedChat!;
+        var otherChat = vm.Chats.First(c => c.Id != originalChat.Id);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.CloseOverlayCommand.Execute(null);
+            vm.Draft = "Черновик первой беседы";
+            vm.SelectedChat = otherChat;
+            if (vm.Draft != "") throw new Exception("Draft leaked to another conversation");
+            vm.Draft = "Черновик второй беседы";
+            vm.SelectedChat = originalChat;
+            if (vm.Draft != "Черновик первой беседы") throw new Exception("Draft was not restored");
+        });
+        await Task.Delay(700);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.SelectedMessage = vm.Messages.First(m => m.Mine);
+            vm.BeginEditCommand.Execute(null);
+            vm.CancelComposeCommand.Execute(null);
+            if (vm.Draft != "Черновик первой беседы") throw new Exception("Cancel edit lost the draft");
+            vm.Draft = "";
+        });
         foreach (var theme in Appearance.ThemeSettings.Presets.Take(2))
         {
             var suffix = theme.Dark ? "dark" : "light";
@@ -101,6 +127,10 @@ public static class Preview
                     vm.Overlay = screen;
                 });
                 await Task.Delay(120);
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (shell.FindControl<Grid>("ShellGrid")!.IsEnabled) throw new Exception("Modal leaves background enabled");
+                });
                 await Shot(window, screen + "-" + suffix);
             }
             await Dispatcher.UIThread.InvokeAsync(() =>
@@ -226,6 +256,14 @@ public static class Preview
                 throw new Exception("Foreign message exposes edit action");
             shell.ActiveMessageMenu.Close();
         });
+        Task<bool>? confirmation = null;
+        await Dispatcher.UIThread.InvokeAsync(() => { confirmation = Views.Dialogs.ConfirmAction.Show(shell, "Удалить сообщение у всех?", "Сообщение исчезнет у всех участников. Отменить это действие нельзя.", "Удалить"); });
+        await Task.Delay(150);
+        var confirmWindow = await Dispatcher.UIThread.InvokeAsync(() =>
+            ((Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Windows.Single(w => w.Title == "Удалить сообщение у всех?"));
+        await Shot(confirmWindow, "confirm-delete");
+        await Dispatcher.UIThread.InvokeAsync(() => confirmWindow.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, "Отмена")).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)));
+        if (await confirmation!) throw new Exception("Cancel confirmed a destructive action");
         Console.WriteLine("PASS UI screen matrix and filter selection retention");
     }
 

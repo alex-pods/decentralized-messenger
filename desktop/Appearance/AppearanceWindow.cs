@@ -175,7 +175,8 @@ public sealed class AppearanceWindow : Window
             ((Border)content.Children[0]).BorderThickness = new Thickness(0);
             ((TextBlock)content.Children[1]).Text = card.Tag?.ToString();
         }
-        _error.Text = "";
+        _error.Text = ThemeSettings.Contrast(_colors[2].Color, _colors[0].Color) < 4.5 || ThemeSettings.Contrast(_colors[2].Color, _colors[1].Color) < 4.5
+            ? "Текст может быть плохо различим. Увеличьте разницу между цветом текста и фона." : "";
     }
 
     void Save()

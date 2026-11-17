@@ -53,7 +53,7 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         var surface = Color.Parse(theme.Surface);
         var text = Color.Parse(theme.Text);
         var accent = Color.Parse(theme.Accent);
-        var muted = Blend(text, surface, .60);
+        var muted = Blend(text, surface, .70);
         var line = Blend(text, surface, .18);
         var hover = Blend(text, surface, .07);
         var bubble = Blend(accent, surface, .14);
@@ -81,8 +81,19 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         Set(accent, "AccentBrush", "OnlineBrush", "SelectionEdge");
         Set(bubble, "BubbleMine", "AccentFill");
         Set(theme.Dark ? Color.Parse("#FF9696") : Color.Parse("#A52835"), "DangerBrush");
-        Set(accent.R * .299 + accent.G * .587 + accent.B * .114 > 150 ? Colors.Black : Colors.White, "ActionTextBrush");
+        Set(Contrast(accent, Colors.Black) > Contrast(accent, Colors.White) ? Colors.Black : Colors.White, "ActionTextBrush");
         Current = theme;
+    }
+
+    public static double Contrast(Color first, Color second)
+    {
+        static double Luminance(Color c)
+        {
+            static double Linear(byte channel) { var v = channel / 255d; return v <= .04045 ? v / 12.92 : Math.Pow((v + .055) / 1.055, 2.4); }
+            return .2126 * Linear(c.R) + .7152 * Linear(c.G) + .0722 * Linear(c.B);
+        }
+        var a = Luminance(first); var b = Luminance(second);
+        return (Math.Max(a, b) + .05) / (Math.Min(a, b) + .05);
     }
 
     static Color Blend(Color foreground, Color background, double amount) => Color.FromRgb(

@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.GroupDetails" x:Name="Root">
   <StackPanel Spacing="6" Margin="0,0,0,12">
     <TextBlock Classes="field" Text="Название"/>
-    <TextBox Text="{Binding GroupTitle}" Watermark="1–64 символа"/>
+    <TextBox Text="{Binding GroupTitle}" Watermark="Название группы" MaxLength="64" AutomationProperties.Name="Название группы"/>
     <ItemsControl ItemsSource="{Binding GroupDraft}" Margin="0,8,0,0">
       <ItemsControl.ItemsPanel>
         <ItemsPanelTemplate>
@@ -13,7 +13,7 @@
           <Border Classes="chip" Margin="0,0,6,6">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <TextBlock Text="{Binding DisplayName}" MaxWidth="180" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-              <Button Classes="icon small" Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}">
+              <Button Classes="icon small" ToolTip.Tip="Убрать из выбранных" AutomationProperties.Name="Убрать из выбранных" Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}">
                 <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10"/>
               </Button>
             </StackPanel>

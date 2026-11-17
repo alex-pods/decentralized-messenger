@@ -1,5 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.ForwardPicker" x:Name="Root">
-  <ListBox Classes="plain" ItemsSource="{Binding Chats}" MaxHeight="360">
+  <StackPanel Spacing="12">
+  <TextBlock Text="Выберите получателя" Classes="secondary"/>
+  <TextBox x:Name="DestinationSearch" Watermark="Найти чат" TextChanged="OnSearchChanged"/>
+  <TextBlock x:Name="NoResults" Text="Чаты не найдены" Classes="caption" IsVisible="False"/>
+  <ListBox x:Name="Destinations" Classes="plain" ItemsSource="{Binding Chats}" MaxHeight="360">
     <ListBox.ItemTemplate>
       <DataTemplate>
         <Button Classes="row" Command="{Binding DataContext.ForwardToCommand, ElementName=Root}" CommandParameter="{Binding}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12">
@@ -17,4 +21,5 @@
       </DataTemplate>
     </ListBox.ItemTemplate>
   </ListBox>
+  </StackPanel>
 </UserControl>

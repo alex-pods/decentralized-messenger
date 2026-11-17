@@ -36,6 +36,13 @@ public partial class ShellView : UserControl
 
     void OnShellKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.K && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _vm?.OverlayOpen == false)
+        {
+            _showChats = true;
+            UpdateNavigation();
+            ChatSearch.Focus();
+            e.Handled = true;
+        }
         if (e.Key == Key.Escape && _vm != null)
         {
             if (_vm.OverlayOpen) _vm.CloseOverlayCommand.Execute(null);
@@ -89,6 +96,19 @@ public partial class ShellView : UserControl
 
     void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(ShellViewModel.OverlayOpen))
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_vm?.OverlayOpen == true)
+                {
+                    var target = OverlaySheet.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(c => c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+                    if (target != null) target.Focus();
+                    else OverlaySheet.GetVisualDescendants().OfType<Button>().FirstOrDefault(c => c.IsEffectivelyVisible)?.Focus();
+                }
+                else ComposerInput.Focus();
+            }, DispatcherPriority.Loaded);
+        }
         if (e.PropertyName == nameof(ShellViewModel.SelectedChat))
         {
             FilterChats();

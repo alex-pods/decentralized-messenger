@@ -47,6 +47,14 @@ public partial class ShellView
         menu.Open(anchor);
     }
 
+    async void OnLeaveGroup(object? sender, RoutedEventArgs e)
+    {
+        var chat = _vm?.SelectedChat;
+        if (chat == null) return;
+        if (await Dialogs.ConfirmAction.Show(this, "Выйти из группы?", $"Вы покинете «{chat.Title}». Для возвращения потребуется приглашение участника.", "Выйти") && _vm?.SelectedChat == chat)
+            _vm.LeaveChatCommand.Execute(null);
+    }
+
     void OnMessageContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (sender is Control { DataContext: MessageItem message } anchor)
@@ -89,12 +97,31 @@ public partial class ShellView
             menu.Items.Add(new Separator());
             menu.Items.Add(ActionItem("Ответить", "IcReply", _vm.ReplyCommand));
         }
+        if (!message.IsDeleted && !message.IsNotStored)
+        {
+            var copy = new MenuItem { Header = "Копировать текст" };
+            copy.Click += async (_, _) =>
+            {
+                try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(message.Text); }
+                catch { if (_vm != null) _vm.Error = "Не удалось скопировать текст"; }
+            };
+            menu.Items.Add(copy);
+        }
         if (_vm.CanForward) menu.Items.Add(ActionItem("Переслать", "IcForward", _vm.ShowForwardCommand));
         if (_vm.CanPin) menu.Items.Add(ActionItem(_vm.PinActionLabel, "IcPin", _vm.TogglePinCommand));
         if (_vm.CanEdit) menu.Items.Add(ActionItem("Редактировать", "IcEdit", _vm.BeginEditCommand));
         menu.Items.Add(new Separator());
         menu.Items.Add(ActionItem("Удалить у меня", "IcTrash", _vm.DeleteForMeCommand));
-        if (_vm.CanDeleteEveryone) menu.Items.Add(ActionItem("Удалить у всех", "IcTrash", _vm.DeleteForEveryoneCommand));
+        if (_vm.CanDeleteEveryone)
+        {
+            var delete = new MenuItem { Header = "Удалить у всех" };
+            delete.Click += async (_, _) =>
+            {
+                if (await Dialogs.ConfirmAction.Show(this, "Удалить сообщение у всех?", "Сообщение исчезнет у всех участников. Отменить это действие нельзя.", "Удалить") && _vm?.SelectedMessage == message)
+                    _vm.DeleteForEveryoneCommand.Execute(null);
+            };
+            menu.Items.Add(delete);
+        }
         menu.Open(anchor);
     }
 

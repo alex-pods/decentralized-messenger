@@ -2,7 +2,7 @@
   <StackPanel Spacing="8" Margin="0,0,0,8">
     <TextBlock Text="Найти человека по тегу" Classes="field" Margin="0,0,0,4"/>
     <Grid ColumnDefinitions="*,Auto">
-      <TextBox Text="{Binding SearchQuery}" Watermark="Полный тег">
+      <TextBox Text="{Binding SearchQuery}" Watermark="Например, @alex" IsEnabled="{Binding !Searching}">
         <TextBox.InnerLeftContent>
           <local:Glyph Data="{StaticResource IcSearch}" Width="15" Height="15" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/>
         </TextBox.InnerLeftContent>
@@ -10,8 +10,9 @@
           <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
         </TextBox.KeyBindings>
       </TextBox>
-      <Button Grid.Column="1" Classes="secondaryAction" Content="Найти" Margin="8,0,0,0" MinHeight="40" Command="{Binding SearchCommand}"/>
+      <Button Grid.Column="1" Classes="secondaryAction" Content="Найти" IsEnabled="{Binding !Searching}" Margin="8,0,0,0" MinHeight="40" Command="{Binding SearchCommand}"/>
     </Grid>
+    <TextBlock Text="{Binding SearchHint}" Classes="caption" TextWrapping="Wrap"/>
     <ListBox Classes="plain" ItemsSource="{Binding SearchResults}" MaxHeight="190">
       <ListBox.ItemTemplate>
         <DataTemplate>

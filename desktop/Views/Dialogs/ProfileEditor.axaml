@@ -14,7 +14,6 @@
     <TextBox Text="{Binding DisplayName}" MaxLength="32" AutomationProperties.Name="Имя" IsEnabled="{Binding !ShowProfileCommand.IsRunning}"/>
     <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>
     <TextBox Text="{Binding Bio}" MaxLength="500" AutomationProperties.Name="О себе" IsEnabled="{Binding !ShowProfileCommand.IsRunning}" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap" VerticalContentAlignment="Top"/>
-    <CheckBox Content="Находить меня по тегу" IsChecked="{Binding AllowTagSearch}" Margin="0,8,0,0"/>
     <Button Classes="primary large" Content="Сохранить" HorizontalAlignment="Right" Padding="26,0" Margin="0,14,0,0" Command="{Binding SaveProfileCommand}"/>
   </StackPanel>
 </UserControl>

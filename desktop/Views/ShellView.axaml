@@ -187,13 +187,8 @@
             <TextBlock Text="{Binding DraftLengthHint}" IsVisible="{Binding HasDraftLengthHint}" Classes="caption" HorizontalAlignment="Right"/>
             <Border Classes="composer">
               <Grid ColumnDefinitions="*,Auto">
-                <TextBox x:Name="ComposerInput" Classes="bare" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" Watermark="Напишите сообщение…">
-                  <TextBox.KeyBindings>
-                    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}"/>
-                    <KeyBinding Gesture="Meta+Enter" Command="{Binding SendCommand}"/>
-                  </TextBox.KeyBindings>
-                </TextBox>
-                <Button Grid.Column="1" Classes="send" VerticalAlignment="Bottom" Margin="6,0,2,0" ToolTip.Tip="Отправить · Ctrl+Enter / ⌘Enter" AutomationProperties.Name="Отправить" Command="{Binding SendCommand}" IsEnabled="{Binding CanSendDraft}">
+                <TextBox x:Name="ComposerInput" Classes="bare" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" Watermark="Напишите сообщение…"/>
+                <Button x:Name="SendButton" Grid.Column="1" Classes="send" VerticalAlignment="Bottom" Margin="6,0,2,0" AutomationProperties.Name="Отправить" Command="{Binding SendCommand}" IsEnabled="{Binding CanSendDraft}">
                   <local:Glyph Data="{StaticResource IcSend}" Width="18" Height="18" StrokeWidth="2.2" Foreground="{DynamicResource ActionTextBrush}"/>
                 </Button>
               </Grid>

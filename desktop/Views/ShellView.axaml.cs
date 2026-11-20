@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using MessengerDesktop.Settings;
 
 namespace MessengerDesktop.Views;
 
@@ -32,6 +33,32 @@ public partial class ShellView : UserControl
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
+        ComposerInput.AddHandler(InputElement.KeyDownEvent, OnComposerKeyDown, RoutingStrategies.Tunnel);
+        AttachedToVisualTree += (_, _) => { AppPreferences.Changed += UpdateSendHint; UpdateSendHint(); };
+        DetachedFromVisualTree += (_, _) => AppPreferences.Changed -= UpdateSendHint;
+    }
+
+    void UpdateSendHint() => ToolTip.SetTip(SendButton,
+        AppPreferences.Current.SendMode == SendMode.Enter ? "Отправить · Enter" : "Отправить · Ctrl+Enter / ⌘Enter");
+
+    void OnComposerKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || _vm == null) return;
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        // Enter-режим: Enter и Ctrl+Enter отправляют, Shift+Enter — перенос строки.
+        // Ctrl+Enter-режим: отправляет только Ctrl/⌘+Enter, обычный Enter — перенос строки.
+        var send = AppPreferences.Current.SendMode == SendMode.Enter ? !shift && !alt : ctrl && !shift && !alt;
+        if (!send) return;
+        e.Handled = true;
+        if (_vm.SendCommand.CanExecute(null)) _vm.SendCommand.Execute(null);
+    }
+
+    async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm != null && TopLevel.GetTopLevel(this) is Window owner)
+            await new Settings.SettingsWindow(_vm).ShowDialog(owner);
     }
 
     void OnShellKeyDown(object? sender, KeyEventArgs e)
@@ -263,18 +290,27 @@ public partial class ShellView : UserControl
         if (e.Source is not Control src) return;
         if (src.FindAncestorOfType<ScrollBar>() != null) return;
 
-        bool isBubble = false;
+        Border? bubble = null;
+        var onChip = false;
         for (Control? v = src; v != null; v = v.GetVisualParent() as Control)
         {
-            if (v is Border b && b.Classes.Contains("bubble")) 
-            { 
-                isBubble = true; 
-                break; 
+            if (v is Border b && b.Classes.Contains("reaction")) onChip = true;
+            if (v is Border bb && bb.Classes.Contains("bubble"))
+            {
+                bubble = bb;
+                break;
             }
             if (v is ListBoxItem) break; // дошли до строки, пузырь не найден
         }
 
-        if (isBubble) return;
+        if (bubble != null)
+        {
+            // Двойной клик по самому сообщению (не по чипу реакции).
+            if (e.ClickCount == 2 && !onChip && bubble.DataContext is MessageItem message
+                && _vm is { OverlayOpen: false } && _vm.ActivateMessage(message))
+                Dispatcher.UIThread.Post(() => ComposerInput.Focus(), DispatcherPriority.Input);
+            return;
+        }
 
         if (DataContext is ShellViewModel vm)
             vm.SelectedMessage = null;

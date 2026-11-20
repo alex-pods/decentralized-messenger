@@ -1,0 +1,11 @@
+**
+!backend/
+!backend/**
+backend/**/bin/
+backend/**/obj/
+backend/**/tests/
+backend/**/deploy/
+backend/**/*.db*
+backend/**/files/
+backend/**/keys/
+backend/**/*.env

@@ -43,8 +43,17 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _header;
     [ObservableProperty] private string _status = "подключение…";
     [ObservableProperty] private string? _error;
-    [ObservableProperty] private bool _busy;
-    [ObservableProperty] private string _draft = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSendDraft))]
+    private bool _busy;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSendDraft))]
+    [NotifyPropertyChangedFor(nameof(DraftLengthHint))]
+    [NotifyPropertyChangedFor(nameof(HasDraftLengthHint))]
+    private string _draft = "";
+    [ObservableProperty] private bool _searching;
+    [ObservableProperty] private string _searchHint = "";
+    private int _searchGeneration;
     [ObservableProperty] private string _searchQuery = "";
     [ObservableProperty] private string _groupTitle = "";
     [ObservableProperty] private string _displayName = "";
@@ -67,6 +76,7 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGroup))]
     [NotifyPropertyChangedFor(nameof(HasChat))]
+    [NotifyPropertyChangedFor(nameof(CanSendDraft))]
     [NotifyPropertyChangedFor(nameof(ChatTitle))]
     [NotifyPropertyChangedFor(nameof(CanManagePins))]
     [NotifyPropertyChangedFor(nameof(CanPin))]
@@ -105,7 +115,12 @@ public partial class ShellViewModel : ObservableObject
 
     public bool IsGroup => SelectedChat?.Type == "group";
     public bool HasChat => SelectedChat != null;
+    public string DraftLengthHint => HasDraftLengthHint ? $"{Draft.Trim().Length} / 4096 символов" : "";
+    public bool HasDraftLengthHint => Draft.Trim().Length > 3800;
+    public bool CanSendDraft => HasChat && !Busy && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
     public bool HasAvatar => Avatar is not null;
+    public long CurrentUserId => _me.Id;
+    internal MessengerClient ThemeApi => _api;
     public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";
     public bool OverlayOpen => Overlay.Length > 0;
     public bool ShowPeopleSearch => Overlay is "direct" or "group" or "members";
@@ -140,6 +155,7 @@ public partial class ShellViewModel : ObservableObject
 
     public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me)
     {
+        Messages.CollectionChanged += (_, _) => UpdateMessageGroups();
         _nav = nav;
         _api = api;
         _me = me;
@@ -158,7 +174,19 @@ public partial class ShellViewModel : ObservableObject
         _ = ReloadChats();
     }
 
-    [RelayCommand] void CloseOverlay() => Overlay = "";
+    [RelayCommand] void CloseOverlay()
+    {
+        if (Overlay == "profile")
+        {
+            DisplayName = _me.DisplayName;
+            Bio = _me.Bio ?? "";
+            AllowTagSearch = _me.AllowTagSearch;
+        }
+        ++_searchGeneration;
+        Searching = false;
+        Overlay = "";
+        Error = null;
+    }
     [RelayCommand] void DismissError() => Error = null;
 
     [RelayCommand]
@@ -185,6 +213,10 @@ public partial class ShellViewModel : ObservableObject
 
     void ResetSearch()
     {
+        ++_searchGeneration;
+        Searching = false;
+        SearchHint = "";
+        Error = null;
         SearchQuery = "";
         DisposeItems(SearchResults, GroupDraft);
     }

@@ -19,23 +19,125 @@ public partial class ShellView : UserControl
     public ShellView()
     {
         InitializeComponent();
-        ChassisWidth.Track(this);
+        SizeChanged += (_, _) => UpdateNavigation();
+        AttachedToVisualTree += (_, _) => UpdateNavigation();
         DataContextChanged += (_, _) => Hook();
+        ChatList.SelectionChanged += (_, _) =>
+        {
+            if (_filtering || ChatList.SelectedItem is not ChatItem chat) return;
+            if (_vm != null) _vm.SelectedChat = chat;
+            _showChats = false;
+            UpdateNavigation();
+        };
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
+    }
+
+    void OnShellKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.K && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _vm?.OverlayOpen == false)
+        {
+            _showChats = true;
+            UpdateNavigation();
+            ChatSearch.Focus();
+            e.Handled = true;
+        }
+        if (e.Key == Key.Escape && _vm != null)
+        {
+            if (_vm.OverlayOpen) _vm.CloseOverlayCommand.Execute(null);
+            else if (_vm.HasComposeHint) _vm.CancelComposeCommand.Execute(null);
+            else _vm.SelectedMessage = null;
+            e.Handled = true;
+        }
+    }
+
+    bool _showChats = true;
+
+    void OnShowChats(object? sender, RoutedEventArgs e)
+    {
+        _showChats = true;
+        UpdateNavigation();
+    }
+
+    void UpdateNavigation()
+    {
+        bool narrow = Bounds.Width < 780;
+        OverlaySheet.MaxHeight = Math.Max(220, Bounds.Height - 40);
+        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "344,*");
+        Grid.SetColumn(ChatSidebar, 0);
+        Grid.SetColumn(ScreenBay, narrow ? 0 : 1);
+        ChatSidebar.IsVisible = !narrow || _showChats;
+        ScreenBay.IsVisible = !narrow || !_showChats;
+        BackToChats.IsVisible = narrow;
+    }
+
+    bool _filtering;
+
+    void OnChatFilterChanged(object? sender, TextChangedEventArgs e) => FilterChats();
+
+    void FilterChats()
+    {
+        if (_vm == null) return;
+        _filtering = true;
+        try
+        {
+            var query = ChatSearch.Text?.Trim() ?? "";
+            var visible = _vm.Chats.Where(chat => chat.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+            ChatList.ItemsSource = visible;
+            ChatList.SelectedItem = visible.Contains(_vm.SelectedChat) ? _vm.SelectedChat : null;
+            ChatEmpty.IsVisible = visible.Length == 0;
+            ChatEmpty.Text = query.Length == 0 ? "Здесь появятся ваши разговоры" : "Чаты не найдены";
+        }
+        finally { _filtering = false; }
+    }
+
+    void OnChatsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => FilterChats();
+
+    void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ShellViewModel.OverlayOpen))
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_vm?.OverlayOpen == true)
+                {
+                    var target = OverlaySheet.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(c => c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+                    if (target != null) target.Focus();
+                    else OverlaySheet.GetVisualDescendants().OfType<Button>().FirstOrDefault(c => c.IsEffectivelyVisible)?.Focus();
+                }
+                else ComposerInput.Focus();
+            }, DispatcherPriority.Loaded);
+        }
+        if (e.PropertyName == nameof(ShellViewModel.SelectedChat))
+        {
+            FilterChats();
+            if (_vm?.HasChat == true) _showChats = false;
+            UpdateNavigation();
+        }
+    }
+
+    async void OnAppearanceClick(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is Window owner)
+            await new Appearance.AppearanceWindow(_vm?.ThemeApi, _vm?.CurrentUserId).ShowDialog(owner);
     }
 
     void Hook()
     {
         if (_vm != null)
         {
+            _vm.Chats.CollectionChanged -= OnChatsChanged;
+            _vm.PropertyChanged -= OnShellPropertyChanged;
             _vm.ScrollToEnd -= Scroll;
             _vm.ScrollToMessage -= ScrollTo;
         }
         _vm = DataContext as ShellViewModel;
         if (_vm != null)
         {
+            _vm.Chats.CollectionChanged += OnChatsChanged;
+            _vm.PropertyChanged += OnShellPropertyChanged;
+            FilterChats();
             _vm.ScrollToEnd += Scroll;
             _vm.ScrollToMessage += ScrollTo;
         }
@@ -179,42 +281,4 @@ public partial class ShellView : UserControl
 
         e.Handled = true;
     }
-    async void OnChooseAvatarClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
-        if (storage == null) return;
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Выберите изображение для аватара",
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType("Изображения")
-                {
-                    Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"]
-                }
-            ]
-        });
-        if (files.Count > 0)
-            await UploadAvatarFromPath(files[0].Path.LocalPath);
-    }
-
-    void OnAvatarDragOver(object? sender, DragEventArgs e)
-    {
-        e.DragEffects = e.Data.GetFiles()?.Any(file => file.Path.IsFile) == true
-            ? DragDropEffects.Copy
-            : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    async void OnAvatarDrop(object? sender, DragEventArgs e)
-    {
-        var file = e.Data.GetFiles()?.FirstOrDefault(item => item.Path.IsFile);
-        if (file != null)
-            await UploadAvatarFromPath(file.Path.LocalPath);
-        e.Handled = true;
-    }
-
-    Task UploadAvatarFromPath(string path) =>
-        _vm?.UploadAvatarAsync(path) ?? Task.CompletedTask;
 }

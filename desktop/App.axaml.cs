@@ -14,10 +14,11 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            Appearance.ThemeSettings.Restore();
             var window = new MainWindow();
             var nav = new Navigator(window);
             desktop.MainWindow = window;
-            window.DataContext = new LoginViewModel(nav);
+            window.DataContext = new LoginViewModel(nav, Program.ServerOverride);
             if (Preview.Server != null)
                 _ = Preview.Run(window, nav).ContinueWith(t =>
                 {
@@ -34,6 +35,7 @@ public partial class App : Application
     {
         var saved = SessionStore.Load();
         if (saved == null) return;
+        if (Program.ServerOverride != null && !string.Equals(Program.ServerOverride, saved.Server.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return;
         var api = new MessengerClient(saved.Server, saved.Token);
         try
         {

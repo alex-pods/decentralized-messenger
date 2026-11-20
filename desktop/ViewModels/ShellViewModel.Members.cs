@@ -31,7 +31,8 @@ public partial class ShellViewModel
                 Members.Add(new MemberRow
                 {
                     Id = m.Id,
-                    Title = $"{m.DisplayName}  @{m.Tag}",
+                    Title = string.IsNullOrWhiteSpace(m.DisplayName) ? "@" + m.Tag : m.DisplayName,
+                    TagLabel = "@" + m.Tag,
                     Role = m.Role,
                     RoleLabel = m.Role switch { "owner" => "владелец", "admin" => "админ", _ => "участник" },
                     PromoteLabel = m.Role == "admin" ? "Снять админа" : "Сделать админом",

@@ -30,6 +30,10 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
         {
             await WriteError(ctx, StatusCodes.Status401Unauthorized, "unauthorized", e.Message);
         }
+        catch (BadHttpRequestException e)
+        {
+            await WriteError(ctx, e.StatusCode, "invalid_request", "Invalid or oversized request body");
+        }
         catch (Exception e)
         {
             log.LogError(e, "unhandled error on {Path}", ctx.Request.Path);

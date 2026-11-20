@@ -34,6 +34,8 @@ public partial class UserCardDto : ObservableObject, IDisposable
     [JsonPropertyName("tag")] public string Tag { get; set; } = "";
     [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
     public string Label => string.IsNullOrWhiteSpace(DisplayName) ? "@" + Tag : $"{DisplayName}  @{Tag}";
+    public string NameLabel => string.IsNullOrWhiteSpace(DisplayName) ? "@" + Tag : DisplayName;
+    public string TagLabel => "@" + Tag;
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {

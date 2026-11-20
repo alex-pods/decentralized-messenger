@@ -142,7 +142,8 @@ public partial class ShellViewModel
     async Task Send()
     {
         var chat = SelectedChat;
-        var text = Draft.Trim();
+        var submitted = Draft;
+        var text = submitted.Trim();
         if (chat == null || text.Length == 0 || Busy) return;
         if (text.Length > 4096) { Error = "Сообщение длиннее 4096 символов"; return; }
         Busy = true;
@@ -152,17 +153,15 @@ public partial class ShellViewModel
             if (Editing is { } ed)
             {
                 await _api.EditMessage(ed.Id, text);
-                Editing = null;
-                Draft = "";
-                await ReloadMessages();
+                CompleteCompose(chat.Id, submitted, editing: true);
+                if (SelectedChat?.Id == chat.Id) await ReloadMessages();
             }
             else
             {
                 // client_ref: повтор после сетевого сбоя не создаст дубль
                 var clientRef = Guid.NewGuid().ToString("N");
                 var id = await _api.SendMessage(chat.Id, text, ReplyTo?.Id, clientRef);
-                ReplyTo = null;
-                Draft = "";
+                CompleteCompose(chat.Id, submitted, editing: false);
                 // Без полного Reload (Clear мигает «фантомами»): догоняем after_id, WS дедупится по id.
                 await MergeAfter(chat, afterId: id - 1);
             }
@@ -487,9 +486,9 @@ public partial class ShellViewModel
     }
 
     [RelayCommand] void Reply() { if (SelectedMessage != null) { Editing = null; ReplyTo = SelectedMessage; } }
-    [RelayCommand] void BeginEdit() { if (CanEdit && SelectedMessage != null) { ReplyTo = null; Editing = SelectedMessage; Draft = SelectedMessage.Text; } }
+    [RelayCommand] void BeginEdit() { if (CanEdit && SelectedMessage != null) { if (Editing == null) _beforeEdit = Draft; ReplyTo = null; Editing = SelectedMessage; Draft = SelectedMessage.Text; } }
     [RelayCommand] void ShowForward() { if (CanForward) Overlay = "forward"; }
-    [RelayCommand] void CancelCompose() { ReplyTo = null; Editing = null; }
+    [RelayCommand] void CancelCompose() { if (Editing != null) Draft = _beforeEdit; ReplyTo = null; Editing = null; }
     [RelayCommand] void ToggleMoreReactions() => ShowMoreReactions = !ShowMoreReactions;
 
     partial void OnSelectedMessageChanged(MessageItem? value) => ShowMoreReactions = false;

@@ -33,14 +33,14 @@ public sealed class AvatarBrushConverter : IValueConverter
 {
     static readonly IBrush[] Palette =
     [
-        Solid("#314048"),
-        Solid("#5C6A72"),
-        Solid("#8A4E3A"),
-        Solid("#C4542A"),
-        Solid("#3E515C"),
-        Solid("#6E6248"),
-        Solid("#4A5560"),
-        Solid("#7A8490"),
+        Solid("#52769A"),
+        Solid("#6873A1"),
+        Solid("#B06A59"),
+        Solid("#AD7249"),
+        Solid("#4E8581"),
+        Solid("#96764E"),
+        Solid("#756891"),
+        Solid("#5E8090"),
     ];
 
     static IBrush Solid(string hex) => new SolidColorBrush(Color.Parse(hex));

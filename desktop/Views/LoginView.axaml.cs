@@ -18,6 +18,7 @@ public partial class LoginView : UserControl
         PasswordBox.PasswordChar = _reveal ? '\0' : '•';
         EyeOpen.IsVisible = !_reveal;
         EyeClosed.IsVisible = _reveal;
+        if (sender is Control button) Avalonia.Automation.AutomationProperties.SetName(button, _reveal ? "Скрыть пароль" : "Показать пароль");
         e.Handled = true;
     }
 }

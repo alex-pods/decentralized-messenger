@@ -32,6 +32,8 @@ builder.Services.AddCors(options =>
 // Database
 builder.Services.AddSingleton(new DbConnectionFactory(builder.Configuration["Db"] ?? "messenger.db"));
 
+builder.Services.AddSingleton<ThemesRepository>();
+
 // Repositories
 builder.Services.AddSingleton<IUsersRepository, UsersRepository>();
 builder.Services.AddSingleton<IAvatarsRepository, AvatarsRepository>();
@@ -114,7 +116,7 @@ app.UseMiddleware<SessionAuthenticationMiddleware>();
 
 var dbFactory = app.Services.GetRequiredService<DbConnectionFactory>();
 MigrationRunner.Run(dbFactory);
-await DevSeed.Run(dbFactory);
+if (builder.Configuration["MESSENGER_DEV_SEED"] != "false") await DevSeed.Run(dbFactory);
 
 // Endpoints («ручки»)
 app.MapReactionsEndpoints();
@@ -125,5 +127,6 @@ app.MapPinsEndpoints();
 app.MapAttachmentsEndpoints();
 app.MapChatsEndpoints();
 app.MapAuthEndpoints();
+app.MapThemesEndpoints();
 
 app.Run();

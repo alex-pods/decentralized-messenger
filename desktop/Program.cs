@@ -38,6 +38,8 @@ internal static class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            // Avoid separate native popup windows on macOS, where the message menu can close on opening.
+            .With(new AvaloniaNativePlatformOptions { OverlayPopups = true })
             .WithInterFont()
             .LogToTrace();
 }

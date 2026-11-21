@@ -85,16 +85,27 @@
           </Grid></Border>
           <Border Grid.Row="1" Classes="screen" Margin="0" BorderThickness="0" CornerRadius="0">
             <DockPanel>
-              <Border DockPanel.Dock="Top" Margin="24,0,24,10" Padding="8" CornerRadius="10" Background="{DynamicResource AccentFill}" IsVisible="{Binding HasPins}">
-                <Grid ColumnDefinitions="*,Auto">
-                  <Button Classes="toolbar" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Command="{Binding ShowPinnedCommand}" Background="Transparent" BorderThickness="0">
+              <Border DockPanel.Dock="Top" Padding="12,3" BorderThickness="0,0,0,1"
+                      BorderBrush="{DynamicResource SeparatorBrush}" IsVisible="{Binding HasPins}">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Button Classes="icon small" Width="32" Height="32" VerticalAlignment="Center"
+                          ToolTip.Tip="Все закреплённые сообщения" AutomationProperties.Name="Все закреплённые сообщения"
+                          Command="{Binding ShowPinListCommand}">
+                    <PathIcon Width="16" Height="16" Data="M 1,2 H 4 V 5 H 1 Z M 6,2 H 15 V 4 H 6 Z M 1,7 H 4 V 10 H 1 Z M 6,7 H 15 V 9 H 6 Z M 1,12 H 4 V 15 H 1 Z M 6,12 H 15 V 14 H 6 Z"/>
+                  </Button>
+                  <Button Grid.Column="1" Classes="toolbar" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          Command="{Binding ShowPinnedCommand}" Background="Transparent" BorderThickness="0">
                     <Grid ColumnDefinitions="Auto,*,Auto">
-                      <local:Glyph Data="{StaticResource IcPin}" Width="14" Height="14" StrokeWidth="1.7" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="1" Margin="8,0,8,0" Text="{Binding PinText}" Foreground="{DynamicResource OnFieldBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" VerticalAlignment="Center"/>
+                      <Border Width="2" CornerRadius="1" Background="{DynamicResource AccentBrush}"/>
+                      <StackPanel Grid.Column="1" Margin="8,0" Spacing="1">
+                        <TextBlock Text="{Binding PinScope}" Classes="caption" Foreground="{DynamicResource AccentBrush}"/>
+                        <TextBlock Text="{Binding PinText}" Foreground="{DynamicResource OnFieldBrush}" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                      </StackPanel>
                       <TextBlock Grid.Column="2" Text="{Binding PinCounter}" Classes="caption" VerticalAlignment="Center"/>
                     </Grid>
                   </Button>
-                  <Button Grid.Column="1" Classes="icon small" ToolTip.Tip="Открепить" AutomationProperties.Name="Открепить" Command="{Binding UnpinShownCommand}" IsVisible="{Binding CanManagePins}">
+                  <Button Grid.Column="2" Classes="icon small" ToolTip.Tip="Открепить" AutomationProperties.Name="Открепить"
+                          Command="{Binding UnpinShownCommand}" IsVisible="{Binding CanUnpinShown}">
                     <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
                   </Button>
                 </Grid>
@@ -225,6 +236,29 @@
               <Button Content="Скрыть чат у себя" Command="{Binding HideChatCommand}" Margin="0,0,8,8"/>
               <Button Classes="danger" Content="Выйти из группы" Click="OnLeaveGroup" IsVisible="{Binding IsGroup}" Margin="0,0,0,8"/>
             </WrapPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="10"
+                      IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=pins}">
+            <TextBlock Text="Личные закрепы хранятся только на этом устройстве." TextWrapping="Wrap" Classes="secondary"/>
+            <TextBlock Text="В этом чате пока нет закреплённых сообщений." TextWrapping="Wrap" IsVisible="{Binding PinListEmpty}"/>
+              <ItemsControl ItemsSource="{Binding PinList}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Classes="group" Padding="10" Margin="0,0,0,8">
+                      <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding Scope}" Classes="caption"/>
+                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                        <WrapPanel>
+                          <Button Content="Перейти к сообщению" Margin="0,0,8,4"
+                                  Command="{Binding DataContext.OpenPinFromListCommand, ElementName=Root}" CommandParameter="{Binding}"/>
+                          <Button Content="Открепить" Margin="0,0,0,4" IsVisible="{Binding CanRemove}"
+                                  Command="{Binding DataContext.RemovePinFromListCommand, ElementName=Root}" CommandParameter="{Binding}"/>
+                        </WrapPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+          </StackPanel>
             <views:ForwardPicker DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>
             <DockPanel IsVisible="{Binding ShowPeopleSearch}">
               <views:PeopleSearch DockPanel.Dock="Top"/>

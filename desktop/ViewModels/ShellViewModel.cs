@@ -87,6 +87,8 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanForward))]
     [NotifyPropertyChangedFor(nameof(CanDeleteEveryone))]
     [NotifyPropertyChangedFor(nameof(CanPin))]
+    [NotifyPropertyChangedFor(nameof(CanPinLocally))]
+    [NotifyPropertyChangedFor(nameof(LocalPinActionLabel))]
     [NotifyPropertyChangedFor(nameof(SelectedIsPinned))]
     [NotifyPropertyChangedFor(nameof(PinActionLabel))]
     [NotifyPropertyChangedFor(nameof(HasMessageActions))]
@@ -131,6 +133,7 @@ public partial class ShellViewModel : ObservableObject
         "members" => "Участники",
         "profile" => "Профиль",
         "forward" => "Переслать в…",
+        "pins" => "Закреплённые сообщения",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;
@@ -142,9 +145,12 @@ public partial class ShellViewModel : ObservableObject
     public bool CanPin => CanManagePins && SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public bool SelectedIsPinned => SelectedMessage != null && _pins.Any(p => p.MessageId == SelectedMessage.Id);
     public string PinActionLabel => SelectedIsPinned ? "Открепить" : "Закрепить";
-    public bool HasPins => _pins.Count > 0;
-    public string PinText => _pins.Count == 0 ? "" : _pins[Math.Clamp(_pinIndex, 0, _pins.Count - 1)].Text;
-    public string PinCounter => _pins.Count <= 1 ? "" : $"{Math.Clamp(_pinIndex, 0, _pins.Count - 1) + 1}/{_pins.Count}";
+    PinListItem? ShownPin => _stripPins.Count == 0 ? null : _stripPins[Math.Clamp(_pinIndex, 0, _stripPins.Count - 1)];
+    public bool HasPins => ShownPin != null;
+    public string PinText => ShownPin is { } pin ? MessageMapper.Trim(pin.Text, 120) : "";
+    public string PinScope => ShownPin?.Local == true ? "Закреплено для себя" : "Закреплённое сообщение";
+    public bool CanUnpinShown => ShownPin is { } pin && (pin.Local || CanManagePins);
+    public string PinCounter => _stripPins.Count <= 1 ? "" : $"{_pinIndex + 1}/{_stripPins.Count}";
     public string SelectionHint => SelectedMessage is null ? "" : "Выбрано сообщение";
 
     public event Action<MessageItem>? ScrollToMessage;

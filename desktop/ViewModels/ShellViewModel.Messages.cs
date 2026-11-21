@@ -260,7 +260,7 @@ public partial class ShellViewModel
             _pins.Add(new PinItem
             {
                 MessageId = pin.MessageId,
-                Text = MessageMapper.Trim(MessageMapper.Body(pin.Message), 90)
+                Text = MessageMapper.Body(pin.Message)
             });
         }
         _pinIndex = 0;
@@ -270,17 +270,26 @@ public partial class ShellViewModel
     void ClearPins()
     {
         _pins.Clear();
+        _stripPins.Clear();
         _pinIndex = 0;
         NotifyPins();
     }
 
     void NotifyPins()
     {
-        OnPropertyChanged(nameof(HasPins));
-        OnPropertyChanged(nameof(PinText));
-        OnPropertyChanged(nameof(PinCounter));
+
         OnPropertyChanged(nameof(SelectedIsPinned));
         OnPropertyChanged(nameof(PinActionLabel));
+        RefreshPinList();
+    }
+
+    void NotifyPinStrip()
+    {
+        OnPropertyChanged(nameof(HasPins));
+        OnPropertyChanged(nameof(PinText));
+        OnPropertyChanged(nameof(PinScope));
+        OnPropertyChanged(nameof(PinCounter));
+        OnPropertyChanged(nameof(CanUnpinShown));
     }
 
     void UpsertPin(MessageDto message)
@@ -289,7 +298,7 @@ public partial class ShellViewModel
         var item = new PinItem
         {
             MessageId = message.Id,
-            Text = MessageMapper.Trim(MessageMapper.Body(message), 90)
+            Text = MessageMapper.Body(message)
         };
         var at = _pins.FindIndex(p => p.MessageId < message.Id);
         if (at < 0) _pins.Add(item);
@@ -311,28 +320,12 @@ public partial class ShellViewModel
     /// </summary>
     public void SyncPinToVisible(MessageItem lastVisible)
     {
-        if (_pins.Count == 0) return;
-        if (Environment.TickCount64 < _pinSyncQuietUntil) return;
-
-        var lastIdx = Messages.IndexOf(lastVisible);
-        if (lastIdx < 0) return;
-
-        var pinMsgIndices = new int[_pins.Count];
-        for (var i = 0; i < _pins.Count; i++)
-        {
-            pinMsgIndices[i] = -1;
-            for (var m = 0; m < Messages.Count; m++)
-            {
-                if (Messages[m].Id != _pins[i].MessageId) continue;
-                pinMsgIndices[i] = m;
-                break;
-            }
-        }
-
-        var next = PinStrip.IndexForScroll(lastIdx, pinMsgIndices);
+        if (_stripPins.Count == 0 || Environment.TickCount64 < _pinSyncQuietUntil) return;
+        var next = _stripPins.FindIndex(pin => pin.MessageId <= lastVisible.Id);
+        if (next < 0) next = _stripPins.Count - 1;
         if (next == _pinIndex) return;
         _pinIndex = next;
-        NotifyPins();
+        NotifyPinStrip();
     }
 
     /// <summary>
@@ -343,12 +336,14 @@ public partial class ShellViewModel
     [RelayCommand]
     async Task ShowPinned()
     {
-        var chat = SelectedChat;
-        if (chat == null || _pins.Count == 0) return;
+        if (SelectedChat is { } chat && ShownPin is { } pin)
+            await JumpToPin(chat, pin.MessageId);
+    }
+
+    async Task JumpToPin(ChatItem chat, long messageId)
+    {
         var gen = _openGen;
         var jump = ++_pinJump;
-        var index = Math.Clamp(_pinIndex, 0, _pins.Count - 1);
-        var messageId = _pins[index].MessageId;
         Error = null;
 
         if (Messages.Any(m => m.Id == messageId))
@@ -433,10 +428,10 @@ public partial class ShellViewModel
             try { ScrollToMessage?.Invoke(target); }
             catch { /* список мог уже смениться */ }
         }, DispatcherPriority.Background);
-        var at = _pins.FindIndex(p => p.MessageId == messageId);
-        if (at >= 0 && _pins.Count > 1)
-            _pinIndex = (at + 1) % _pins.Count;
-        NotifyPins();
+        var at = _stripPins.FindIndex(p => p.MessageId == messageId);
+        if (at >= 0 && _stripPins.Count > 1)
+            _pinIndex = (at + 1) % _stripPins.Count;
+        NotifyPinStrip();
     }
 
     bool SameJump(int gen, int jump, long chatId) =>
@@ -445,16 +440,8 @@ public partial class ShellViewModel
     [RelayCommand]
     async Task UnpinShown()
     {
-        var chat = SelectedChat;
-        if (chat == null || !CanManagePins || _pins.Count == 0) return;
-        var pin = _pins[Math.Clamp(_pinIndex, 0, _pins.Count - 1)];
-        try
-        {
-            Error = null;
-            await _api.UnpinMessage(chat.Id, pin.MessageId);
-            RemovePin(pin.MessageId);
-        }
-        catch (Exception ex) { Error = Friendly(ex); }
+        if (ShownPin is { } pin && CanUnpinShown)
+            await RemovePinFromList(pin);
     }
 
     [RelayCommand]
@@ -543,6 +530,7 @@ public partial class ShellViewModel
         {
             Error = null;
             await _api.DeleteMessage(id, everyone);
+            if (SelectedChat is { } deletingChat) UpdateLocalPin(deletingChat.Id, id, null);
             SelectedMessage = null;
             await ReloadMessages();
         }
@@ -558,13 +546,14 @@ public partial class ShellViewModel
                 Incoming(e.ChatId, e.Message, unread: e.Message.SenderId != _me.Id);
                 break;
             case "message_edited" when e.Message != null:
+                UpdateLocalPin(e.Message.ChatId, e.Message.Id, MessageMapper.Body(e.Message));
                 Incoming(e.ChatId, e.Message, unread: false);
                 if (e.ChatId == SelectedChat?.Id)
                 {
                     var pinned = _pins.FirstOrDefault(p => p.MessageId == e.Message.Id);
                     if (pinned != null)
                     {
-                        pinned.Text = MessageMapper.Trim(MessageMapper.Body(e.Message), 90);
+                        pinned.Text = MessageMapper.Body(e.Message);
                         NotifyPins();
                     }
                 }
@@ -576,6 +565,8 @@ public partial class ShellViewModel
                 RemovePin(unpinned);
                 break;
             case "message_deleted":
+                if (e.ChatId is { } deletedChat && e.MessageId is { } deletedId)
+                    UpdateLocalPin(deletedChat, deletedId, null);
                 if (e.ForEveryone != false && e.MessageId is { } dropped)
                     RemovePin(dropped);
                 if (e.ForEveryone == false && e.ChatId == SelectedChat?.Id && e.MessageId is { } hid)

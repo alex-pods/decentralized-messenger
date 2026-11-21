@@ -11,6 +11,7 @@ public partial class ShellViewModel
         ReplyTo = null;
         Editing = null;
         RestoreDraft(value);
+        if (Overlay == "pins") Overlay = "";
         ClearPins();
         if (value == null)
         {

@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Presenters;
+
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -194,7 +196,7 @@ public partial class ShellView : UserControl
     void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         // Offset не менялся (только extent) — тоже синхронизируем после догрузки истории.
-        SyncPinFromViewport();
+        Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
     }
 
     void SyncPinFromViewport()
@@ -205,17 +207,18 @@ public partial class ShellView : UserControl
 
         MessageItem? lastVisible = null;
         var bestBottom = double.MinValue;
-        var viewH = list.Bounds.Height;
-        foreach (var container in list.GetRealizedContainers())
+        var viewport = _logScroll?.FindDescendantOfType<ScrollContentPresenter>();
+        if (viewport == null) return;
+        var viewH = viewport.Bounds.Height;
+        foreach (var c in list.GetVisualDescendants().OfType<ListBoxItem>())
         {
-            if (container is not Control c) continue;
-            var topLeft = c.TranslatePoint(new Point(0, 0), list);
+            var topLeft = c.TranslatePoint(new Point(0, 0), viewport);
             if (topLeft == null) continue;
             var y = topLeft.Value.Y;
             var bottom = y + c.Bounds.Height;
             if (bottom <= 0 || y >= viewH) continue;
             if (bottom <= bestBottom) continue;
-            var idx = list.IndexFromContainer(container);
+            var idx = list.IndexFromContainer(c);
             if (idx < 0 || idx >= _vm.Messages.Count) continue;
             bestBottom = bottom;
             lastVisible = _vm.Messages[idx];

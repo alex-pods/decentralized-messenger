@@ -260,6 +260,8 @@ public partial class ShellViewModel
             _pins.Add(new PinItem
             {
                 MessageId = pin.MessageId,
+                SenderId = pin.Message.SenderId,
+                SentAt = DateTimeOffset.TryParse(pin.Message.SentAt, out var sentAt) ? sentAt : null,
                 Text = MessageMapper.Body(pin.Message)
             });
         }
@@ -298,6 +300,8 @@ public partial class ShellViewModel
         var item = new PinItem
         {
             MessageId = message.Id,
+            SenderId = message.SenderId,
+            SentAt = DateTimeOffset.TryParse(message.SentAt, out var sentAt) ? sentAt : null,
             Text = MessageMapper.Body(message)
         };
         var at = _pins.FindIndex(p => p.MessageId < message.Id);
@@ -464,6 +468,8 @@ public partial class ShellViewModel
                 UpsertPin(new MessageDto
                 {
                     Id = message.Id,
+                    SenderId = message.SenderId,
+                    SentAt = message.SentAt?.ToString("O"),
                     Text = message.Text,
                     ContentState = message.IsDeleted ? "deleted" : "stored"
                 });

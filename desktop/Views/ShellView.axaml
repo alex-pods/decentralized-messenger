@@ -61,7 +61,8 @@
         </DockPanel>
       </Border>
       <Border x:Name="ScreenBay" Classes="screenbay deck" Grid.Column="1">
-        <Grid RowDefinitions="Auto,*,Auto">
+        <Panel>
+        <Grid RowDefinitions="Auto,*,Auto" IsVisible="{Binding !ShowingPinnedMessages}">
           <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="84" Margin="28,0" PointerPressed="OnDragAreaPressed">
             <Button x:Name="BackToChats" Classes="icon" Click="OnShowChats" IsVisible="False" ToolTip.Tip="К чатам">
               <local:Glyph Data="{StaticResource IcReply}"/>
@@ -88,7 +89,7 @@
               <Border DockPanel.Dock="Top" Padding="12,3" BorderThickness="0,0,0,1"
                       BorderBrush="{DynamicResource SeparatorBrush}" IsVisible="{Binding HasPins}">
                 <Grid ColumnDefinitions="Auto,*,Auto">
-                  <Button Classes="icon small" Width="32" Height="32" VerticalAlignment="Center"
+                  <Button x:Name="OpenPinnedMessages" Classes="icon small" Width="32" Height="32" VerticalAlignment="Center"
                           ToolTip.Tip="Все закреплённые сообщения" AutomationProperties.Name="Все закреплённые сообщения"
                           Command="{Binding ShowPinListCommand}">
                     <PathIcon Width="16" Height="16" Data="M 1,2 H 4 V 5 H 1 Z M 6,2 H 15 V 4 H 6 Z M 1,7 H 4 V 10 H 1 Z M 6,7 H 15 V 9 H 6 Z M 1,12 H 4 V 15 H 1 Z M 6,12 H 15 V 14 H 6 Z"/>
@@ -211,6 +212,66 @@
             </Border>
           </StackPanel>
         </Grid>
+        <Grid RowDefinitions="Auto,*" IsVisible="{Binding ShowingPinnedMessages}">
+          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*" MinHeight="84" Margin="24,0">
+              <Button x:Name="BackFromPinnedMessages" Classes="icon" Margin="0,0,12,0"
+                      VerticalAlignment="Center" ToolTip.Tip="Назад в чат" AutomationProperties.Name="Назад в чат"
+                      Command="{Binding ClosePinListCommand}">
+                <PathIcon Width="18" Height="18" Data="M 8,2 L 9.5,3.5 L 4,9 H 17 V 11 H 4 L 9.5,16.5 L 8,18 L 0,10 Z"/>
+              </Button>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="Закреплённые сообщения" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding ChatTitle}" Classes="caption" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Grid Grid.Row="1">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+              <ItemsControl ItemsSource="{Binding PinList}" Margin="24,18">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="{Binding Mine, Converter={StaticResource Align}}" MaxWidth="600" Margin="0,0,0,9">
+                      <Button Padding="0" Background="Transparent" BorderThickness="0"
+                              HorizontalContentAlignment="Stretch"
+                              ToolTip.Tip="Перейти к сообщению в чате"
+                              Command="{Binding DataContext.OpenPinFromListCommand, ElementName=Root}" CommandParameter="{Binding}">
+                        <Border Classes="bubble" Classes.mine="{Binding Mine}" Padding="13,9">
+                          <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="Auto,*">
+                              <TextBlock Text="{Binding Sender}" FontSize="13" FontWeight="SemiBold"
+                                         Foreground="{DynamicResource AccentBrush}" MaxWidth="120" Margin="0,0,8,0"
+                                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                         IsVisible="{Binding Sender, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                              <TextBlock Grid.Column="1" Text="{Binding Scope}" Classes="caption"
+                                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                            <local:MessageTextPanel>
+                              <TextBlock Text="{Binding Text}" FontSize="15" LineHeight="21" TextWrapping="Wrap"/>
+                              <TextBlock Text="{Binding Time}" Classes="caption" FontSize="11"
+                                         IsVisible="{Binding Time, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                            </local:MessageTextPanel>
+                          </StackPanel>
+                        </Border>
+                      </Button>
+                      <Button Grid.Column="1" Classes="icon small" VerticalAlignment="Center" Margin="5,0,0,0"
+                              ToolTip.Tip="Открепить сообщение" AutomationProperties.Name="Открепить сообщение"
+                              IsVisible="{Binding CanRemove}"
+                              Command="{Binding DataContext.RemovePinFromListCommand, ElementName=Root}" CommandParameter="{Binding}">
+                        <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
+                      </Button>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+            <TextBlock Text="В этом чате пока нет закреплённых сообщений." Classes="secondary"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
+                       TextAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding PinListEmpty}"/>
+          </Grid>
+        </Grid>
+        </Panel>
       </Border>
     </Grid>
     <Border Classes="scrim" Background="{DynamicResource DimBrush}" IsVisible="{Binding OverlayOpen}">
@@ -236,29 +297,6 @@
               <Button Content="Скрыть чат у себя" Command="{Binding HideChatCommand}" Margin="0,0,8,8"/>
               <Button Classes="danger" Content="Выйти из группы" Click="OnLeaveGroup" IsVisible="{Binding IsGroup}" Margin="0,0,0,8"/>
             </WrapPanel>
-          <StackPanel DockPanel.Dock="Top" Spacing="10"
-                      IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=pins}">
-            <TextBlock Text="Личные закрепы хранятся только на этом устройстве." TextWrapping="Wrap" Classes="secondary"/>
-            <TextBlock Text="В этом чате пока нет закреплённых сообщений." TextWrapping="Wrap" IsVisible="{Binding PinListEmpty}"/>
-              <ItemsControl ItemsSource="{Binding PinList}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border Classes="group" Padding="10" Margin="0,0,0,8">
-                      <StackPanel Spacing="8">
-                        <TextBlock Text="{Binding Scope}" Classes="caption"/>
-                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
-                        <WrapPanel>
-                          <Button Content="Перейти к сообщению" Margin="0,0,8,4"
-                                  Command="{Binding DataContext.OpenPinFromListCommand, ElementName=Root}" CommandParameter="{Binding}"/>
-                          <Button Content="Открепить" Margin="0,0,0,4" IsVisible="{Binding CanRemove}"
-                                  Command="{Binding DataContext.RemovePinFromListCommand, ElementName=Root}" CommandParameter="{Binding}"/>
-                        </WrapPanel>
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-          </StackPanel>
             <views:ForwardPicker DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>
             <DockPanel IsVisible="{Binding ShowPeopleSearch}">
               <views:PeopleSearch DockPanel.Dock="Top"/>

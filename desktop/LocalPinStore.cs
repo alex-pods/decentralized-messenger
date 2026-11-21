@@ -7,7 +7,7 @@ namespace MessengerDesktop;
 /// <summary>Личные закрепы: отдельный файл для пары сервер/пользователь. Сеть не используется.</summary>
 public static class LocalPinStore
 {
-    public sealed record Entry(long ChatId, long MessageId, string Text);
+    public sealed record Entry(long ChatId, long MessageId, string Text, long? SenderId = null, DateTimeOffset? SentAt = null);
 
     static string FilePath(string server, long userId)
     {

@@ -133,7 +133,6 @@ public partial class ShellViewModel : ObservableObject
         "members" => "Участники",
         "profile" => "Профиль",
         "forward" => "Переслать в…",
-        "pins" => "Закреплённые сообщения",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;

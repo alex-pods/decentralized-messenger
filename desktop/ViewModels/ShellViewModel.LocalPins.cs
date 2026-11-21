@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace MessengerDesktop;
 
-public sealed record PinListItem(long MessageId, string Text, bool Local, bool CanRemove = true)
+public sealed record PinListItem(long MessageId, string Text, bool Local, bool CanRemove,
+    bool Mine, string? Sender, string? Time)
 {
     public string Scope => Local ? "Только для меня · на этом устройстве" : "Для всех";
 }
@@ -12,6 +14,8 @@ public partial class ShellViewModel
 {
     private readonly List<PinListItem> _stripPins = new();
     public ObservableCollection<PinListItem> PinList { get; } = new();
+    [ObservableProperty] private bool _showingPinnedMessages;
+
     public bool PinListEmpty => PinList.Count == 0;
     public bool CanPinLocally => HasChat && SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public string LocalPinActionLabel => SelectedChat != null && SelectedMessage != null &&
@@ -34,9 +38,16 @@ public partial class ShellViewModel
         PinList.Clear();
         if (SelectedChat is { } chat)
         {
-            var shared = _pins.Select(p => new PinListItem(p.MessageId, p.Text, false, CanManagePins));
+            var loaded = Messages.Where(message => !message.IsDeleted)
+                .ToDictionary(message => message.Id);
+            var shared = _pins.Select(p => MakePin(p.MessageId, p.Text, false, CanManagePins, p.SenderId, p.SentAt));
             var local = ReadLocalPins().Where(p => p.ChatId == chat.Id)
-                .Select(p => new PinListItem(p.MessageId, p.Text, true));
+                .Select(p =>
+                {
+                    loaded.TryGetValue(p.MessageId, out var message);
+                    return MakePin(p.MessageId, p.Text, true, true,
+                        p.SenderId ?? message?.SenderId, p.SentAt ?? message?.SentAt);
+                });
             foreach (var pin in shared.Concat(local).OrderByDescending(p => p.MessageId)) PinList.Add(pin);
         }
         _stripPins.Clear();
@@ -48,6 +59,14 @@ public partial class ShellViewModel
         OnPropertyChanged(nameof(LocalPinActionLabel));
     }
 
+    PinListItem MakePin(long id, string text, bool local, bool canRemove, long? senderId, DateTimeOffset? sentAt)
+    {
+        var mine = senderId == _me.Id;
+        var name = senderId is { } sender && !mine && IsGroup && _names.TryGetValue(sender, out var knownName)
+            ? knownName : null;
+        return new(id, text, local, canRemove, mine, name, sentAt?.ToLocalTime().ToString("HH:mm"));
+    }
+
     void UpdateLocalPin(long chatId, long messageId, string? text)
     {
         try
@@ -56,7 +75,7 @@ public partial class ShellViewModel
             var index = pins.FindIndex(p => p.ChatId == chatId && p.MessageId == messageId);
             if (index < 0) return;
             if (text == null) pins.RemoveAt(index);
-            else pins[index] = new(chatId, messageId, text);
+            else pins[index] = pins[index] with { Text = text };
             LocalPinStore.Save(_api.ServerBase, _me.Id, pins);
             RefreshPinList();
         }
@@ -68,8 +87,11 @@ public partial class ShellViewModel
     {
         if (!HasChat) return;
         RefreshPinList();
-        Overlay = "pins";
+        ShowingPinnedMessages = true;
     }
+
+    [RelayCommand]
+    void ClosePinList() => ShowingPinnedMessages = false;
 
     [RelayCommand]
     void ToggleLocalPin()
@@ -81,7 +103,7 @@ public partial class ShellViewModel
             var pins = LocalPinStore.Load(_api.ServerBase, _me.Id);
             var added = pins.RemoveAll(p => p.ChatId == chat.Id && p.MessageId == message.Id) == 0;
             if (added)
-                pins.Add(new(chat.Id, message.Id, message.Text));
+                pins.Add(new(chat.Id, message.Id, message.Text, message.SenderId, message.SentAt));
             LocalPinStore.Save(_api.ServerBase, _me.Id, pins);
             RefreshPinList();
             if (added && _stripPins.FirstOrDefault()?.MessageId == message.Id)
@@ -97,7 +119,7 @@ public partial class ShellViewModel
     async Task OpenPinFromList(PinListItem pin)
     {
         if (SelectedChat is not { } chat) return;
-        Overlay = "";
+        ClosePinList();
         await JumpToPin(chat, pin.MessageId);
     }
 

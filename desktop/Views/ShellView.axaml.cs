@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Presenters;
+
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -46,6 +48,7 @@ public partial class ShellView : UserControl
         if (e.Key == Key.Escape && _vm != null)
         {
             if (_vm.OverlayOpen) _vm.CloseOverlayCommand.Execute(null);
+            else if (_vm.ShowingPinnedMessages) _vm.ClosePinListCommand.Execute(null);
             else if (_vm.HasComposeHint) _vm.CancelComposeCommand.Execute(null);
             else _vm.SelectedMessage = null;
             e.Handled = true;
@@ -96,6 +99,14 @@ public partial class ShellView : UserControl
 
     void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(ShellViewModel.ShowingPinnedMessages))
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_vm?.ShowingPinnedMessages == true) BackFromPinnedMessages.Focus();
+                else if (OpenPinnedMessages.IsEffectivelyVisible) OpenPinnedMessages.Focus();
+            }, DispatcherPriority.Loaded);
+        }
         if (e.PropertyName == nameof(ShellViewModel.OverlayOpen))
         {
             Dispatcher.UIThread.Post(() =>
@@ -194,7 +205,7 @@ public partial class ShellView : UserControl
     void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         // Offset не менялся (только extent) — тоже синхронизируем после догрузки истории.
-        SyncPinFromViewport();
+        Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
     }
 
     void SyncPinFromViewport()
@@ -205,17 +216,18 @@ public partial class ShellView : UserControl
 
         MessageItem? lastVisible = null;
         var bestBottom = double.MinValue;
-        var viewH = list.Bounds.Height;
-        foreach (var container in list.GetRealizedContainers())
+        var viewport = _logScroll?.FindDescendantOfType<ScrollContentPresenter>();
+        if (viewport == null) return;
+        var viewH = viewport.Bounds.Height;
+        foreach (var c in list.GetVisualDescendants().OfType<ListBoxItem>())
         {
-            if (container is not Control c) continue;
-            var topLeft = c.TranslatePoint(new Point(0, 0), list);
+            var topLeft = c.TranslatePoint(new Point(0, 0), viewport);
             if (topLeft == null) continue;
             var y = topLeft.Value.Y;
             var bottom = y + c.Bounds.Height;
             if (bottom <= 0 || y >= viewH) continue;
             if (bottom <= bestBottom) continue;
-            var idx = list.IndexFromContainer(container);
+            var idx = list.IndexFromContainer(c);
             if (idx < 0 || idx >= _vm.Messages.Count) continue;
             bestBottom = bottom;
             lastVisible = _vm.Messages[idx];
@@ -261,20 +273,12 @@ public partial class ShellView : UserControl
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.Source is not Control src) return;
-        if (src.FindAncestorOfType<ScrollBar>() != null) return;
-
-        bool isBubble = false;
         for (Control? v = src; v != null; v = v.GetVisualParent() as Control)
         {
-            if (v is Border b && b.Classes.Contains("bubble")) 
-            { 
-                isBubble = true; 
-                break; 
-            }
-            if (v is ListBoxItem) break; // дошли до строки, пузырь не найден
+            if (v is Button or ScrollBar || v is Border b && b.Classes.Contains("bubble"))
+                return;
+            if (v is ListBoxItem) break;
         }
-
-        if (isBubble) return;
 
         if (DataContext is ShellViewModel vm)
             vm.SelectedMessage = null;

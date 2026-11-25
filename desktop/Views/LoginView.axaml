@@ -5,7 +5,7 @@
              x:Class="MessengerDesktop.Views.LoginView">
 
 
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+  <ScrollViewer Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled" AllowAutoHide="False" ClipToBounds="True">
     <Grid Margin="32,50" RowDefinitions="Auto,*">
       <TextBlock Text="Messenger" FontWeight="SemiBold" FontSize="18" Margin="0,0,0,48"/>
       <Border Grid.Row="1" MaxWidth="360" HorizontalAlignment="Stretch" VerticalAlignment="Center">

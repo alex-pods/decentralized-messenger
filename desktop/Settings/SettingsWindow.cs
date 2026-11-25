@@ -31,6 +31,7 @@ public sealed partial class SettingsWindow : Window
     }
 
     public SettingsWindow() => InitializeComponent();
+    void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => Views.MainWindow.DragFrom(this, e);
 
     public SettingsWindow(ShellViewModel vm, string? section = null) : this()
     {
@@ -59,6 +60,7 @@ public sealed partial class SettingsWindow : Window
         };
         TagSearch.IsCheckedChanged += async (_, _) => await ChangeTagSearch();
         Done.Click += (_, _) => Close();
+        CloseSettings.Click += (_, _) => Close();
         Appearance.Click += async (_, _) =>
         {
             _appearanceOpen = true;

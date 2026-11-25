@@ -63,11 +63,30 @@ public static partial class Preview
             vm.ActivateMessage(message);
         });
         await Until(() => vm.Messages.First().Chips.Any(c => c.Emoji == "🔥" && c.Mine), "Double click reaction failed");
+        var log = shell.FindControl<ListBox>("Log")!;
+        var menuMessage = await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var item = vm.Messages.Last(m => !m.IsDeleted);
+            log.ScrollIntoView(item);
+            return item.Id;
+        });
+        Button? menuButton = null;
+        await Until(() =>
+        {
+            menuButton = log.GetVisualDescendants().OfType<Button>().FirstOrDefault(b =>
+                b.Classes.Contains("messageMenu") && b.IsEffectivelyVisible && b.Bounds.Width > 0 &&
+                b.DataContext is MessageItem item && item.Id == menuMessage);
+            return menuButton != null;
+        }, "Scrolled message actions did not appear");
+        var messageButton = menuButton!;
+        Point MenuCenter() => messageButton.TranslatePoint(new Point(messageButton.Bounds.Width / 2, messageButton.Bounds.Height / 2), window)!.Value;
+        await Dispatcher.UIThread.InvokeAsync(() => messageButton.Focus(NavigationMethod.Tab));
+        await Until(() => window.InputHitTest(MenuCenter()) is Visual hit &&
+                         (hit == messageButton || hit.FindAncestorOfType<Button>() == messageButton), "Message actions are outside the clickable viewport");
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            var messageButton = shell.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("messageMenu"));
             using var pointer = new Pointer(42, PointerType.Mouse, true);
-            var position = messageButton.TranslatePoint(new Point(15, 15), window)!.Value;
+            var position = MenuCenter();
             messageButton.RaiseEvent(new PointerPressedEventArgs(messageButton, pointer, window, position, 1,
                 new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
             messageButton.RaiseEvent(new PointerReleasedEventArgs(messageButton, pointer, window, position, 2,

@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -34,6 +36,17 @@ public static partial class Preview
                 Expect(contact.FindControl<Button>("WriteMessage")!.IsEnabled, "Loaded contact cannot start a conversation");
             });
             await Task.Delay(120);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var profile = contact.GetVisualDescendants().OfType<ScrollContentPresenter>().Single();
+                foreach (var name in new[] { "PersonName", "Activity", "Username", "Biography" })
+                {
+                    var text = contact.FindControl<TextBlock>(name)!;
+                    var origin = text.TranslatePoint(new Point(), profile)!.Value;
+                    Expect(origin.X >= -.5 && origin.X + text.Bounds.Width <= profile.Bounds.Width + .5,
+                        $"Contact field {name} runs outside the profile viewport at {width}");
+                }
+            });
             await Shot(contact, "mvp-contact-" + suffix);
             await Dispatcher.UIThread.InvokeAsync(() => contact.FindControl<Button>("WriteMessage")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
             await Until(() => !window.OwnedWindows.OfType<UserProfileWindow>().Any(), "Write message did not close contact profile");

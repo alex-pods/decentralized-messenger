@@ -52,6 +52,7 @@ public static partial class Preview
         await Until(() => lifetime.Windows.OfType<SettingsWindow>().Any(), "Settings did not open");
         await Dispatcher.UIThread.InvokeAsync(() => Press(window, window));
         await Until(() => !lifetime.Windows.OfType<SettingsWindow>().Any(), "Owner click did not dismiss settings");
+        await AuditForwarding(window, shell, vm, api);
 
         using var guest = new MessengerClient(api.ServerBase);
         var tag = "audit" + Guid.NewGuid().ToString("N")[..8];
@@ -105,6 +106,95 @@ public static partial class Preview
         await Shot(window, "audit-group-activity-details");
         Console.WriteLine("PASS native input routing: outside dismissal, keyboard search, tag privacy and debouncing");
         Console.WriteLine("PASS group activity: persisted join/leave/removal, duplicate invite ignored, live update and former-member access denied");
+    }
+
+    static async Task AuditForwarding(Window window, ShellView shell, ShellViewModel vm, MessengerClient api)
+    {
+        var panel = shell.FindControl<Control>("ForwardPanel")!;
+        var search = panel.FindControl<TextBox>("DestinationSearch")!;
+        var recipients = panel.FindControl<ListBox>("Destinations")!;
+        var send = panel.FindControl<Button>("SendForward")!;
+        var empty = panel.FindControl<TextBlock>("NoResults")!;
+        var sourceChat = await Dispatcher.UIThread.InvokeAsync(() => vm.Chats.First(chat => chat.IsGroup));
+        await Dispatcher.UIThread.InvokeAsync(() => vm.SelectedChat = sourceChat);
+        await Until(() => vm.Messages.Any(message => !message.IsDeleted) && Equals(vm.SelectedChat, sourceChat),
+            "No source message for forwarding");
+        var target = await Dispatcher.UIThread.InvokeAsync(() => vm.Chats.First(chat => chat.Title.StartsWith("Максим")));
+        var before = await api.GetMessages(target.Id);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.SelectedMessage = vm.Messages.First(message => !message.IsDeleted && !message.IsNotStored);
+            vm.ShowForwardCommand.Execute(null);
+            search.Text = "неизвестный получатель";
+        });
+        await Until(() => empty.IsEffectivelyVisible && !send.IsEnabled, "Empty result still allows sending");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            search.Text = "ОРЛОВ Максим";
+            search.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+        });
+        await Until(() => recipients.SelectedItem == target && send.IsEnabled, "Keyboard search did not select the correct recipient");
+        Expect((await api.GetMessages(target.Id)).Count == before.Count, "Selecting the recipient sent a message");
+
+        foreach (var dark in new[] { false, true })
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Resize(window, 360);
+                window.Height = 600;
+                Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[dark ? 1 : 0]);
+            });
+            await Until(() => send.IsEffectivelyVisible && send.Bounds.Height >= 32, "Send action is missing in the compact picker");
+            await Shot(window, $"audit-forward-selected-{(dark ? "dark" : "light")}-360");
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.CloseOverlayCommand.Execute(null);
+            vm.ShowForwardCommand.Execute(null);
+        });
+        await Until(() => string.IsNullOrEmpty(search.Text) && recipients.SelectedItem == null,
+            "Reopening retained the old recipient or filter");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            search.Text = "@" + target.Tag;
+            search.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+        });
+        await Until(() => recipients.SelectedItem == target && send.CommandParameter == target,
+            "Tag selection did not bind to the send action");
+        await OnUiAsync(() => vm.ForwardToCommand.ExecuteAsync(send.CommandParameter));
+        var forwarded = (await api.GetMessages(target.Id)).Where(item => item.Id > before.Last().Id).ToArray();
+        Expect(forwarded is [{ ForwardedFrom: not null }], "Expected one forwarded message with attribution");
+        await Until(() => !vm.OverlayOpen, "Forward picker stayed open after confirmation");
+
+        var sidebar = shell.FindControl<Border>("ChatSidebar")!;
+        var back = shell.FindControl<Button>("BackToChats")!;
+        await Dispatcher.UIThread.InvokeAsync(() => back.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)));
+        await Until(() => sidebar.IsEffectivelyVisible, "Back did not reveal compact chat list");
+        await OnUiAsync(() => vm.ReloadChatsCommand.ExecuteAsync(null));
+        await Until(() => sidebar.IsEffectivelyVisible, "A background refresh changed the compact page");
+        var chatList = shell.FindControl<ListBox>("ChatList")!;
+        await Dispatcher.UIThread.InvokeAsync(() => chatList.ScrollIntoView(chatList.SelectedIndex));
+        await Until(() => chatList.ContainerFromIndex(chatList.SelectedIndex) != null,
+            "Active chat did not realize a row in the compact list");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var row = (ListBoxItem)chatList.ContainerFromIndex(chatList.SelectedIndex)!;
+            using var pointer = new Pointer(82, PointerType.Mouse, true);
+            var position = row.TranslatePoint(new Point(10, 10), window)!.Value;
+            var press = new PointerPressedEventArgs(row, pointer, window, position, 1,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None);
+            row.RaiseEvent(new TappedEventArgs(InputElement.TappedEvent, press) { Source = row });
+        });
+        await Until(() => !sidebar.IsEffectivelyVisible, "Clicking the active chat did not reopen the compact conversation");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Resize(window, 1180);
+            window.Height = 780;
+            Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]);
+        });
+        Console.WriteLine("PASS forwarding: select without sending, reopen/reset, multiword and tag lookup, explicit send and attribution");
+        Console.WriteLine("PASS compact navigation: background refresh keeps the chat list open and a tap reopens the active chat");
     }
 
     static async Task AuditEmptyConversation(Window window, ShellView shell, ShellViewModel vm)

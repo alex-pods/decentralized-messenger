@@ -84,6 +84,7 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         Set(bubble, "AccentFill");
         Set(Blend(accent, surface, theme.Dark ? .16 : .08), "QuoteFill");
         Set(theme.Dark ? Color.Parse("#FF9696") : Color.Parse("#A52835"), "DangerBrush");
+        Set(theme.Dark ? Colors.Black : Colors.White, "DangerActionTextBrush");
         Set(Contrast(accent, Colors.Black) > Contrast(accent, Colors.White) ? Colors.Black : Colors.White, "ActionTextBrush");
         Current = theme;
         Changed?.Invoke();

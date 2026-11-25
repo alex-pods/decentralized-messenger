@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
@@ -14,11 +15,21 @@ public partial class UserProfileWindow : Window
     bool _closed;
 
     public UserProfileWindow() => InitializeComponent();
+    void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);
+    void OnProfileSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        var gutter = (double)Application.Current!.FindResource("DialogScrollBarWidth")!;
+        ProfileContent.Width = Math.Max(0, e.NewSize.Width - gutter);
+    }
 
     public UserProfileWindow(ShellViewModel shell, long userId) : this()
     {
         _shell = shell;
         _userId = userId;
+        ErrorText.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty) ErrorText.IsVisible = !string.IsNullOrEmpty(ErrorText.Text);
+        };
         WriteMessage.IsVisible = userId != shell.CurrentUserId;
         Opened += async (_, _) => await LoadProfile();
         Retry.Click += async (_, _) => await LoadProfile();

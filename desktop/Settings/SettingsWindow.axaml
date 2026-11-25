@@ -2,11 +2,14 @@
         xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Settings.SettingsWindow"
         Title="Настройки" Width="520" Height="720" MinWidth="360" MinHeight="420"
-        WindowStartupLocation="CenterOwner" Background="{DynamicResource RaisedBrush}">
+        WindowStartupLocation="CenterOwner" SystemDecorations="BorderOnly" Background="{DynamicResource RaisedBrush}">
   <DockPanel Margin="24">
-    <StackPanel DockPanel.Dock="Top" Spacing="5" Margin="0,0,0,22">
-      <TextBlock Text="Настройки" FontSize="22" FontWeight="SemiBold"/>
-    </StackPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+      <Border Background="Transparent" PointerPressed="OnHeaderPressed">
+        <TextBlock Text="Настройки" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+      </Border>
+      <local:DismissButton x:Name="CloseSettings" Grid.Column="1"/>
+    </Grid>
     <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,18,0,0">
       <TextBlock x:Name="SaveStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding Text, RelativeSource={RelativeSource Self}, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
       <Grid ColumnDefinitions="*,Auto">
@@ -14,13 +17,14 @@
         <Button x:Name="Done" Grid.Column="1" Content="Готово" Classes="primary" Padding="24,10"/>
       </Grid>
     </StackPanel>
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" Margin="0,0,8,0">
+    <ScrollViewer Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                  AllowAutoHide="False" ClipToBounds="True">
       <StackPanel Spacing="22">
         <StackPanel x:Name="PrivacySection" Spacing="10">
           <TextBlock Text="Приватность" FontSize="15" FontWeight="SemiBold"/>
           <TextBlock Text="Поиск по моему тегу"/>
           <ToggleSwitch x:Name="TagSearch" OnContent="Включено" OffContent="Выключено" AutomationProperties.Name="Поиск по моему тегу"/>
-          <TextBlock Text="Разрешить другим находить вас по тегу. Настройка действует на всех ваших устройствах." Classes="secondary" FontSize="13"/>
+          <TextBlock Text="Разрешить другим находить вас по тегу. Настройка действует на всех ваших устройствах." Classes="secondary" FontSize="13" TextWrapping="Wrap"/>
           <TextBlock x:Name="PrivacyStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding Text, RelativeSource={RelativeSource Self}, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
         </StackPanel>
         <Border Height="1" Background="{DynamicResource LineBrush}"/>

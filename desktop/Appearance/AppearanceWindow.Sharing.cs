@@ -12,13 +12,17 @@ public sealed partial class AppearanceWindow
     readonly long? _owner;
     ThemeShare? _remote;
     readonly TextBox _themeLink = new() { Name = "ThemeLink", Watermark = "https://…/themes/…" };
-    readonly TextBlock _exchangeStatus = new() { Name = "ThemeExchangeStatus", TextWrapping = TextWrapping.Wrap, Classes = { "caption" } };
-    readonly Button _updateShared = new() { Content = "Обновить опубликованную", IsVisible = false };
+    readonly TextBlock _exchangeStatus = new() { Name = "ThemeExchangeStatus", TextWrapping = TextWrapping.Wrap, Classes = { "caption" }, IsVisible = false };
+    readonly Button _updateShared = new() { Content = "Обновить опубликованную", Classes = { "secondaryAction" }, IsVisible = false };
     StackPanel _exchange = null!;
 
     Control SharingControls()
     {
         _exchange = new StackPanel { Name = "ThemeSharing", Spacing = 10 };
+        _exchangeStatus.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty) _exchangeStatus.IsVisible = !string.IsNullOrEmpty(_exchangeStatus.Text);
+        };
         _themeLink.TextChanged += (_, _) =>
         {
             if (_remote != null && _themeLink.Text?.Trim().TrimEnd('/') != _api?.ServerBase + "/themes/" + _remote.Id)
@@ -29,9 +33,9 @@ public sealed partial class AppearanceWindow
         };
         _exchange.Children.Add(new TextBlock { Text = "Обмен темами", FontWeight = FontWeight.SemiBold });
         _exchange.Children.Add(new TextBlock { Text = "Файл можно передать напрямую. Ссылка хранит тему на вашем сервере.", Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
-        var actions = new WrapPanel { Orientation = Orientation.Horizontal };
-        var import = new Button { Content = "Импорт файла", Classes = { "secondaryAction" } };
-        var export = new Button { Content = "Экспорт файла", Classes = { "secondaryAction" } };
+        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,*") };
+        var import = new Button { Content = "Импорт файла", Classes = { "secondaryAction" }, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var export = new Button { Content = "Экспорт файла", Classes = { "secondaryAction" }, HorizontalAlignment = HorizontalAlignment.Stretch };
         import.Click += async (_, _) => await Transfer(async () =>
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Импорт темы", AllowMultiple = false,
@@ -51,10 +55,10 @@ public sealed partial class AppearanceWindow
             await using var stream = await file.OpenWriteAsync(); stream.SetLength(0); await stream.WriteAsync(data);
             _exchangeStatus.Text = "Файл темы сохранён.";
         });
+        Grid.SetColumn(export, 2);
         actions.Children.Add(import); actions.Children.Add(export); _exchange.Children.Add(actions);
-        _exchange.Children.Add(_themeLink);
-        var links = new WrapPanel { Orientation = Orientation.Horizontal };
-        var load = new Button { Content = "Открыть ссылку" };
+        var linkInput = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,Auto"), Margin = new Thickness(0, 6, 0, 0) };
+        var load = new Button { Content = "Открыть ссылку", Classes = { "secondaryAction" }, VerticalAlignment = VerticalAlignment.Stretch };
         load.Click += async (_, _) => await Transfer(async () =>
         {
             if (!Uri.TryCreate(_themeLink.Text?.Trim(), UriKind.Absolute, out var uri)) throw new InvalidDataException("Проверьте ссылку.");
@@ -65,7 +69,7 @@ public sealed partial class AppearanceWindow
             Load(share.Theme); ThemeSettings.Apply(share.Theme);
             _exchangeStatus.Text = "Тема открыта в предпросмотре. Можно изменить и сохранить свою копию.";
         });
-        var publish = new Button { Content = "Опубликовать копию", IsEnabled = _api != null };
+        var publish = new Button { Content = "Опубликовать копию", Classes = { "secondaryAction" }, IsEnabled = _api != null };
         publish.Click += async (_, _) => await Transfer(async () =>
         {
             ThemeExchange.Validate(ThemeSettings.Current);
@@ -82,7 +86,7 @@ public sealed partial class AppearanceWindow
                 new { version = _remote.Version, theme = ThemeSettings.Current }, default);
             _exchangeStatus.Text = "Тема обновлена по прежней ссылке.";
         });
-        var copy = new Button { Content = "Копировать ссылку" };
+        var copy = new Button { Content = "Копировать ссылку", Classes = { "secondaryAction" } };
         copy.Click += async (_, _) => await Transfer(async () =>
         {
             if (!Uri.TryCreate(_themeLink.Text?.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != "https")
@@ -90,8 +94,16 @@ public sealed partial class AppearanceWindow
             if (Clipboard == null) throw new InvalidOperationException("Буфер обмена недоступен.");
             await Clipboard.SetTextAsync(uri.AbsoluteUri); _exchangeStatus.Text = "Ссылка скопирована.";
         });
-        foreach (var button in new[] { import, export, load, publish, copy }) button.Margin = new Thickness(0, 0, 8, 8);
-        links.Children.Add(load); links.Children.Add(publish); links.Children.Add(copy);
+        Grid.SetColumn(load, 2);
+        linkInput.Children.Add(_themeLink); linkInput.Children.Add(load); _exchange.Children.Add(linkInput);
+        Avalonia.Automation.AutomationProperties.SetName(_themeLink, "Ссылка на тему");
+        var links = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var button in new[] { publish, copy })
+        {
+            button.Padding = new Thickness(10, 7);
+            button.Margin = new Thickness(0, 0, 8, 4);
+            links.Children.Add(button);
+        }
         _exchange.Children.Add(links); _exchange.Children.Add(_updateShared); _exchange.Children.Add(_exchangeStatus);
         return _exchange;
     }

@@ -175,14 +175,15 @@ public partial class ShellViewModel
     [RelayCommand]
     async Task ForwardTo(ChatItem? target)
     {
-        var source = SelectedMessage;
-        if (target == null || source == null || !CanForward || Busy || _api.AntispamBlocked) return;
+        var source = ForwardSource;
+        if (Overlay != "forward" || target == null || source is not { IsDeleted: false, IsNotStored: false } ||
+            Busy || _api.AntispamBlocked || !Chats.Any(chat => chat.Id == target.Id)) return;
         Busy = true;
         try
         {
             Error = null;
             var id = await _api.ForwardMessage(source.Id, target.Id);
-            Overlay = "";
+            if (ReferenceEquals(ForwardSource, source)) Overlay = "";
             if (SelectedChat?.Id == target.Id) await MergeAfter(target, afterId: id - 1);
             else await ReloadChats();
         }

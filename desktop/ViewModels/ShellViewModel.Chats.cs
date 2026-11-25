@@ -28,8 +28,6 @@ public partial class ShellViewModel
     [RelayCommand]
     async Task ReloadChats()
     {
-        var selected = SelectedChat?.Id;
-        var unread = Chats.Where(c => c.Unread).Select(c => c.Id).ToHashSet();
         List<ChatDto> list;
         try
         {
@@ -45,6 +43,8 @@ public partial class ShellViewModel
         {
             await Ui(() =>
             {
+                var selected = SelectedChat?.Id;
+                var unread = Chats.Where(c => c.Unread).Select(c => c.Id).ToHashSet();
                 _suppress = true;
                 DisposeItems(Chats);
                 foreach (var c in list)

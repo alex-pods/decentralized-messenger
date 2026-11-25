@@ -1,14 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.ForwardPicker" x:Name="Root">
   <StackPanel Spacing="12">
-  <TextBlock Text="Выберите получателя" Classes="secondary"/>
-  <TextBox x:Name="DestinationSearch" Watermark="Найти чат" TextChanged="OnSearchChanged"/>
-  <TextBlock x:Name="NoResults" Text="Чаты не найдены" Classes="caption" IsVisible="False"/>
-  <ListBox x:Name="Destinations" Classes="plain" ItemsSource="{Binding Chats}" MaxHeight="360">
+  <TextBox x:Name="DestinationSearch" Classes="search" Watermark="Поиск получателя" TextChanged="OnSearchChanged"
+           KeyDown="OnSearchKeyDown" AutomationProperties.Name="Поиск получателя">
+    <TextBox.InnerLeftContent>
+      <local:Glyph Data="{StaticResource IcSearch}" Width="16" Height="16" Margin="10,0,0,0" Foreground="{DynamicResource LabelBrush}"/>
+    </TextBox.InnerLeftContent>
+    <TextBox.InnerRightContent>
+      <local:DismissButton x:Name="ClearDestination" Classes="compact" IsVisible="False"
+              Click="OnClearSearch" ToolTip.Tip="Очистить поиск" AutomationProperties.Name="Очистить поиск"/>
+    </TextBox.InnerRightContent>
+  </TextBox>
+  <TextBlock x:Name="NoResults" Classes="secondary" TextWrapping="Wrap" IsVisible="False"/>
+  <ListBox x:Name="Destinations" Classes="recipient" MaxHeight="224" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+           ScrollViewer.AllowAutoHide="False"
+           SelectionChanged="OnRecipientChanged" AutomationProperties.Name="Чаты для пересылки">
     <ListBox.ItemTemplate>
       <DataTemplate>
-        <Button Classes="row" Command="{Binding DataContext.ForwardToCommand, ElementName=Root}" CommandParameter="{Binding}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12">
           <Grid ColumnDefinitions="Auto,*">
-            <Border Classes="avatar" Width="30" Height="30" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
+            <Border Classes="avatar" Width="32" Height="32" ClipToBounds="True" Background="{Binding AvatarColorKey, Converter={StaticResource AvatarBrush}}">
               <Panel>
                 <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
                 <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding ShowInitial}"/>
@@ -17,9 +26,11 @@
             </Border>
             <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
           </Grid>
-        </Button>
       </DataTemplate>
     </ListBox.ItemTemplate>
   </ListBox>
+  <Button x:Name="SendForward" Classes="primary" HorizontalAlignment="Right" Padding="18,8"
+          Content="Переслать" Command="{Binding ForwardToCommand}" CommandParameter="{Binding SelectedItem, ElementName=Destinations}"
+          IsEnabled="False"/>
   </StackPanel>
 </UserControl>

@@ -25,23 +25,24 @@ def main():
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=False)
     repo = Path(__file__).resolve().parents[1]
-    for project in ("backend", "desktop"):
-        subprocess.run(["dotnet", "build", project, "-c", "Release", "--nologo", "-v", "quiet"], cwd=repo, check=True)
-    desktop = repo / "desktop/bin/Release/net8.0/MessengerDesktop.dll"
-    for check in ("--check-preferences", "--check-pins"):
-        subprocess.run(["dotnet", str(desktop), check], cwd=repo, check=True)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     address = f"http://127.0.0.1:{port}"
     with tempfile.TemporaryDirectory(prefix="messenger-ui-check-") as directory:
         temp = Path(directory)
+        for project in ("backend", "desktop"):
+            subprocess.run(["dotnet", "build", project, "-c", "Release", "--nologo", "-v", "quiet",
+                            "-o", str(temp / project)], cwd=repo, check=True)
+        desktop = temp / "desktop/MessengerDesktop.dll"
+        for check in ("--check-preferences", "--check-pins"):
+            subprocess.run(["dotnet", str(desktop), check], cwd=repo, check=True)
         env = {**os.environ, "ASPNETCORE_URLS": address, "Db": str(temp / "check.db"),
                "MESSENGER_FILES": str(temp / "files"), "MESSENGER_DEV_SEED": "false",
                "MESSENGER_KEY": base64.b64encode(secrets.token_bytes(32)).decode(),
                "Logging__LogLevel__Default": "Warning"}
         with (temp / "runtime.log").open("w+", encoding="utf-8") as log:
-            server = subprocess.Popen(["dotnet", str(repo / "backend/bin/Release/net8.0/Messenger.Api.dll")],
+            server = subprocess.Popen(["dotnet", str(temp / "backend/Messenger.Api.dll")],
                                       cwd=temp, env=env, stdout=log, stderr=log,
                                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
             try:

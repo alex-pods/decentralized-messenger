@@ -11,10 +11,8 @@
             <TextBox x:Name="ChatSearch" Classes="search" TextChanged="OnChatFilterChanged" KeyDown="OnChatSearchKeyDown" Watermark="Поиск по чатам" AutomationProperties.Name="Поиск чатов">
               <TextBox.InnerLeftContent><local:Glyph Data="{StaticResource IcSearch}" Width="16" Height="16" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/></TextBox.InnerLeftContent>
               <TextBox.InnerRightContent>
-                <Button x:Name="ClearChatSearch" Classes="icon" Width="32" Height="32" MinWidth="32" MinHeight="32" IsVisible="False"
-                        Click="OnClearChatSearch" ToolTip.Tip="Очистить поиск" AutomationProperties.Name="Очистить поиск">
-                  <local:Glyph Data="{StaticResource IcClose}" Width="15" Height="15"/>
-                </Button>
+                <local:DismissButton x:Name="ClearChatSearch" Classes="compact" IsVisible="False"
+                        Click="OnClearChatSearch" ToolTip.Tip="Очистить поиск" AutomationProperties.Name="Очистить поиск"/>
               </TextBox.InnerRightContent>
             </TextBox>
           </StackPanel>
@@ -39,7 +37,8 @@
             </Grid>
           </Border>
           <TextBlock x:Name="ChatEmpty" DockPanel.Dock="Top" IsVisible="False" Text="Чаты не найдены" Classes="secondary" Margin="24,8" TextWrapping="Wrap"/>
-          <ListBox Classes="sidebar" ItemsSource="{Binding Chats}" SelectedItem="{Binding SelectedChat, Mode=OneWay}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" x:Name="ChatList">
+          <ListBox Classes="sidebar" ItemsSource="{Binding Chats}" SelectedItem="{Binding SelectedChat, Mode=OneWay}"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.AllowAutoHide="False" x:Name="ChatList">
             <ListBox.ItemTemplate>
               <DataTemplate>
                 <Grid ColumnDefinitions="Auto,*" MinHeight="46" ClipToBounds="True">
@@ -117,10 +116,8 @@
                       <TextBlock Grid.Column="2" Text="{Binding PinCounter}" Classes="caption" VerticalAlignment="Center"/>
                     </Grid>
                   </Button>
-                  <Button Grid.Column="2" Classes="icon small" ToolTip.Tip="Открепить" AutomationProperties.Name="Открепить"
-                          Command="{Binding UnpinShownCommand}" IsVisible="{Binding CanUnpinShown}">
-                    <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
-                  </Button>
+                  <local:DismissButton Grid.Column="2" Classes="compact" ToolTip.Tip="Открепить" AutomationProperties.Name="Открепить"
+                                       Command="{Binding UnpinShownCommand}" IsVisible="{Binding CanUnpinShown}"/>
                 </Grid>
               </Border>
               <Panel>
@@ -130,7 +127,9 @@
                                Foreground="{DynamicResource LabelBrush}" VerticalAlignment="Center"/>
                   <TextBlock Text="Откройте переписку из списка" Classes="secondary" VerticalAlignment="Center"/>
                 </StackPanel>
-                <ListBox x:Name="Log" Classes="log" VerticalAlignment="Bottom" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}" Background="Transparent" Padding="0,16,0,12" ScrollViewer.HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasChat}">
+                <ListBox x:Name="Log" Classes="log" VerticalAlignment="Bottom" ItemsSource="{Binding Messages}"
+                         SelectedItem="{Binding SelectedMessage}" Background="Transparent" Padding="0,16,0,12"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.AllowAutoHide="False" IsVisible="{Binding HasChat}">
                   <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel/>
@@ -207,9 +206,8 @@
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="0,0,10,0"/>
                 <TextBlock Grid.Column="1" Text="{Binding ComposeHint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                <Button Grid.Column="2" Classes="icon small" Margin="8,0,0,0" AutomationProperties.Name="Отменить" Command="{Binding CancelComposeCommand}">
-                  <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
-                </Button>
+                <local:DismissButton Grid.Column="2" Classes="compact" Margin="8,0,0,0"
+                                     ToolTip.Tip="Отменить" AutomationProperties.Name="Отменить" Command="{Binding CancelComposeCommand}"/>
               </Grid>
             </Border>
             <TextBlock Text="{Binding DraftLengthHint}" IsVisible="{Binding HasDraftLengthHint}" Classes="caption" HorizontalAlignment="Right"/>
@@ -230,25 +228,24 @@
     <Border x:Name="OverlayScrim" Classes="scrim" Background="{DynamicResource DimBrush}" IsVisible="{Binding OverlayOpen}" PointerPressed="OnOverlayPressed">
       <Border Classes="sheet" MaxHeight="680" Padding="24" HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="480" Margin="20" KeyboardNavigation.TabNavigation="Cycle" x:Name="OverlaySheet">
         <DockPanel>
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,18">
-              <StackPanel Spacing="2" VerticalAlignment="Center">
-
-                <TextBlock Text="{Binding OverlayTitle}" FontSize="18" FontWeight="SemiBold"/>
-              </StackPanel>
-              <Button Grid.Column="1" Classes="icon" ToolTip.Tip="Закрыть" AutomationProperties.Name="Закрыть" Command="{Binding CloseOverlayCommand}">
-                <local:Glyph Data="{StaticResource IcClose}" Width="14" Height="14"/>
-              </Button>
+            <Grid x:Name="OverlayHeader" DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+              <TextBlock Text="{Binding OverlayTitle}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"
+                         TextWrapping="Wrap" Margin="0,0,8,0"/>
+              <local:DismissButton Grid.Column="1" VerticalAlignment="Top" Command="{Binding CloseOverlayCommand}"/>
             </Grid>
-            <TextBlock DockPanel.Dock="Bottom" Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,12,0,0"/>
-          <ScrollViewer x:Name="OverlayScroll" HorizontalScrollBarVisibility="Disabled" Margin="0,0,8,0">
+            <Button x:Name="SubmitGroup" Classes="primary large" Content="Создать группу" HorizontalAlignment="Right"
+                    Padding="18,0" Command="{Binding CreateGroupCommand}" DockPanel.Dock="Bottom"
+                    IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}" Margin="0,12,0,0" MinHeight="40"/>
+            <TextBlock DockPanel.Dock="Bottom" Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,12,0,0"
+                       IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+          <ScrollViewer x:Name="OverlayScroll" Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto" AllowAutoHide="False" ClipToBounds="True">
             <DockPanel>
-            <Button Classes="primary large" Content="Создать группу" HorizontalAlignment="Right" Padding="22,0" Command="{Binding CreateGroupCommand}" DockPanel.Dock="Bottom" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}" Margin="0,20,0,0" MinHeight="42"/>
-            <views:ProfileEditor DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}"/>
-            <views:GroupDetails DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}"/>
-            <views:ConversationDetails x:Name="GroupDetailsPanel" DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}"/>
-            <views:ForwardPicker DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>
-            <views:PeopleSearch IsVisible="{Binding ShowPeopleSearch}"/>
-
+              <views:ProfileEditor DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}"/>
+              <views:GroupDetails DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}"/>
+              <views:ConversationDetails x:Name="GroupDetailsPanel" DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}"/>
+              <views:ForwardPicker x:Name="ForwardPanel" DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>
+              <views:PeopleSearch IsVisible="{Binding ShowPeopleSearch}"/>
             </DockPanel>
           </ScrollViewer>
         </DockPanel>
@@ -259,9 +256,8 @@
       <Grid ColumnDefinitions="Auto,*,Auto">
         <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource DangerBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
         <TextBlock Grid.Column="1" Text="{Binding Error}" TextWrapping="Wrap" VerticalAlignment="Center"/>
-        <Button Grid.Column="2" Classes="icon small" Margin="10,0,0,0" AutomationProperties.Name="Закрыть ошибку" Command="{Binding DismissErrorCommand}">
-          <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10"/>
-        </Button>
+        <local:DismissButton Grid.Column="2" Classes="compact" Margin="10,0,0,0"
+                            AutomationProperties.Name="Закрыть ошибку" Command="{Binding DismissErrorCommand}"/>
       </Grid>
     </Border>
   </Panel>

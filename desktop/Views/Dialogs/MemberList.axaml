@@ -17,7 +17,8 @@
           </StackPanel>
             </Grid>
           </Button>
-          <Button Classes="icon" Click="OnMemberMenu" IsVisible="{Binding CanKick}" Grid.Column="1" ToolTip.Tip="Управление участником" AutomationProperties.Name="Управление участником">
+          <Button Classes="icon" Click="OnMemberMenu" IsVisible="{Binding CanKick}" Grid.Column="1" VerticalAlignment="Center"
+                  ToolTip.Tip="Управление участником" AutomationProperties.Name="Управление участником">
             <local:Glyph Data="{StaticResource IcMore}"/>
           </Button>
         </Grid>

@@ -13,9 +13,8 @@
           <Border Classes="chip" Margin="0,0,6,6">
             <StackPanel Orientation="Horizontal" Spacing="4">
               <TextBlock Text="{Binding DisplayName}" MaxWidth="180" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-              <Button Classes="icon small" ToolTip.Tip="Убрать из выбранных" AutomationProperties.Name="Убрать из выбранных" Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}">
-                <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10"/>
-              </Button>
+              <local:DismissButton Classes="compact" ToolTip.Tip="Убрать из выбранных" AutomationProperties.Name="Убрать из выбранных"
+                                   Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}"/>
             </StackPanel>
           </Border>
         </DataTemplate>

@@ -1,0 +1,209 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:MessengerDesktop" xmlns:primitives="using:Avalonia.Controls.Primitives">
+  <Styles.Resources>
+    <ControlTheme x:Key="RangeSegment" TargetType="RepeatButton">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Panel Background="Transparent">
+            <Border Height="7" CornerRadius="3.5" VerticalAlignment="Center" Background="{TemplateBinding Background}"/>
+          </Panel>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="TransparentTrackSegment" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="Transparent"/>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="DialogScrollThumb" TargetType="Thumb">
+      <Setter Property="MinHeight" Value="24"/>
+      <Setter Property="Background" Value="{DynamicResource LineBrush}"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Margin="1,0" CornerRadius="3" Background="{TemplateBinding Background}"/>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover">
+        <Setter Property="Background" Value="{DynamicResource LabelBrush}"/>
+      </Style>
+    </ControlTheme>
+    <ControlTheme x:Key="DialogVerticalScrollBar" TargetType="ScrollBar">
+      <Setter Property="Width" Value="{StaticResource DialogScrollBarWidth}"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Padding="5,2,0,2" Background="Transparent">
+            <Track Orientation="Vertical" IsDirectionReversed="True"
+                   Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                   Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}"
+                   DeferThumbDrag="{TemplateBinding ScrollViewer.IsDeferredScrollingEnabled}">
+              <Track.DecreaseButton>
+                <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource TransparentTrackSegment}"/>
+              </Track.DecreaseButton>
+              <Track.IncreaseButton>
+                <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource TransparentTrackSegment}"/>
+              </Track.IncreaseButton>
+              <Thumb Theme="{StaticResource DialogScrollThumb}"/>
+            </Track>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+  </Styles.Resources>
+  <Style Selector="Button.dismiss">
+    <Setter Property="Width" Value="36"/>
+    <Setter Property="Height" Value="36"/>
+    <Setter Property="MinHeight" Value="36"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="CornerRadius" Value="6"/>
+  </Style>
+  <Style Selector="Button.dismiss.compact">
+    <Setter Property="Width" Value="30"/>
+    <Setter Property="Height" Value="30"/>
+    <Setter Property="MinHeight" Value="30"/>
+  </Style>
+  <Style Selector="Button.dismiss local|Glyph">
+    <Setter Property="Width" Value="16"/>
+    <Setter Property="Height" Value="16"/>
+  </Style>
+  <Style Selector="Button.dismiss.compact local|Glyph">
+    <Setter Property="Width" Value="14"/>
+    <Setter Property="Height" Value="14"/>
+  </Style>
+  <Style Selector="Button.dangerConfirm">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerActionTextBrush}"/>
+  </Style>
+  <Style Selector="Button.dangerConfirm:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerActionTextBrush}"/>
+    <Setter Property="Opacity" Value=".85"/>
+  </Style>
+
+  <Style Selector=":is(Slider).messengerRange">
+    <Setter Property="Height" Value="34"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="ClipToBounds" Value="True"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="RangeFrame" Background="Transparent" BorderBrush="Transparent" BorderThickness="1"
+                CornerRadius="6" Padding="3,0">
+          <Grid>
+            <Border Name="RangeRail" Height="7" Margin="10,0" VerticalAlignment="Center" CornerRadius="3.5"
+                    Background="{DynamicResource LineBrush}" IsHitTestVisible="False"/>
+            <Track Name="PART_Track" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                   Value="{TemplateBinding Value, Mode=TwoWay}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+              <Track.DecreaseButton>
+                <RepeatButton Name="PART_DecreaseButton" Theme="{StaticResource RangeSegment}"
+                              Background="{DynamicResource AccentBrush}" Focusable="False"/>
+              </Track.DecreaseButton>
+              <Track.IncreaseButton>
+                <RepeatButton Name="PART_IncreaseButton" Theme="{StaticResource TransparentTrackSegment}"/>
+              </Track.IncreaseButton>
+              <Thumb Width="22" Height="26">
+                <Thumb.Template>
+                  <ControlTemplate>
+                    <Border Background="Transparent">
+                      <Border Name="RangeHandle" Width="16" Height="22" CornerRadius="6" BorderThickness="2"
+                              Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource RaisedBrush}"/>
+                    </Border>
+                  </ControlTemplate>
+                </Thumb.Template>
+              </Thumb>
+            </Track>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector=":is(Slider).messengerRange:focus-visible /template/ Border#RangeFrame">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector=":is(Slider).messengerRange:disabled">
+    <Setter Property="Opacity" Value=".45"/>
+  </Style>
+
+  <Style Selector="Expander.themeDesigner /template/ Border#ExpanderContent">
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="ColorPicker.themePicker">
+    <Setter Property="Width" Value="NaN"/>
+    <Setter Property="Height" Value="NaN"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Expander Classes="themeColor" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,12,12,6">
+          <Expander.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{TemplateBinding Content}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+              <Border Grid.Column="1" Classes="collapsedSwatch" Width="28" Height="18" CornerRadius="4" BorderThickness="1"
+                      BorderBrush="{DynamicResource LineBrush}" Margin="10,0,6,0"
+                      Background="{TemplateBinding HsvColor, Converter={StaticResource ToBrushConverter}}"/>
+            </Grid>
+          </Expander.Header>
+          <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="112,12,*" Height="112">
+              <Border ClipToBounds="True" CornerRadius="6">
+                <primitives:ColorSpectrum Width="112" Height="112" Components="SaturationValue" Shape="Box"
+                                         HsvColor="{TemplateBinding HsvColor, Mode=TwoWay}" AutomationProperties.Name="Насыщенность и яркость"/>
+              </Border>
+              <Grid Grid.Column="2" RowDefinitions="*,8,Auto,3,Auto">
+                <Border CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource LineBrush}"
+                        Background="{TemplateBinding HsvColor, Converter={StaticResource ToBrushConverter}}"/>
+                <TextBlock Grid.Row="2" Text="HEX" Classes="caption"/>
+                <TextBox Grid.Row="4" Name="PART_HexTextBox" Watermark="RRGGBB" MaxLength="7" MinHeight="36" Height="36"
+                         Padding="9,6" AutomationProperties.Name="Код цвета HEX"/>
+              </Grid>
+            </Grid>
+            <StackPanel>
+              <TextBlock Text="Оттенок" Classes="caption"/>
+              <primitives:ColorSlider Classes="messengerRange" Orientation="Horizontal" ColorModel="Hsva" ColorComponent="Component1"
+                                      IsAlphaVisible="False" HsvColor="{TemplateBinding HsvColor, Mode=TwoWay}" AutomationProperties.Name="Оттенок"/>
+            </StackPanel>
+          </StackPanel>
+        </Expander>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="Expander.themeColor:expanded Border.collapsedSwatch">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+
+  <Style Selector="Expander /template/ ToggleButton#ExpanderHeader /template/ Path#ExpandCollapseChevron">
+    <Setter Property="Width" Value="12"/>
+    <Setter Property="Height" Value="8"/>
+    <Setter Property="Stretch" Value="Uniform"/>
+    <Setter Property="Data" Value="{StaticResource IcChevronDown}"/>
+    <Setter Property="Stroke" Value="{DynamicResource LabelBrush}"/>
+    <Setter Property="StrokeThickness" Value="1.6"/>
+  </Style>
+  <Style Selector="RadioButton, CheckBox, ToggleSwitch">
+    <Setter Property="Foreground" Value="{DynamicResource InkBrush}"/>
+  </Style>
+  <Style Selector="RadioButton:checked:not(:disabled) /template/ Ellipse#CheckOuterEllipse">
+    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="RadioButton:checked:not(:disabled) /template/ Ellipse#CheckGlyph">
+    <Setter Property="Fill" Value="{DynamicResource ActionTextBrush}"/>
+    <Setter Property="Stroke" Value="{DynamicResource ActionTextBrush}"/>
+  </Style>
+  <Style Selector="CheckBox:checked:not(:disabled) /template/ Border#NormalRectangle">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="ToggleSwitch:checked:not(:disabled) /template/ Border#OuterBorder">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="ScrollViewer.dialogScroll /template/ ScrollBar#PART_VerticalScrollBar,
+                   ListBox.recipient /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar,
+                   ListBox.sidebar /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar,
+                   ListBox.log /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar">
+    <Setter Property="Theme" Value="{StaticResource DialogVerticalScrollBar}"/>
+  </Style>
+</Styles>

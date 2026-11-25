@@ -30,6 +30,7 @@ public partial class ShellView : UserControl
             if (_filtering || ChatList.SelectedItem is not ChatItem chat) return;
             OpenFromSearch(chat);
         };
+        ChatList.AddHandler(InputElement.TappedEvent, OnChatTapped, RoutingStrategies.Bubble, handledEventsToo: true);
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
@@ -90,6 +91,7 @@ public partial class ShellView : UserControl
     }
 
     bool _showChats = true;
+    long? _presentedChatId;
 
     void OnShowChats(object? sender, RoutedEventArgs e)
     {
@@ -100,7 +102,10 @@ public partial class ShellView : UserControl
     void UpdateNavigation()
     {
         bool narrow = Bounds.Width < 780;
-        OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - 40, 220, 680);
+        var compactSheet = Bounds.Width < 480;
+        OverlaySheet.Margin = new Thickness(compactSheet ? 12 : 20);
+        OverlaySheet.Padding = new Thickness(compactSheet ? 16 : 24);
+        OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - OverlaySheet.Margin.Top * 2, 100, 680);
         ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "344,*");
         Grid.SetColumn(ChatSidebar, 0);
         Grid.SetColumn(ScreenBay, narrow ? 0 : 1);
@@ -142,7 +147,13 @@ public partial class ShellView : UserControl
         UpdateNavigation();
     }
 
-    static string NormalizeSearch(string value) => value.ToLowerInvariant().Replace('ё', 'е');
+    void OnChatTapped(object? sender, TappedEventArgs e)
+    {
+        if (Bounds.Width >= 780 || !_showChats || e.Source is not Visual source) return;
+        var row = source as ListBoxItem ?? source.FindAncestorOfType<ListBoxItem>();
+        if (row?.DataContext is ChatItem chat && ReferenceEquals(chat, _vm?.SelectedChat))
+            OpenFromSearch(chat);
+    }
 
     void FilterChats()
     {
@@ -151,16 +162,7 @@ public partial class ShellView : UserControl
         try
         {
             var query = ChatSearch.Text?.Trim() ?? "";
-            var tagOnly = query.StartsWith('@');
-            var terms = NormalizeSearch(query.TrimStart('@')).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            var visible = _vm.Chats.Where(chat =>
-            {
-                var tag = NormalizeSearch(chat.Tag ?? "");
-                var title = tagOnly ? "" : NormalizeSearch(chat.Title);
-                return (!tagOnly || tag.Length > 0) &&
-                       terms.All(term => title.Contains(term, StringComparison.Ordinal) ||
-                                         tag.Contains(term, StringComparison.Ordinal));
-            }).ToArray();
+            var visible = ChatSearchFilter.Match(_vm.Chats, query);
             ChatList.ItemsSource = visible;
             ChatList.SelectedItem = visible.Contains(_vm.SelectedChat) ? _vm.SelectedChat : null;
             ChatEmpty.IsVisible = visible.Length == 0;
@@ -201,7 +203,9 @@ public partial class ShellView : UserControl
         if (e.PropertyName == nameof(ShellViewModel.SelectedChat))
         {
             FilterChats();
-            _showChats = _vm?.HasChat != true;
+            var chatId = _vm?.SelectedChat?.Id;
+            if (chatId != _presentedChatId) _showChats = chatId == null;
+            _presentedChatId = chatId;
             UpdateNavigation();
         }
     }

@@ -11,8 +11,10 @@ public sealed partial class AppearanceWindow
 {
     readonly WallpaperSettings _originalWallpaper = WallpaperSettings.Current;
     readonly List<Button> _wallpaperCards = new();
-    readonly Slider _blur = new() { Name = "WallpaperBlur", Minimum = 0, Maximum = 20, TickFrequency = 1, IsSnapToTickEnabled = true };
-    readonly TextBlock _blurLabel = new() { Classes = { "secondary" }, VerticalAlignment = VerticalAlignment.Center };
+    readonly Slider _blur = new() { Name = "WallpaperBlur", Classes = { "messengerRange" },
+        Minimum = 0, Maximum = 20, TickFrequency = 1, SmallChange = 1, IsSnapToTickEnabled = true };
+    readonly TextBlock _blurLabel = new() { Classes = { "secondary" }, VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(8, 0, 0, 0) };
     readonly TextBlock _wallpaperStatus = new() { Classes = { "secondary" }, TextWrapping = TextWrapping.Wrap };
     bool _importing;
 
@@ -59,15 +61,17 @@ public sealed partial class AppearanceWindow
         section.Children.Add(choose);
         section.Children.Add(_wallpaperStatus);
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        row.Children.Add(new TextBlock { Text = "Размытие", VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = "Размытие", FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(_blurLabel, 1); row.Children.Add(_blurLabel);
-        section.Children.Add(row);
         Avalonia.Automation.AutomationProperties.SetName(_blur, "Размытие фона");
         _blur.ValueChanged += (_, _) =>
         {
             if (!_closed && !_loadingWallpaper) SelectWallpaper(WallpaperSettings.Current with { Blur = _blur.Value });
         };
-        section.Children.Add(_blur);
+        var blurControl = new Border { Name = "WallpaperBlurField", Padding = new Thickness(12, 9, 12, 2), CornerRadius = new CornerRadius(8),
+            Child = new StackPanel { Spacing = 2, Children = { row, _blur } } };
+        blurControl.Bind(Border.BackgroundProperty, new DynamicResourceExtension("FieldFill"));
+        section.Children.Add(blurControl);
         section.Children.Add(new TextBlock { Text = "PNG, JPEG или WebP · до 20 МБ. Фон сохраняется на этом устройстве и не входит в ссылку на цветовую тему.",
             Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
         section.Children.Add(new TextBlock { Text = "Узоры: Hero Patterns · Steve Schoger · CC BY 4.0", Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });

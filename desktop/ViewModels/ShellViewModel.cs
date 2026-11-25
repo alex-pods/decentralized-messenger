@@ -111,6 +111,11 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowPeopleSearch))]
     private string _overlay = "";
 
+    [ObservableProperty] private MessageItem? _forwardSource;
+
+    partial void OnOverlayChanged(string value) =>
+        ForwardSource = value == "forward" && CanForward ? SelectedMessage : null;
+
     [ObservableProperty] private bool _showMoreReactions;
     public IReadOnlyList<string> QuickReactions => ReactionCatalog.Main;
     public IReadOnlyList<string> MoreReactions => ReactionCatalog.More;
@@ -132,7 +137,7 @@ public partial class ShellViewModel : ObservableObject
         "group" => "Новая группа",
         "members" => IsGroup ? "Информация о группе" : "Информация о чате",
         "profile" => "Профиль",
-        "forward" => "Переслать в…",
+        "forward" => "Переслать сообщение",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;

@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -26,11 +27,18 @@ public sealed partial class AppearanceWindow : Window
         Height = 660;
         MinWidth = 360;
         MinHeight = 420;
+        SystemDecorations = SystemDecorations.BorderOnly;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var layout = new DockPanel { Margin = new Thickness(24) };
-        var heading = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 24) };
-        heading.Children.Add(new TextBlock { Text = "Оформление", FontSize = 20, FontWeight = FontWeight.SemiBold });
-        heading.Children.Add(new TextBlock { Text = "Выберите тему или создайте свою.", Classes = { "secondary" } });
+        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 0, 0, 16) };
+        var title = new Border { Background = Brushes.Transparent, Child = new TextBlock { Text = "Оформление",
+            FontSize = 20, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center } };
+        title.PointerPressed += (_, e) => Views.MainWindow.DragFrom(title, e);
+        heading.Children.Add(title);
+        var close = new DismissButton();
+        close.Click += (_, _) => Close();
+        Grid.SetColumn(close, 1);
+        heading.Children.Add(close);
         DockPanel.SetDock(heading, Dock.Top);
         layout.Children.Add(heading);
 
@@ -41,14 +49,19 @@ public sealed partial class AppearanceWindow : Window
         cancel.Click += (_, _) => Close();
         save.Click += (_, _) => Save();
         footer.Children.Add(_error);
+        _error.IsVisible = false;
+        _error.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty) _error.IsVisible = !string.IsNullOrWhiteSpace(_error.Text);
+        };
         footerActions.Children.Add(cancel);
         footerActions.Children.Add(save);
         footer.Children.Add(footerActions);
         DockPanel.SetDock(footer, Dock.Bottom);
         layout.Children.Add(footer);
 
-        var body = new StackPanel { Spacing = 24, HorizontalAlignment = HorizontalAlignment.Left };
-        var choices = new WrapPanel { Orientation = Orientation.Horizontal };
+        var body = new StackPanel { Spacing = 20, HorizontalAlignment = HorizontalAlignment.Left };
+        var choices = new UniformGrid { Columns = 2 };
         foreach (var preset in ThemeSettings.Presets)
         {
             var card = PresetCard(preset);
@@ -69,7 +82,7 @@ public sealed partial class AppearanceWindow : Window
             accents.Children.Add(swatch);
         }
         body.Children.Add(new StackPanel { Spacing = 10, Children = { new TextBlock { Text = "Цвет акцента", FontWeight = FontWeight.Medium }, accents } });
-        var custom = new StackPanel { Spacing = 14, Margin = new Thickness(0, 14, 0, 0) };
+        var custom = new StackPanel { Spacing = 9, Margin = new Thickness(0, 12, 0, 0) };
         custom.Children.Add(_name);
         _name.TextChanged += (_, _) => PreviewCustom();
         custom.Children.Add(_dark);
@@ -77,20 +90,24 @@ public sealed partial class AppearanceWindow : Window
         string[] labels = ["Фон", "Поверхности", "Текст", "Акцент"];
         for (int i = 0; i < _colors.Length; i++)
         {
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            row.Children.Add(new TextBlock { Text = labels[i], VerticalAlignment = VerticalAlignment.Center });
-            var picker = new ColorPicker { IsAlphaEnabled = false, Width = 150 };
+            var picker = new ColorPicker { Classes = { "themePicker" }, Content = labels[i], IsAlphaEnabled = false };
+            Avalonia.Automation.AutomationProperties.SetName(picker, labels[i]);
             _colors[i] = picker;
             picker.ColorChanged += (_, _) => PreviewCustom();
-            Grid.SetColumn(picker, 1);
-            row.Children.Add(picker);
-            custom.Children.Add(row);
+            custom.Children.Add(picker);
         }
-        body.Children.Add(new Expander { Header = "Создать свою тему", Content = custom, HorizontalAlignment = HorizontalAlignment.Stretch });
+        body.Children.Add(new Expander { Header = "Создать свою тему", Content = custom, Classes = { "themeDesigner" },
+            HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(0) });
         body.Children.Add(SharingControls());
-        var scroll = new ScrollViewer { Content = body, Margin = new Thickness(0, 0, 8, 0), HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
-        // Keep wrapping panels inside the viewport after native window resize.
-        scroll.SizeChanged += (_, _) => body.MaxWidth = Math.Max(0, scroll.Bounds.Width - 12);
+        var scroll = new ScrollViewer { Content = body, ClipToBounds = true, AllowAutoHide = false,
+            Classes = { "dialogScroll" },
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var scrollGutter = (double)Application.Current!.FindResource("DialogScrollBarWidth")!;
+        scroll.SizeChanged += (_, e) =>
+        {
+            body.Width = Math.Max(0, e.NewSize.Width - scrollGutter);
+            choices.Columns = body.Width >= 452 ? 4 : 2;
+        };
         layout.Children.Add(scroll);
         Content = layout;
         Load(_original);
@@ -124,7 +141,8 @@ public sealed partial class AppearanceWindow : Window
         var card = new Button
         {
             Tag = preset.Name,
-            Width = 108,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(5),
             Margin = new Thickness(0, 0, 8, 8),
             Content = new StackPanel { Spacing = 9, Children = { thumbnail, new TextBlock { Text = preset.Name, HorizontalAlignment = HorizontalAlignment.Center } } }

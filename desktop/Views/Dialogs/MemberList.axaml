@@ -2,7 +2,9 @@
   <ListBox Classes="plain" ItemsSource="{Binding Members}" MaxHeight="360">
     <ListBox.ItemTemplate>
       <DataTemplate>
-        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,9">
+        <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+          <Button Classes="row" Click="OnOpenProfile" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0,10" ToolTip.Tip="Открыть профиль">
+            <Grid ColumnDefinitions="Auto,*">
           <Border Classes="avatar" Width="34" Height="34" VerticalAlignment="Top" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
             <Panel>
               <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
@@ -13,7 +15,9 @@
             <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
             <TextBlock Text="{Binding Detail}" Classes="caption" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}"/>
           </StackPanel>
-          <Button Classes="icon" Click="OnMemberMenu" IsVisible="{Binding CanKick}" Grid.Column="2" ToolTip.Tip="Управление участником" AutomationProperties.Name="Управление участником">
+            </Grid>
+          </Button>
+          <Button Classes="icon" Click="OnMemberMenu" IsVisible="{Binding CanKick}" Grid.Column="1" ToolTip.Tip="Управление участником" AutomationProperties.Name="Управление участником">
             <local:Glyph Data="{StaticResource IcMore}"/>
           </Button>
         </Grid>

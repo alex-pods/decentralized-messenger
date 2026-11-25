@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MessengerDesktop" xmlns:views="using:MessengerDesktop.Views.Dialogs"
+             x:Class="MessengerDesktop.Views.Dialogs.ConversationDetails">
+  <StackPanel Spacing="16">
+    <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding ShowMembersCommand.IsRunning}"/>
+    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,4">
+      <Border Classes="avatar" Width="64" Height="64" Background="{Binding SelectedChat.AvatarColorKey, Converter={StaticResource AvatarBrush}}">
+        <Panel>
+          <Image Source="{Binding SelectedChat.Avatar}" IsVisible="{Binding SelectedChat.HasAvatar}" Stretch="UniformToFill"/>
+          <TextBlock Classes="avatarText" Text="{Binding ChatTitle, Converter={StaticResource Initial}}" IsVisible="{Binding SelectedChat.ShowInitial}" FontSize="24"/>
+          <local:Glyph Data="{StaticResource IcGroup}" Width="28" Height="28" Foreground="White" IsVisible="{Binding IsGroup}"/>
+        </Panel>
+      </Border>
+      <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center" Spacing="6">
+        <TextBlock Text="{Binding ChatTitle}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+        <TextBlock Text="{Binding MembersSummary}" Classes="secondary"/>
+        <TextBlock Text="{Binding GroupRoleText}" Classes="caption" IsVisible="{Binding IsGroup}"/>
+      </StackPanel>
+    </Grid>
+    <Button Classes="profileRow" Click="OnPinsClick">
+      <Grid ColumnDefinitions="Auto,*,Auto"><local:Glyph Data="{StaticResource IcPin}"/><TextBlock Grid.Column="1" Text="Закреплённые сообщения" TextWrapping="Wrap" Margin="14,0" VerticalAlignment="Center"/><local:Glyph Grid.Column="2" Data="{StaticResource IcChevronRight}" Width="16" Height="16"/></Grid>
+    </Button>
+    <Border Height="1" Background="{DynamicResource LineBrush}"/>
+    <TextBlock Text="Участники" FontWeight="SemiBold"/>
+    <Expander Header="Добавить участника" HorizontalAlignment="Stretch" IsVisible="{Binding CanInviteMembers}">
+      <views:PeopleSearch Margin="0,14,0,0"/>
+    </Expander>
+    <views:MemberList/>
+    <Border Height="1" Background="{DynamicResource LineBrush}"/>
+    <Button Classes="profileRow" Click="OnHideClick">
+      <Grid ColumnDefinitions="Auto,*"><local:Glyph Data="{StaticResource IcEyeOff}"/><StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="5"><TextBlock Text="Скрыть чат у себя"/><TextBlock Text="Убрать из своего списка чатов" Classes="caption" TextWrapping="Wrap"/></StackPanel></Grid>
+    </Button>
+    <Button Classes="profileRow danger" Click="OnLeaveClick" IsVisible="{Binding IsGroup}">
+      <Grid ColumnDefinitions="Auto,*"><local:Glyph Data="{StaticResource IcLogout}"/><StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="5"><TextBlock Text="Покинуть группу"/><TextBlock Text="Для возвращения понадобится приглашение" Classes="caption" TextWrapping="Wrap"/></StackPanel></Grid>
+    </Button>
+  </StackPanel>
+</UserControl>

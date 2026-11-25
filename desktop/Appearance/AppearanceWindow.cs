@@ -47,7 +47,7 @@ public sealed partial class AppearanceWindow : Window
         DockPanel.SetDock(footer, Dock.Bottom);
         layout.Children.Add(footer);
 
-        var body = new StackPanel { Spacing = 24 };
+        var body = new StackPanel { Spacing = 24, HorizontalAlignment = HorizontalAlignment.Left };
         var choices = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var preset in ThemeSettings.Presets)
         {
@@ -57,6 +57,7 @@ public sealed partial class AppearanceWindow : Window
         }
         body.Children.Add(choices);
         body.Children.Add(ConversationPreview());
+        body.Children.Add(WallpaperControls());
         var accents = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var (hex, label) in new[] { ("#33755C", "Зелёный"), ("#3867B2", "Синий"), ("#87613B", "Песочный"), ("#9B5671", "Розовый"), ("#675BA2", "Фиолетовый"), ("#56606B", "Графит") })
         {
@@ -87,10 +88,18 @@ public sealed partial class AppearanceWindow : Window
         }
         body.Children.Add(new Expander { Header = "Создать свою тему", Content = custom, HorizontalAlignment = HorizontalAlignment.Stretch });
         body.Children.Add(SharingControls());
-        layout.Children.Add(new ScrollViewer { Content = body, Padding = new Thickness(0, 0, 8, 0), HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
+        var scroll = new ScrollViewer { Content = body, Margin = new Thickness(0, 0, 8, 0), HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        // Keep wrapping panels inside the viewport after native window resize.
+        scroll.SizeChanged += (_, _) => body.MaxWidth = Math.Max(0, scroll.Bounds.Width - 12);
+        layout.Children.Add(scroll);
         Content = layout;
         Load(_original);
-        Closed += (_, _) => { _closed = true; if (!_saved) ThemeSettings.Apply(_original); };
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            if (!_saved) { ThemeSettings.Apply(_original); WallpaperSettings.Apply(_originalWallpaper); }
+            WallpaperSettings.Prune();
+        };
         KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape) Close(); };
     }
 
@@ -134,8 +143,9 @@ public sealed partial class AppearanceWindow : Window
             bubble.Bind(Border.BackgroundProperty, new DynamicResourceExtension(mine ? "BubbleMine" : "RaisedBrush"));
             return bubble;
         }
-        var preview = new Border { Padding = new Thickness(20), CornerRadius = new CornerRadius(8),
-            Child = new StackPanel { Spacing = 12, Children = { Message("Встретимся завтра?", false), Message("Да, в семь. До встречи!", true) } } };
+        var preview = new Border { CornerRadius = new CornerRadius(8), ClipToBounds = true,
+            Child = new Panel { Children = { new WallpaperLayer(), new StackPanel { Margin = new Thickness(20), Spacing = 12,
+                Children = { Message("Встретимся завтра?", false), Message("Да, в семь. До встречи!", true) } } } } };
         preview.Bind(Border.BackgroundProperty, new DynamicResourceExtension("ChassisBrush"));
         return preview;
     }
@@ -190,7 +200,11 @@ public sealed partial class AppearanceWindow : Window
         try
         {
             ThemeExchange.Validate(ThemeSettings.Current);
-            ThemeSettings.Save();
+            if (_importing) { _error.Text = "Дождитесь загрузки изображения."; return; }
+            var previous = WallpaperSettings.Read();
+            WallpaperSettings.Save();
+            try { ThemeSettings.Save(); }
+            catch { WallpaperSettings.Save(previous); throw; }
             _saved = true;
             Close();
         }

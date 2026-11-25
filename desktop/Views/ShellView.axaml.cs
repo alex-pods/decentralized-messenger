@@ -46,6 +46,7 @@ public partial class ShellView : UserControl
     void OnComposerKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter || _vm == null) return;
+        if (ComposerInput.GetVisualDescendants().OfType<TextPresenter>().Any(p => !string.IsNullOrEmpty(p.PreeditText))) return;
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
@@ -54,7 +55,7 @@ public partial class ShellView : UserControl
         var send = AppPreferences.Current.SendMode == SendMode.Enter ? !shift && !alt : ctrl && !shift && !alt;
         if (!send) return;
         e.Handled = true;
-        if (_vm.SendCommand.CanExecute(null)) _vm.SendCommand.Execute(null);
+        if (_vm.CanSendDraft && _vm.SendCommand.CanExecute(null)) _vm.SendCommand.Execute(null);
     }
 
     async void OnSettingsClick(object? sender, RoutedEventArgs e)
@@ -130,7 +131,7 @@ public partial class ShellView : UserControl
         {
             Dispatcher.UIThread.Post(() =>
             {
-                if (_vm?.ShowingPinnedMessages == true) BackFromPinnedMessages.Focus();
+                if (_vm?.ShowingPinnedMessages == true) PinnedMessages.FindControl<Button>("BackFromPinnedMessages")!.Focus();
                 else if (OpenPinnedMessages.IsEffectivelyVisible) OpenPinnedMessages.Focus();
             }, DispatcherPriority.Loaded);
         }
@@ -140,9 +141,12 @@ public partial class ShellView : UserControl
             {
                 if (_vm?.OverlayOpen == true)
                 {
-                    var target = OverlaySheet.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(c => c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+                    var target = _vm.Overlay is "direct" or "group" or "forward"
+                        ? OverlaySheet.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(c => c.IsEffectivelyVisible && c.IsEffectivelyEnabled)
+                        : null;
                     if (target != null) target.Focus();
                     else OverlaySheet.GetVisualDescendants().OfType<Button>().FirstOrDefault(c => c.IsEffectivelyVisible)?.Focus();
+                    OverlayScroll.ScrollToHome();
                 }
                 else ComposerInput.Focus();
             }, DispatcherPriority.Loaded);
@@ -288,9 +292,8 @@ public partial class ShellView : UserControl
 
     void OnDragAreaPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);
 
-    void OnChipPressed(object? sender, PointerPressedEventArgs e)
+    void OnChipClick(object? sender, RoutedEventArgs e)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (sender is Control { DataContext: ReactionChip chip } && DataContext is ShellViewModel vm)
             vm.ToggleChipCommand.Execute(chip);
         e.Handled = true;   // ListBox не увидит нажатие и не выберет сообщение
@@ -306,7 +309,8 @@ public partial class ShellView : UserControl
         var onChip = false;
         for (Control? v = src; v != null; v = v.GetVisualParent() as Control)
         {
-            if (v is Button || v is Border b && b.Classes.Contains("reaction")) onChip = true;
+            if (v is Button) return; // Do not swallow message-menu or reaction button clicks in the tunnel.
+            if (v is Border b && b.Classes.Contains("reaction")) onChip = true;
             if (v is Border bb && bb.Classes.Contains("bubble"))
             {
                 bubble = bb;

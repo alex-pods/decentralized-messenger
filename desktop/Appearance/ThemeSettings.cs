@@ -17,7 +17,8 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
     ];
 
     public static ThemeSettings Current { get; private set; } = Presets[0];
-    static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    public static event Action? Changed;
+    internal static string FilePath { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "messenger-desktop", "appearance.json");
 
     public static void Restore()
@@ -85,6 +86,7 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
         Set(theme.Dark ? Color.Parse("#FF9696") : Color.Parse("#A52835"), "DangerBrush");
         Set(Contrast(accent, Colors.Black) > Contrast(accent, Colors.White) ? Colors.Black : Colors.White, "ActionTextBrush");
         Current = theme;
+        Changed?.Invoke();
     }
 
     public static double Contrast(Color first, Color second)

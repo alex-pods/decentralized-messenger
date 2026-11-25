@@ -4,26 +4,37 @@ namespace MessengerDesktop;
 
 public partial class ShellViewModel
 {
+    int _membersRequest;
+    public bool CanInviteMembers => IsGroup && _myRole is "owner" or "admin";
+    public string MembersSummary => $"Участники: {Members.Count}";
+    public string GroupRoleText => _myRole switch
+    {
+        "owner" => "Вы — владелец группы", "admin" => "Вы — администратор", _ => "Вы — участник группы"
+    };
     [RelayCommand]
     async Task ShowMembers()
     {
         if (SelectedChat == null) return;
         ResetSearch();
         Overlay = "members";
-        await LoadMembersPanel();
+        try { await LoadMembersPanel(); }
+        catch (Exception ex) { Error = Friendly(ex); }
     }
 
     async Task LoadMembersPanel()
     {
         var chat = SelectedChat;
         if (chat == null) return;
+        var request = ++_membersRequest;
         var members = await _api.GetMembers(chat.Id);
+        if (request != _membersRequest || SelectedChat?.Id != chat.Id) return;
         var myRole = members.FirstOrDefault(m => m.Id == _me.Id)?.Role ?? "";
-        _myRole = myRole;
         var owner = myRole == "owner";
         var staff = myRole is "owner" or "admin";
         await Ui(() =>
         {
+            if (request != _membersRequest || SelectedChat?.Id != chat.Id) return;
+            _myRole = myRole;
             DisposeItems(Members);
             foreach (var m in members)
             {
@@ -35,10 +46,10 @@ public partial class ShellViewModel
                     TagLabel = "@" + m.Tag,
                     Role = m.Role,
                     RoleLabel = m.Role switch { "owner" => "владелец", "admin" => "админ", _ => "участник" },
-                    PromoteLabel = m.Role == "admin" ? "Снять админа" : "Сделать админом",
-                    CanKick = staff && m.Id != _me.Id && m.Role != "owner" && (m.Role != "admin" || owner),
-                    CanPromote = owner && m.Id != _me.Id && m.Role != "owner",
-                    CanTransfer = owner && m.Id != _me.Id
+                    PromoteLabel = m.Role == "admin" ? "Снять права администратора" : "Назначить администратором",
+                    CanKick = chat.IsGroup && staff && m.Id != _me.Id && m.Role != "owner" && (m.Role != "admin" || owner),
+                    CanPromote = chat.IsGroup && owner && m.Id != _me.Id && m.Role != "owner",
+                    CanTransfer = chat.IsGroup && owner && m.Id != _me.Id
                 });
                 _ = LoadAvatar(m.Id, image =>
                 {
@@ -47,6 +58,12 @@ public partial class ShellViewModel
                 });
             }
             OnPropertyChanged(nameof(CanDeleteEveryone));
+            OnPropertyChanged(nameof(CanInviteMembers));
+            OnPropertyChanged(nameof(MembersSummary));
+            OnPropertyChanged(nameof(GroupRoleText));
+            OnPropertyChanged(nameof(CanManagePins));
+            OnPropertyChanged(nameof(CanPin));
+            RefreshPinList();
         });
     }
 

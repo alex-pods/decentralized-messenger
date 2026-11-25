@@ -1,19 +1,80 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.ProfileEditor" x:Name="Root">
-  <StackPanel Spacing="10">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters"
+             x:Class="MessengerDesktop.Views.Dialogs.ProfileEditor" x:Name="Root">
+  <StackPanel Spacing="0">
     <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding ShowProfileCommand.IsRunning}"/>
-    <WrapPanel Orientation="Horizontal" Margin="0,0,0,14">
-      <Border Width="64" Height="64" CornerRadius="32" Background="{Binding CurrentUserId, Converter={StaticResource AvatarBrush}}" ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver" DragDrop.Drop="OnAvatarDrop" BorderBrush="{DynamicResource WellEdge}" BorderThickness="1">
-        <Grid>
+    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,24">
+      <Border Width="72" Height="72" CornerRadius="36" Background="{Binding CurrentUserId, Converter={StaticResource AvatarBrush}}"
+              ClipToBounds="True" DragDrop.AllowDrop="True" DragDrop.DragOver="OnAvatarDragOver" DragDrop.Drop="OnAvatarDrop">
+        <Panel>
           <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
-          <TextBlock Text="{Binding DisplayName, Converter={StaticResource Initial}}" TextWrapping="Wrap" TextAlignment="Center" FontSize="28" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="14" IsVisible="{Binding !HasAvatar}"/>
-        </Grid>
+          <TextBlock Classes="avatarText" Text="{Binding DisplayName, Converter={StaticResource Initial}}" FontSize="28" IsVisible="{Binding !HasAvatar}"/>
+        </Panel>
       </Border>
-      <Button Classes="small" Content="Выбрать фото…" Click="OnChooseAvatarClick" Margin="12,8,0,8" VerticalAlignment="Center"/>
-    </WrapPanel>
-    <TextBlock Classes="field" Text="Имя"/>
-    <TextBox Text="{Binding DisplayName}" MaxLength="32" AutomationProperties.Name="Имя" IsEnabled="{Binding !ShowProfileCommand.IsRunning}"/>
-    <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>
-    <TextBox Text="{Binding Bio}" MaxLength="500" AutomationProperties.Name="О себе" IsEnabled="{Binding !ShowProfileCommand.IsRunning}" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap" VerticalContentAlignment="Top"/>
-    <Button Classes="primary large" Content="Сохранить" HorizontalAlignment="Right" Padding="26,0" Margin="0,14,0,0" Command="{Binding SaveProfileCommand}"/>
+      <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center" Spacing="5">
+        <TextBlock Text="{Binding DisplayName}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+        <Button x:Name="CopyTag" Click="OnCopyTag" HorizontalAlignment="Left" HorizontalContentAlignment="Left" Padding="0" MinHeight="24"
+                ToolTip.Tip="Скопировать тег" AutomationProperties.Name="Скопировать мой тег">
+          <TextBlock Text="{Binding UserTag}" Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"/>
+        </Button>
+      </StackPanel>
+    </Grid>
+    <StackPanel x:Name="AccountPanel" Spacing="0">
+      <TextBlock Text="{Binding Bio}" Classes="secondary" Margin="0,0,0,16" MaxLines="3" TextTrimming="CharacterEllipsis"
+                 IsVisible="{Binding Bio, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+      <Button x:Name="EditProfile" Click="OnEditProfile" Classes="profileRow">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <local:Glyph Data="{StaticResource IcEdit}"/>
+          <StackPanel Grid.Column="1" Margin="14,0" Spacing="4"><TextBlock Text="Редактировать профиль"/><TextBlock Text="Фото, имя и информация о себе" Classes="caption" TextWrapping="Wrap"/></StackPanel>
+          <local:Glyph Grid.Column="2" Data="{StaticResource IcChevronRight}" Width="16" Height="16"/>
+        </Grid>
+      </Button>
+      <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,14"/>
+      <Button Click="OnPreferencesClick" Tag="PrivacySection" Classes="profileRow">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <local:Glyph Data="{StaticResource IcShield}"/>
+          <StackPanel Grid.Column="1" Margin="14,0" Spacing="4"><TextBlock Text="Приватность"/><TextBlock x:Name="PrivacySummary" Classes="caption" TextWrapping="Wrap"/></StackPanel>
+          <local:Glyph Grid.Column="2" Data="{StaticResource IcChevronRight}" Width="16" Height="16"/>
+        </Grid>
+      </Button>
+      <Button Click="OnPreferencesClick" Tag="MessagesSection" Classes="profileRow">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <local:Glyph Data="{StaticResource IcBubble}"/>
+          <StackPanel Grid.Column="1" Margin="14,0" Spacing="4"><TextBlock Text="Сообщения"/><TextBlock x:Name="MessagesSummary" Classes="caption" TextWrapping="Wrap"/></StackPanel>
+          <local:Glyph Grid.Column="2" Data="{StaticResource IcChevronRight}" Width="16" Height="16"/>
+        </Grid>
+      </Button>
+      <Button Click="OnAppearanceClick" Classes="profileRow">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <local:Glyph Data="{StaticResource IcPalette}"/>
+          <StackPanel Grid.Column="1" Margin="14,0" Spacing="4"><TextBlock Text="Оформление"/><TextBlock x:Name="ThemeSummary" Classes="caption" TextWrapping="Wrap"/></StackPanel>
+          <local:Glyph Grid.Column="2" Data="{StaticResource IcChevronRight}" Width="16" Height="16"/>
+        </Grid>
+      </Button>
+      <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,14"/>
+      <Grid ColumnDefinitions="Auto,*" Margin="12,8,12,16">
+        <local:Glyph Data="{StaticResource IcServer}" Foreground="{DynamicResource LabelBrush}"/>
+        <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="4">
+          <TextBlock Text="Ваш сервер" Classes="caption"/>
+          <TextBlock Text="{Binding ServerLabel}" FontSize="13" TextWrapping="Wrap"/>
+        </StackPanel>
+      </Grid>
+      <Button Click="OnLogoutClick" Classes="profileRow danger">
+        <StackPanel Orientation="Horizontal" Spacing="14"><local:Glyph Data="{StaticResource IcLogout}"/><TextBlock Text="Выйти из аккаунта" VerticalAlignment="Center"/></StackPanel>
+      </Button>
+    </StackPanel>
+    <StackPanel x:Name="EditPanel" IsVisible="False" Spacing="10">
+      <Button Content="Изменить фото…" Click="OnChooseAvatarClick" Classes="secondaryAction" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+      <TextBlock Classes="field" Text="Имя"/>
+      <TextBox x:Name="ProfileName" Text="{Binding DisplayName}" MaxLength="32" AutomationProperties.Name="Имя" IsEnabled="{Binding !ShowProfileCommand.IsRunning}"/>
+      <TextBlock Classes="field" Text="О себе" Margin="0,8,0,0"/>
+      <TextBox Text="{Binding Bio}" MaxLength="500" AutomationProperties.Name="О себе" IsEnabled="{Binding !ShowProfileCommand.IsRunning}"
+               AcceptsReturn="True" MinHeight="100" MaxHeight="180" TextWrapping="Wrap" VerticalContentAlignment="Top"/>
+      <TextBlock Text="Фото обновляется сразу. Имя и описание — после сохранения." Classes="caption" TextWrapping="Wrap"/>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
+        <Button x:Name="CancelEdit" Click="OnCancelEdit" Content="Отмена"/>
+        <Button Classes="primary" Content="Сохранить" Padding="20,10" Command="{Binding SaveProfileCommand}"/>
+      </StackPanel>
+    </StackPanel>
   </StackPanel>
 </UserControl>

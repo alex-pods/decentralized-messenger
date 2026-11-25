@@ -16,7 +16,7 @@ public static partial class Preview
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                ThemeSettings.Apply(theme); window.Width = width; window.Height = 780;
+                ThemeSettings.Apply(theme); Resize(window, width); window.Height = 780;
                 if (window.DataContext is LoginViewModel login)
                 {
                     login.IsRegistration = registration; login.Error = null; login.ShowConnection = false;
@@ -33,7 +33,7 @@ public static partial class Preview
         foreach (var theme in ThemeSettings.Presets.Take(2))
         {
             var suffix = theme.Dark ? "dark" : "light";
-            await Dispatcher.UIThread.InvokeAsync(() => { ThemeSettings.Apply(theme); window.Width = 360; window.Height = 600; });
+            await Dispatcher.UIThread.InvokeAsync(() => { ThemeSettings.Apply(theme); Resize(window, 360); window.Height = 600; });
             foreach (var screen in new[] { "direct", "group", "profile", "members", "forward" })
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
@@ -58,7 +58,7 @@ public static partial class Preview
             await Shot(appearance, $"audit-sharing-{suffix}-360");
             await Dispatcher.UIThread.InvokeAsync(() => appearance.Close());
         }
-        await Dispatcher.UIThread.InvokeAsync(() => { window.Width = 1180; window.Height = 780; ThemeSettings.Apply(ThemeSettings.Presets[0]); });
+        await Dispatcher.UIThread.InvokeAsync(() => { Resize(window, 1180); window.Height = 780; ThemeSettings.Apply(ThemeSettings.Presets[0]); });
         Console.WriteLine("PASS compact screen matrix: authentication, five dialogs, conversation, appearance and sharing in light/dark");
     }
 }

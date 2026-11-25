@@ -10,7 +10,7 @@ public static class ConfirmAction
     public static async Task<bool> Show(Control source, string title, string description, string action)
     {
         if (TopLevel.GetTopLevel(source) is not Window owner) return false;
-        var dialog = new Window { Title = title, Width = 400, SizeToContent = SizeToContent.Height,
+        var dialog = new Window { Title = title, Width = Math.Clamp(owner.ClientSize.Width - 32, 320, 400), SizeToContent = SizeToContent.Height,
             CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         var cancel = new Button { Content = "Отмена", MinWidth = 90 };
         var confirm = new Button { Content = action, Classes = { "danger" }, MinWidth = 110 };

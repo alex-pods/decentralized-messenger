@@ -9,6 +9,21 @@ namespace MessengerDesktop.Views;
 
 public partial class ShellView
 {
+    async void OnChatInfoClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedChat is not { } chat || TopLevel.GetTopLevel(this) is not Window owner) return;
+        if (!chat.IsGroup && chat.AvatarUserId is { } userId)
+            await new Dialogs.UserProfileWindow(_vm, userId).ShowDialog(owner);
+        else await _vm.ShowMembersCommand.ExecuteAsync(null);
+    }
+
+    async void OnSenderProfileClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm != null && sender is Control { DataContext: MessageItem message } && TopLevel.GetTopLevel(this) is Window owner)
+            await new Dialogs.UserProfileWindow(_vm, message.SenderId).ShowDialog(owner);
+        e.Handled = true;
+    }
+
     internal static MenuItem ActionItem(string title, string icon, ICommand command, object? parameter = null) => new()
     {
         Header = title,
@@ -46,20 +61,12 @@ public partial class ShellView
         };
         settings.Click += OnSettingsClick;
         menu.Items.Add(settings);
-        var appearance = new MenuItem { Header = "Оформление" };
+        var appearance = new MenuItem { Header = "Оформление", Icon = new Glyph { Data = (Geometry)Application.Current!.FindResource("IcPalette")!, Width = 17, Height = 17 } };
         appearance.Click += OnAppearanceClick;
         menu.Items.Add(appearance);
         menu.Items.Add(new Separator());
         menu.Items.Add(ActionItem("Выйти из аккаунта", "IcLogout", _vm.LogoutCommand));
         menu.Open(anchor);
-    }
-
-    async void OnLeaveGroup(object? sender, RoutedEventArgs e)
-    {
-        var chat = _vm?.SelectedChat;
-        if (chat == null) return;
-        if (await Dialogs.ConfirmAction.Show(this, "Выйти из группы?", $"Вы покинете «{chat.Title}». Для возвращения потребуется приглашение участника.", "Выйти") && _vm?.SelectedChat == chat)
-            _vm.LeaveChatCommand.Execute(null);
     }
 
     void OnMessageContextRequested(object? sender, ContextRequestedEventArgs e)
@@ -88,19 +95,9 @@ public partial class ShellView
         ActiveMessageMenu = menu;
         if (!message.IsDeleted)
         {
-            var reactions = new Avalonia.Controls.StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 2 };
-            foreach (var emoji in _vm.QuickReactions)
-            {
-                var button = new Button { Content = new ReactionIcon { Emoji = emoji, Width = 22, Height = 22 }, Padding = new Thickness(8) };
-                ToolTip.SetTip(button, emoji);
-                button.Click += (_, _) => { _vm.ToggleReactionCommand.Execute(emoji); menu.Close(); };
-                reactions.Children.Add(button);
-            }
+            var reactions = new ReactionPicker { Width = 264 };
+            reactions.Picked += emoji => { _vm.ToggleReactionCommand.Execute(emoji); menu.Close(); };
             menu.Items.Add(new MenuItem { Header = reactions });
-            var more = new MenuItem { Header = "Другие реакции" };
-            foreach (var emoji in _vm.MoreReactions)
-                more.Items.Add(new MenuItem { Header = emoji, Command = _vm.ToggleReactionCommand, CommandParameter = emoji });
-            menu.Items.Add(more);
             menu.Items.Add(new Separator());
             menu.Items.Add(ActionItem("Ответить", "IcReply", _vm.ReplyCommand));
         }

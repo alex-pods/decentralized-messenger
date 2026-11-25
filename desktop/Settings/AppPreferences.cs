@@ -41,13 +41,17 @@ public static class AppPreferences
     /// <summary>Вызывается после любого изменения настроек.</summary>
     public static event Action? Changed;
 
-    static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    public static string? SaveError { get; private set; }
+
+    internal static string FilePath { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "messenger-desktop", "settings.json");
 
     public static void Load()
     {
         try
         {
+            Current = new();
+            SaveError = null;
             if (File.Exists(FilePath))
                 Current = Normalize(JsonSerializer.Deserialize<UserPreferences>(File.ReadAllText(FilePath), Json) ?? new());
         }
@@ -60,12 +64,12 @@ public static class AppPreferences
     public static void Update(Func<UserPreferences, UserPreferences> change)
     {
         Current = Normalize(change(Current));
-        Changed?.Invoke();
-        try { Save(); }
+        try { Save(); SaveError = null; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Настройка продолжит работать до закрытия приложения, даже если файл не записался.
+            SaveError = "Не удалось сохранить настройки на устройстве. Изменения действуют до закрытия приложения.";
         }
+        Changed?.Invoke();
     }
 
     static void Save()
@@ -80,6 +84,11 @@ public static class AppPreferences
     static UserPreferences Normalize(UserPreferences value)
     {
         var known = ReactionCatalog.Main.Concat(ReactionCatalog.More);
-        return known.Contains(value.DoubleClickReaction) ? value : value with { DoubleClickReaction = ReactionCatalog.Main[0] };
+        return value with
+        {
+            SendMode = Enum.IsDefined(value.SendMode) ? value.SendMode : SendMode.CtrlEnter,
+            DoubleClick = Enum.IsDefined(value.DoubleClick) ? value.DoubleClick : DoubleClickAction.None,
+            DoubleClickReaction = known.Contains(value.DoubleClickReaction) ? value.DoubleClickReaction : ReactionCatalog.Main[0]
+        };
     }
 }

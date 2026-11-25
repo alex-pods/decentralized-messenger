@@ -10,11 +10,10 @@ public partial class ShellViewModel
         try
         {
             await _api.UpdateProfile(null, null, allow);
-            var me = await _api.GetMe();
             await Ui(() =>
             {
-                _me = me;
-                AllowTagSearch = me.AllowTagSearch;
+                _me.AllowTagSearch = allow;
+                AllowTagSearch = allow;
             });
             return null;
         }

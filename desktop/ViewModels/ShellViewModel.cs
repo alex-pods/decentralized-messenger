@@ -125,12 +125,12 @@ public partial class ShellViewModel : ObservableObject
     internal MessengerClient ThemeApi => _api;
     public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";
     public bool OverlayOpen => Overlay.Length > 0;
-    public bool ShowPeopleSearch => Overlay is "direct" or "group" or "members";
+    public bool ShowPeopleSearch => Overlay is "direct" or "group";
     public string OverlayTitle => Overlay switch
     {
         "direct" => "Новый личный чат",
         "group" => "Новая группа",
-        "members" => "Участники",
+        "members" => IsGroup ? "Информация о группе" : "Информация о чате",
         "profile" => "Профиль",
         "forward" => "Переслать в…",
         _ => ""
@@ -143,11 +143,13 @@ public partial class ShellViewModel : ObservableObject
     public bool CanManagePins => HasChat && (!IsGroup || _myRole is "owner" or "admin");
     public bool CanPin => CanManagePins && SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public bool SelectedIsPinned => SelectedMessage != null && _pins.Any(p => p.MessageId == SelectedMessage.Id);
-    public string PinActionLabel => SelectedIsPinned ? "Открепить" : "Закрепить";
+    public string PinActionLabel => SelectedIsPinned ? "Открепить у всех" : "Закрепить для всех";
+    public string UserTag => "@" + _me.Tag;
+    public string ServerLabel => _api.ServerBase;
     PinListItem? ShownPin => _stripPins.Count == 0 ? null : _stripPins[Math.Clamp(_pinIndex, 0, _stripPins.Count - 1)];
     public bool HasPins => ShownPin != null;
     public string PinText => ShownPin is { } pin ? MessageMapper.Trim(pin.Text, 120) : "";
-    public string PinScope => ShownPin?.Local == true ? "Закреплено для себя" : "Закреплённое сообщение";
+    public string PinScope => ShownPin?.Local == true ? "Закреплено для себя" : "Закреплено для всех";
     public bool CanUnpinShown => ShownPin is { } pin && (pin.Local || CanManagePins);
     public string PinCounter => _stripPins.Count <= 1 ? "" : $"{_pinIndex + 1}/{_stripPins.Count}";
     public string SelectionHint => SelectedMessage is null ? "" : "Выбрано сообщение";
@@ -182,11 +184,7 @@ public partial class ShellViewModel : ObservableObject
     [RelayCommand] void CloseOverlay()
     {
         if (Overlay == "profile")
-        {
-            DisplayName = _me.DisplayName;
-            Bio = _me.Bio ?? "";
-            AllowTagSearch = _me.AllowTagSearch;
-        }
+            ResetProfileDraft();
         ++_searchGeneration;
         Searching = false;
         Overlay = "";

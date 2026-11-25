@@ -21,4 +21,8 @@
   <StreamGeometry x:Key="IcMore">M11.0 12.0 a1.0 1.0 0 1 0 2.0 0 a1.0 1.0 0 1 0 -2.0 0 M18.0 12.0 a1.0 1.0 0 1 0 2.0 0 a1.0 1.0 0 1 0 -2.0 0 M4.0 12.0 a1.0 1.0 0 1 0 2.0 0 a1.0 1.0 0 1 0 -2.0 0</StreamGeometry>
   <StreamGeometry x:Key="IcForward">M15 17 L20 12 L15 7 M4 18v-2a4 4 0 0 1 4-4h12</StreamGeometry>
   <StreamGeometry x:Key="IcSmilePlus">M22 11v1a10 10 0 1 1-9-10 M8 14s1.5 2 4 2 4-2 4-2 M9 9 L9.01 9 M15 9 L15.01 9 M16 5h6 M19 2v6</StreamGeometry>
+  <StreamGeometry x:Key="IcPalette">M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z M13.0 6.5 a0.5 0.5 0 1 0 1.0 0 a0.5 0.5 0 1 0 -1.0 0 M17.0 10.5 a0.5 0.5 0 1 0 1.0 0 a0.5 0.5 0 1 0 -1.0 0 M6.0 12.5 a0.5 0.5 0 1 0 1.0 0 a0.5 0.5 0 1 0 -1.0 0 M8.0 7.5 a0.5 0.5 0 1 0 1.0 0 a0.5 0.5 0 1 0 -1.0 0</StreamGeometry>
+  <StreamGeometry x:Key="IcArrowLeft">m12 19-7-7 7-7 M19 12H5</StreamGeometry>
+  <StreamGeometry x:Key="IcShield">M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z M9 12 l2 2 4-4</StreamGeometry>
+  <StreamGeometry x:Key="IcServer">M4.0 2.0 H20.0 Q22.0 2.0 22.0 4.0 V8.0 Q22.0 10.0 20.0 10.0 H4.0 Q2.0 10.0 2.0 8.0 V4.0 Q2.0 2.0 4.0 2.0 Z M4.0 14.0 H20.0 Q22.0 14.0 22.0 16.0 V20.0 Q22.0 22.0 20.0 22.0 H4.0 Q2.0 22.0 2.0 20.0 V16.0 Q2.0 14.0 4.0 14.0 Z M6 6 L6.01 6 M6 18 L6.01 18</StreamGeometry>
 </ResourceDictionary>

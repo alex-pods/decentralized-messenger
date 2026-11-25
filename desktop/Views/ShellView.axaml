@@ -1,4 +1,4 @@
-<UserControl xmlns:views="using:MessengerDesktop.Views.Dialogs" xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="MessengerDesktop.Views.ShellView" x:Name="Root" KeyDown="OnShellKeyDown">
+<UserControl xmlns:appearance="using:MessengerDesktop.Appearance" xmlns:screens="using:MessengerDesktop.Views" xmlns:views="using:MessengerDesktop.Views.Dialogs" xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="MessengerDesktop.Views.ShellView" x:Name="Root" KeyDown="OnShellKeyDown">
   <Panel>
     <Grid x:Name="ShellGrid" Classes="shell" IsEnabled="{Binding !OverlayOpen}" ColumnDefinitions="344,*">
       <Border Classes="sidebar" Grid.Column="0" x:Name="ChatSidebar">
@@ -62,37 +62,43 @@
       </Border>
       <Border x:Name="ScreenBay" Classes="screenbay deck" Grid.Column="1">
         <Panel>
+        <appearance:WallpaperLayer/>
         <Grid RowDefinitions="Auto,*,Auto" IsVisible="{Binding !ShowingPinnedMessages}">
           <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="84" Margin="28,0" PointerPressed="OnDragAreaPressed">
             <Button x:Name="BackToChats" Classes="icon" Click="OnShowChats" IsVisible="False" ToolTip.Tip="К чатам">
-              <local:Glyph Data="{StaticResource IcReply}"/>
+              <local:Glyph Data="{StaticResource IcArrowLeft}"/>
             </Button>
-            <Border Grid.Column="1" Classes="avatar" Width="40" Height="40" Margin="0,0,12,0" ClipToBounds="True" IsVisible="{Binding HasChat}" Background="{Binding SelectedChat.AvatarColorKey, Converter={StaticResource AvatarBrush}}">
+            <Button x:Name="ChatIdentity" Classes="chatIdentity" Cursor="Hand" Grid.Column="1" Grid.ColumnSpan="2" Click="OnChatInfoClick" IsEnabled="{Binding HasChat}"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0,10" ToolTip.Tip="Открыть профиль или информацию о группе">
+              <Grid ColumnDefinitions="Auto,*">
+            <Border Classes="avatar" Width="40" Height="40" Margin="0,0,12,0" ClipToBounds="True" IsVisible="{Binding HasChat}" Background="{Binding SelectedChat.AvatarColorKey, Converter={StaticResource AvatarBrush}}">
               <Panel>
                 <Image Source="{Binding SelectedChat.Avatar}" Stretch="UniformToFill" IsVisible="{Binding SelectedChat.HasAvatar}"/>
                 <TextBlock Classes="avatarText" Text="{Binding SelectedChat.Title, Converter={StaticResource Initial}}" IsVisible="{Binding SelectedChat.ShowInitial}"/>
                 <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16" StrokeWidth="1.8" Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}"/>
               </Panel>
             </Border>
-            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
               <StackPanel Orientation="Vertical" Spacing="2">
                 <TextBlock Text="{Binding ChatTitle}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding SelectedChat.Kind}" Classes="caption" VerticalAlignment="Center" IsVisible="{Binding HasChat}"/>
               </StackPanel>
             </StackPanel>
+              </Grid>
+            </Button>
             <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Информация о чате" AutomationProperties.Name="Информация о чате" Command="{Binding ShowMembersCommand}" VerticalAlignment="Center" IsVisible="{Binding HasChat}">
               <local:Glyph Data="{StaticResource IcInfo}"/>
             </Button>
           </Grid></Border>
-          <Border Grid.Row="1" Classes="screen" Margin="0" BorderThickness="0" CornerRadius="0">
+          <Border Grid.Row="1" Classes="screen" Background="Transparent" Margin="0" BorderThickness="0" CornerRadius="0">
             <DockPanel>
-              <Border DockPanel.Dock="Top" Padding="12,3" BorderThickness="0,0,0,1"
+              <Border DockPanel.Dock="Top" Background="{DynamicResource RaisedBrush}" Padding="12,3" BorderThickness="0,0,0,1"
                       BorderBrush="{DynamicResource SeparatorBrush}" IsVisible="{Binding HasPins}">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                   <Button x:Name="OpenPinnedMessages" Classes="icon small" Width="32" Height="32" VerticalAlignment="Center"
                           ToolTip.Tip="Все закреплённые сообщения" AutomationProperties.Name="Все закреплённые сообщения"
                           Command="{Binding ShowPinListCommand}">
-                    <PathIcon Width="16" Height="16" Data="M 1,2 H 4 V 5 H 1 Z M 6,2 H 15 V 4 H 6 Z M 1,7 H 4 V 10 H 1 Z M 6,7 H 15 V 9 H 6 Z M 1,12 H 4 V 15 H 1 Z M 6,12 H 15 V 14 H 6 Z"/>
+                    <local:Glyph Data="{StaticResource IcPin}" Width="18" Height="18"/>
                   </Button>
                   <Button Grid.Column="1" Classes="toolbar" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                           Command="{Binding ShowPinnedCommand}" Background="Transparent" BorderThickness="0">
@@ -150,9 +156,10 @@
                           </Border>
                           <Border Grid.Column="1" Classes="bubble" Classes.mine="{Binding Mine}" Padding="13,9" MinWidth="82">
                             <StackPanel Spacing="5" MaxWidth="526">
-                              <TextBlock Text="{Binding SenderName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}">
-                                <TextBlock.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="!Mine"/><Binding Path="StartsRun"/><Binding Path="DataContext.IsGroup" ElementName="Root"/></MultiBinding></TextBlock.IsVisible>
-                              </TextBlock>
+                              <Button Classes="authorName" Click="OnSenderProfileClick" HorizontalAlignment="Left" Padding="0" MinHeight="20" ToolTip.Tip="Открыть профиль">
+                                <Button.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="!Mine"/><Binding Path="StartsRun"/><Binding Path="DataContext.IsGroup" ElementName="Root"/></MultiBinding></Button.IsVisible>
+                                <TextBlock Text="{Binding SenderName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap"/>
+                              </Button>
                               <TextBlock Text="{Binding Forwarded}" Classes="caption" TextWrapping="Wrap" ToolTip.Tip="{Binding ForwardedTip}" IsVisible="{Binding IsForwarded}"/>
                               <Border Background="{DynamicResource QuoteFill}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="3,0,0,0" CornerRadius="3" Padding="9,6" IsVisible="{Binding HasReply}">
                                 <TextBlock Text="{Binding Reply}" FontSize="13" Foreground="{DynamicResource LabelBrush}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
@@ -164,9 +171,9 @@
                               <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate><DataTemplate>
-                                  <Border Classes="reaction" Classes.active="{Binding Mine}" Margin="0,0,5,0" Cursor="Hand" PointerPressed="OnChipPressed">
-                                    <StackPanel Orientation="Horizontal" Spacing="5"><local:ReactionIcon Emoji="{Binding Emoji}" Width="16" Height="16"/><TextBlock Text="{Binding Count}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
-                                  </Border>
+                                  <Button Classes="reaction" Classes.active="{Binding Mine}" Margin="0,0,5,4" Click="OnChipClick" AutomationProperties.Name="{Binding Emoji}" ToolTip.Tip="Добавить или убрать свою реакцию">
+                                    <StackPanel Orientation="Horizontal" Spacing="5"><local:ReactionIcon Emoji="{Binding Emoji}" Width="18" Height="18"/><TextBlock Text="{Binding Count}" FontSize="12" VerticalAlignment="Center"/></StackPanel>
+                                  </Button>
                                 </DataTemplate></ItemsControl.ItemTemplate>
                               </ItemsControl>
 
@@ -203,7 +210,7 @@
             <TextBlock Text="{Binding DraftLengthHint}" IsVisible="{Binding HasDraftLengthHint}" Classes="caption" HorizontalAlignment="Right"/>
             <Border Classes="composer">
               <Grid ColumnDefinitions="*,Auto">
-                <TextBox x:Name="ComposerInput" Classes="bare" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" Watermark="Напишите сообщение…"/>
+                <TextBox x:Name="ComposerInput" Classes="bare" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="200" Watermark="Напишите сообщение…" AutomationProperties.Name="Сообщение"/>
                 <Button x:Name="SendButton" Grid.Column="1" Classes="send" VerticalAlignment="Bottom" Margin="6,0,2,0" AutomationProperties.Name="Отправить" Command="{Binding SendCommand}" IsEnabled="{Binding CanSendDraft}">
                   <local:Glyph Data="{StaticResource IcSend}" Width="18" Height="18" StrokeWidth="2.2" Foreground="{DynamicResource ActionTextBrush}"/>
                 </Button>
@@ -211,72 +218,13 @@
             </Border>
           </StackPanel>
         </Grid>
-        <Grid RowDefinitions="Auto,*" IsVisible="{Binding ShowingPinnedMessages}">
-          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto,*" MinHeight="84" Margin="24,0">
-              <Button x:Name="BackFromPinnedMessages" Classes="icon" Margin="0,0,12,0"
-                      VerticalAlignment="Center" ToolTip.Tip="Назад в чат" AutomationProperties.Name="Назад в чат"
-                      Command="{Binding ClosePinListCommand}">
-                <PathIcon Width="18" Height="18" Data="M 8,2 L 9.5,3.5 L 4,9 H 17 V 11 H 4 L 9.5,16.5 L 8,18 L 0,10 Z"/>
-              </Button>
-              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                <TextBlock Text="Закреплённые сообщения" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding ChatTitle}" Classes="caption" TextTrimming="CharacterEllipsis"/>
-              </StackPanel>
-            </Grid>
-          </Border>
-
-          <Grid Grid.Row="1">
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-              <ItemsControl ItemsSource="{Binding PinList}" Margin="24,18">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="{Binding Mine, Converter={StaticResource Align}}" MaxWidth="600" Margin="0,0,0,9">
-                      <Button Padding="0" Background="Transparent" BorderThickness="0"
-                              HorizontalContentAlignment="Stretch"
-                              ToolTip.Tip="Перейти к сообщению в чате"
-                              Command="{Binding DataContext.OpenPinFromListCommand, ElementName=Root}" CommandParameter="{Binding}">
-                        <Border Classes="bubble" Classes.mine="{Binding Mine}" Padding="13,9">
-                          <StackPanel Spacing="4">
-                            <Grid ColumnDefinitions="Auto,*">
-                              <TextBlock Text="{Binding Sender}" FontSize="13" FontWeight="SemiBold"
-                                         Foreground="{DynamicResource AccentBrush}" MaxWidth="120" Margin="0,0,8,0"
-                                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                         IsVisible="{Binding Sender, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-                              <TextBlock Grid.Column="1" Text="{Binding Scope}" Classes="caption"
-                                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                            </Grid>
-                            <local:MessageTextPanel>
-                              <TextBlock Text="{Binding Text}" FontSize="15" LineHeight="21" TextWrapping="Wrap"/>
-                              <TextBlock Text="{Binding Time}" Classes="caption" FontSize="11"
-                                         IsVisible="{Binding Time, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-                            </local:MessageTextPanel>
-                          </StackPanel>
-                        </Border>
-                      </Button>
-                      <Button Grid.Column="1" Classes="icon small" VerticalAlignment="Center" Margin="5,0,0,0"
-                              ToolTip.Tip="Открепить сообщение" AutomationProperties.Name="Открепить сообщение"
-                              IsVisible="{Binding CanRemove}"
-                              Command="{Binding DataContext.RemovePinFromListCommand, ElementName=Root}" CommandParameter="{Binding}">
-                        <local:Glyph Data="{StaticResource IcClose}" Width="12" Height="12"/>
-                      </Button>
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-            <TextBlock Text="В этом чате пока нет закреплённых сообщений." Classes="secondary"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
-                       TextAlignment="Center" TextWrapping="Wrap" IsVisible="{Binding PinListEmpty}"/>
-          </Grid>
-        </Grid>
+        <screens:PinnedMessagesView x:Name="PinnedMessages" IsVisible="{Binding ShowingPinnedMessages}"/>
         </Panel>
       </Border>
     </Grid>
     <Border Classes="scrim" Background="{DynamicResource DimBrush}" IsVisible="{Binding OverlayOpen}">
       <Border Classes="sheet" MaxHeight="680" Padding="24" HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="480" Margin="20" KeyboardNavigation.TabNavigation="Cycle" x:Name="OverlaySheet">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
-          <DockPanel>
+        <DockPanel>
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,18">
               <StackPanel Spacing="2" VerticalAlignment="Center">
 
@@ -287,22 +235,18 @@
               </Button>
             </Grid>
             <TextBlock DockPanel.Dock="Bottom" Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+          <ScrollViewer x:Name="OverlayScroll" HorizontalScrollBarVisibility="Disabled" Margin="0,0,8,0">
+            <DockPanel>
             <Button Classes="primary large" Content="Создать группу" HorizontalAlignment="Right" Padding="22,0" Command="{Binding CreateGroupCommand}" DockPanel.Dock="Bottom" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}" Margin="0,20,0,0" MinHeight="42"/>
-            <ContentControl DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}">
-              <views:ProfileEditor/>
-            </ContentControl>
+            <views:ProfileEditor DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}"/>
             <views:GroupDetails DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}"/>
-            <WrapPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}">
-              <Button Content="Скрыть чат у себя" Command="{Binding HideChatCommand}" Margin="0,0,8,8"/>
-              <Button Classes="danger" Content="Выйти из группы" Click="OnLeaveGroup" IsVisible="{Binding IsGroup}" Margin="0,0,0,8"/>
-            </WrapPanel>
+            <views:ConversationDetails DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}"/>
             <views:ForwardPicker DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>
-            <DockPanel IsVisible="{Binding ShowPeopleSearch}">
-              <views:PeopleSearch DockPanel.Dock="Top"/>
-              <views:MemberList IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}"/>
+            <views:PeopleSearch IsVisible="{Binding ShowPeopleSearch}"/>
+
             </DockPanel>
-          </DockPanel>
-        </ScrollViewer>
+          </ScrollViewer>
+        </DockPanel>
       </Border>
     </Border>
     <Border Classes="toast" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" MaxWidth="520">

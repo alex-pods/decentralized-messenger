@@ -8,12 +8,13 @@ namespace MessengerDesktop;
 public static class LocalPinStore
 {
     public sealed record Entry(long ChatId, long MessageId, string Text, long? SenderId = null, DateTimeOffset? SentAt = null);
+    internal static string DirectoryPath { get; set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "messenger-desktop", "pins");
 
     static string FilePath(string server, long userId)
     {
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(server.TrimEnd('/') + ":" + userId)));
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "messenger-desktop", "pins", key + ".json");
+        return Path.Combine(DirectoryPath, key + ".json");
     }
 
     public static List<Entry> Load(string server, long userId)

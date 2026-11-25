@@ -21,10 +21,17 @@ internal static class Program
             return SelfCheck.Run(args.Length > 1 ? args[1] : "http://127.0.0.1:5080/messenger");
         if (args.Length > 0 && args[0] == "--check-pins")
             return PinStripCheck.Run();
+        if (args.Length > 0 && args[0] == "--check-preferences")
+            return PreferencesCheck.Run();
         if (args.Length > 1 && args[0] == "--check-themes")
             return ThemeExchangeCheck.Run(args[1]);
         if (args.Length > 2 && args[0] == "--preview")
             (Preview.Server, Preview.OutDir) = (args[1], args[2]);
+        if (args.Length > 2 && args[0] == "--preview-mvp")
+        {
+            (Preview.Server, Preview.OutDir) = (args[1], args[2]);
+            Preview.MvpOnly = true;
+        }
         if (args.Length > 2 && args[0] == "--preview-sharing")
         {
             (Preview.Server, Preview.OutDir) = (args[1], args[2]);

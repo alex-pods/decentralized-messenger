@@ -24,7 +24,7 @@
           <TextBox x:Name="PasswordBox"  Margin="0,4,0,0"
                    Text="{Binding Password}" PasswordChar="•" Watermark="Введите пароль">
             <TextBox.InnerRightContent>
-              <Button Classes="eye" Width="32" Height="32" Margin="0,0,4,0"
+              <Button Classes="icon" Width="36" Height="36" Padding="8" Margin="0,0,4,0"
                       AutomationProperties.Name="Показать пароль"
                       Click="OnTogglePassword">
                 <Panel>

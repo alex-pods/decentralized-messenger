@@ -81,6 +81,8 @@ public partial class ShellViewModel
         _myRole = members.FirstOrDefault(m => m.Id == _me.Id)?.Role ?? "";
         OnPropertyChanged(nameof(CanDeleteEveryone));
         OnPropertyChanged(nameof(CanManagePins));
+        OnPropertyChanged(nameof(CanInviteMembers));
+        OnPropertyChanged(nameof(GroupRoleText));
         OnPropertyChanged(nameof(CanPin));
         if (!replace) return;
         var texts = messages.ToDictionary(m => m.Id, MessageMapper.Body);

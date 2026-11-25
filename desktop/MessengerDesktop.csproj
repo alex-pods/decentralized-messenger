@@ -13,7 +13,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AvaloniaResource Include="Assets\Wallpapers\*.svg" />
+    <Content Include="Assets\Wallpapers\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\LUCIDE-LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <AvaloniaResource Include="Assets\Twemoji\*.png" />
+    <Content Include="Assets\Twemoji\LICENSE-GRAPHICS" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Twemoji\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

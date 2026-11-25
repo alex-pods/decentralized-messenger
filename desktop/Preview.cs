@@ -15,11 +15,28 @@ public static partial class Preview
 {
     public static string? Server { get; set; }
     public static string OutDir { get; set; } = ".";
+    public static bool MvpOnly { get; set; }
+
+    static void Resize(Window window, double width)
+    {
+        window.WindowState = WindowState.Normal;
+        window.Width = width;
+    }
 
     public static async Task Run(Window window, Navigator nav)
     {
+        Resize(window, 1180);
         if (SharingOnly) { await AuditSharing(window); return; }
         var (api, me) = await Seed(Server!);
+        if (MvpOnly)
+        {
+            var model = new ShellViewModel(nav, api, me);
+            nav.Go(model);
+            await Task.Delay(2000);
+            await AuditMvp(window, model);
+            window.Close();
+            return;
+        }
         await Task.Delay(1500);
         await Shot(window, "login");
         await Dispatcher.UIThread.InvokeAsync(() =>
@@ -73,10 +90,10 @@ public static partial class Preview
         });
         await Task.Delay(2000);
         await Shot(window, "group");
-        await Dispatcher.UIThread.InvokeAsync(() => window.Width = 520);
+        await Dispatcher.UIThread.InvokeAsync(() => Resize(window, 520));
         await Task.Delay(300);
         await Shot(window, "narrow");
-        await Dispatcher.UIThread.InvokeAsync(() => window.Width = 1180);
+        await Dispatcher.UIThread.InvokeAsync(() => Resize(window, 1180));
 
         await Dispatcher.UIThread.InvokeAsync(() => vm.ShowMembersCommand.Execute(null));
         await Task.Delay(1500);
@@ -89,6 +106,7 @@ public static partial class Preview
 
         await AuditScreens(window, vm);
         await AuditCompactScreens(window, vm);
+        await AuditMvp(window, vm);
         await ReviewGallery(window, vm);
         Dispatcher.UIThread.Post(() => window.Close());
     }
@@ -259,7 +277,7 @@ public static partial class Preview
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                window.Width = width;
+                Resize(window, width);
                 window.Height = 600;
                 vm.Overlay = "profile";
             });
@@ -268,7 +286,7 @@ public static partial class Preview
         }
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            window.Width = 1180;
+            Resize(window, 1180);
             window.Height = 780;
             vm.CloseOverlayCommand.Execute(null);
             Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]);
@@ -282,7 +300,7 @@ public static partial class Preview
         });
         await Task.Delay(150);
         await Shot(window, "group-filled");
-        await Dispatcher.UIThread.InvokeAsync(() => window.Width = 360);
+        await Dispatcher.UIThread.InvokeAsync(() => Resize(window, 360));
         await Task.Delay(150);
         await Shot(window, "group-filled-360");
         await Dispatcher.UIThread.InvokeAsync(() =>
@@ -291,7 +309,7 @@ public static partial class Preview
             if (vm.GroupDraft.Count != 0) throw new Exception("Removing a selected group member failed");
             vm.SearchResults.Clear();
             vm.CloseOverlayCommand.Execute(null);
-            window.Width = 1180;
+            Resize(window, 1180);
             shell.OpenMessageMenu(shell.FindControl<ListBox>("Log")!, vm.Messages.First(m => !m.Mine));
             if (shell.ActiveMessageMenu!.Items.OfType<MenuItem>().Any(item => Equals(item.Header, "Редактировать")))
                 throw new Exception("Foreign message exposes edit action");
@@ -311,7 +329,7 @@ public static partial class Preview
     static async Task ReviewGallery(Window window, ShellViewModel vm)
     {
         Directory.CreateDirectory(Path.Combine(OutDir, "review"));
-        await Dispatcher.UIThread.InvokeAsync(() => { window.Width = 1440; window.Height = 900; });
+        await Dispatcher.UIThread.InvokeAsync(() => { Resize(window, 1440); window.Height = 900; });
         var colors = new[] { ("green", "#33755C", "#88C7A6"), ("blue", "#3867B2", "#8FB6ED"), ("rose", "#9B5671", "#E4A1BC"), ("graphite", "#56606B", "#B7C2CE") };
         foreach (var (label, light, dark) in colors)
         foreach (var isDark in new[] { false, true })
@@ -347,6 +365,12 @@ public static partial class Preview
 
     static Task Shot(Control window, string name) => Dispatcher.UIThread.InvokeAsync(() =>
     {
+        if (window is Window && (name.EndsWith("-360") || name.EndsWith("-1180")))
+        {
+            var expected = name.EndsWith("-360") ? 360 : 1180;
+            // Contact windows deliberately stay 440 px wide on a large desktop.
+            if (window is MainWindow) Expect(Math.Abs(window.Bounds.Width - expected) < 2, "Screenshot viewport mismatch: " + name);
+        }
         var size = new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height);
         using var bitmap = new RenderTargetBitmap(size, new Vector(96, 96));
         bitmap.Render(window);
@@ -368,6 +392,7 @@ public static partial class Preview
 
         var alice = await User("alice", "Алиса Королёва");
         var max = await User("max", "Максим Орлов");
+        await max.api.UpdateProfile("Максим Орлов", "Разрабатываю десктопный клиент. Вечером обычно на связи.");
         var eva = await User("eva", "Ева Лебедева");
         var lev = await User("lev", "Лев Тимофеев");
         var mira = await User("mira", "Мира Соколова");

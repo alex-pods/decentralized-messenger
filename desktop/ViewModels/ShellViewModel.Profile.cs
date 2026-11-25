@@ -4,6 +4,14 @@ namespace MessengerDesktop;
 
 public partial class ShellViewModel
 {
+    public void ResetProfileDraft()
+    {
+        DisplayName = _me.DisplayName;
+        Bio = _me.Bio ?? "";
+        AllowTagSearch = _me.AllowTagSearch;
+        Error = null;
+    }
+
     /// <summary>Профиль: имя, bio и доступность поиска по тегу.</summary>
     [RelayCommand]
     async Task ShowProfile()
@@ -34,7 +42,7 @@ public partial class ShellViewModel
         try
         {
             Error = null;
-            await _api.UpdateProfile(name, Bio, AllowTagSearch);
+            await _api.UpdateProfile(name, Bio); // Privacy is saved separately in Settings.
             var me = await _api.GetMe();
             await Ui(() =>
             {
@@ -42,6 +50,7 @@ public partial class ShellViewModel
                 _names[me.Id] = me.DisplayName;
                 Header = $"{me.DisplayName}  @{me.Tag}";
                 Overlay = "";
+                ResetProfileDraft();
             });
         }
         catch (Exception ex) { Error = Friendly(ex); }

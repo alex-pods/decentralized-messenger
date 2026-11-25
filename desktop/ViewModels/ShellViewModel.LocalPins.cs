@@ -8,6 +8,7 @@ public sealed record PinListItem(long MessageId, string Text, bool Local, bool C
     bool Mine, string? Sender, string? Time)
 {
     public string Scope => Local ? "Только для меня · на этом устройстве" : "Для всех";
+    public string Attribution => string.Join(" · ", new[] { Mine ? "Вы" : Sender, Time }.Where(part => !string.IsNullOrWhiteSpace(part)));
 }
 
 public partial class ShellViewModel
@@ -64,7 +65,7 @@ public partial class ShellViewModel
         var mine = senderId == _me.Id;
         var name = senderId is { } sender && !mine && IsGroup && _names.TryGetValue(sender, out var knownName)
             ? knownName : null;
-        return new(id, text, local, canRemove, mine, name, sentAt?.ToLocalTime().ToString("HH:mm"));
+        return new(id, text, local, canRemove, mine, name, sentAt?.ToLocalTime().ToString("dd.MM.yyyy · HH:mm"));
     }
 
     void UpdateLocalPin(long chatId, long messageId, string? text)

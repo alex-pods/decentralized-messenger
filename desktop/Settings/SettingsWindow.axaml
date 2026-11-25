@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Settings.SettingsWindow"
+        Title="Настройки" Width="520" Height="720" MinWidth="360" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Top" Spacing="5" Margin="0,0,0,22">
+      <TextBlock Text="Настройки" FontSize="22" FontWeight="SemiBold"/>
+      <TextBlock Text="Сообщения, приватность и оформление" Classes="secondary"/>
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,18,0,0">
+      <TextBlock x:Name="SaveStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}"/>
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="Сохраняется автоматически" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
+        <Button x:Name="Done" Grid.Column="1" Content="Готово" Classes="primary" Padding="24,10"/>
+      </Grid>
+    </StackPanel>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" Margin="0,0,8,0">
+      <StackPanel Spacing="22">
+        <StackPanel x:Name="PrivacySection" Spacing="10">
+          <TextBlock Text="Приватность" FontSize="15" FontWeight="SemiBold"/>
+          <TextBlock Text="Поиск по моему тегу"/>
+          <ToggleSwitch x:Name="TagSearch" OnContent="Включено" OffContent="Выключено" AutomationProperties.Name="Поиск по моему тегу"/>
+          <TextBlock Text="Разрешить другим находить вас по тегу. Настройка действует на всех ваших устройствах." Classes="secondary" FontSize="13"/>
+          <TextBlock x:Name="PrivacyStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}"/>
+        </StackPanel>
+        <Border Height="1" Background="{DynamicResource LineBrush}"/>
+        <StackPanel x:Name="MessagesSection" Spacing="10">
+          <TextBlock Text="Отправка сообщения" FontSize="15" FontWeight="SemiBold"/>
+          <RadioButton x:Name="SendEnter" GroupName="send" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <StackPanel Spacing="3"><TextBlock Text="Enter" FontWeight="Medium"/><TextBlock Text="Shift + Enter — новая строка" Classes="caption" TextWrapping="Wrap"/></StackPanel>
+          </RadioButton>
+          <RadioButton x:Name="SendControlEnter" GroupName="send" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <StackPanel Spacing="3"><TextBlock x:Name="ControlEnterLabel" FontWeight="Medium"/><TextBlock Text="Enter — новая строка" Classes="caption"/></StackPanel>
+          </RadioButton>
+        </StackPanel>
+        <Border Height="1" Background="{DynamicResource LineBrush}"/>
+        <StackPanel Spacing="10">
+          <TextBlock Text="Двойной клик по сообщению" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+          <RadioButton x:Name="DoubleReply" GroupName="double" Content="Ответить"/>
+          <RadioButton x:Name="DoubleReact" GroupName="double" Content="Поставить реакцию"/>
+          <local:ReactionPicker x:Name="Reactions" Width="264" HorizontalAlignment="Left" Margin="28,0,0,0"/>
+          <RadioButton x:Name="DoubleNone" GroupName="double" Content="Ничего не делать"/>
+          <TextBlock Text="Клавиши и двойной клик настраиваются только на этом устройстве." Classes="caption" TextWrapping="Wrap"/>
+        </StackPanel>
+        <Border Height="1" Background="{DynamicResource LineBrush}"/>
+        <Button x:Name="Appearance" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0,8">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <local:Glyph Data="{StaticResource IcPalette}" Margin="0,0,12,0"/>
+            <StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="Оформление" FontWeight="Medium"/><TextBlock Text="Темы, цвета и обмен по ссылке" Classes="caption" TextWrapping="Wrap"/></StackPanel>
+            <local:Glyph Grid.Column="2" Data="{StaticResource IcChevronRight}" Width="16" Height="16" Margin="8,0,0,0"/>
+          </Grid>
+        </Button>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

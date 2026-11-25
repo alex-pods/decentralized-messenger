@@ -39,6 +39,13 @@ public partial class ShellView
         if (sender is not Control anchor || _vm == null) return;
         var menu = CreateMenu();
         menu.Items.Add(ActionItem("Мой профиль", "IcInfo", _vm.ShowProfileCommand));
+        var settings = new MenuItem
+        {
+            Header = "Настройки",
+            Icon = new Glyph { Data = (Geometry)Application.Current!.FindResource("IcSettings")!, Width = 17, Height = 17 }
+        };
+        settings.Click += OnSettingsClick;
+        menu.Items.Add(settings);
         var appearance = new MenuItem { Header = "Оформление" };
         appearance.Click += OnAppearanceClick;
         menu.Items.Add(appearance);

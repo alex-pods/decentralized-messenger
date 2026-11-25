@@ -11,6 +11,7 @@ public partial class ShellViewModel
         ReplyTo = null;
         Editing = null;
         RestoreDraft(value);
+        ClosePinList();
         ClearPins();
         if (value == null)
         {

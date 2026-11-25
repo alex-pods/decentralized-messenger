@@ -138,6 +138,8 @@ public partial class MemberRow : ObservableObject, IDisposable
 public sealed class PinItem
 {
     public long MessageId { get; init; }
+    public long? SenderId { get; init; }
+    public DateTimeOffset? SentAt { get; init; }
     public string Text { get; set; } = "";
 }
 

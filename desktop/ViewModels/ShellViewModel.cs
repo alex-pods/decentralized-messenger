@@ -119,7 +119,7 @@ public partial class ShellViewModel : ObservableObject
     public bool HasChat => SelectedChat != null;
     public string DraftLengthHint => HasDraftLengthHint ? $"{Draft.Trim().Length} / 4096 символов" : "";
     public bool HasDraftLengthHint => Draft.Trim().Length > 3800;
-    public bool CanSendDraft => HasChat && !Busy && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
+    public bool CanSendDraft => HasChat && !Busy && !AntispamRequired && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
     public bool HasAvatar => Avatar is not null;
     public long CurrentUserId => _me.Id;
     internal MessengerClient ThemeApi => _api;
@@ -165,6 +165,9 @@ public partial class ShellViewModel : ObservableObject
         Messages.CollectionChanged += (_, _) => UpdateMessageGroups();
         _nav = nav;
         _api = api;
+        _api.AntispamChanged += OnAntispamChanged;
+        AntispamRequired = _api.AntispamBlocked;
+        _ = _api.DiscoverAntispam();
         _me = me;
         _names[me.Id] = me.DisplayName;
         Header = $"{me.DisplayName}  @{me.Tag}";
@@ -204,6 +207,7 @@ public partial class ShellViewModel : ObservableObject
         if (_closed) return;
         _closed = true;
         _live.Dispose();
+        _api.AntispamChanged -= OnAntispamChanged;
         _api.Dispose();
         DisposeItems(Chats);
         DisposeItems(SearchResults, GroupDraft);

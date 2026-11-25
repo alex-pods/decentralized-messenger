@@ -26,6 +26,7 @@ public static partial class Preview
     public static async Task Run(Window window, Navigator nav)
     {
         Resize(window, 1180);
+        if (AntispamOnly) { await AuditAntispam(window, nav); return; }
         if (SharingOnly) { await AuditSharing(window); return; }
         var (api, me) = await Seed(Server!);
         if (MvpOnly)

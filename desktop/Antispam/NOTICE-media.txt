@@ -1,0 +1,18 @@
+Native media/audio dependencies (unmodified, dynamically linked):
+
+NAudio 2.2.1 — Mark Heath and contributors, MIT.
+Source and license: https://github.com/naudio/NAudio/tree/v2.2.1
+
+LibVLCSharp 3.10.2 — VideoLAN and contributors, LGPL-2.1-or-later.
+Source and license: https://code.videolan.org/videolan/LibVLCSharp
+
+VideoLAN.LibVLC.Windows 3.0.24 — VideoLAN and contributors.
+LibVLC/libvlccore: LGPL-2.1-or-later. Bundled plugins have their own licenses,
+including GPL-2.0-or-later; preserve these when distributing the native runtime.
+Corresponding source: https://download.videolan.org/pub/videolan/vlc/3.0.24/
+License information: https://www.videolan.org/legal.html
+Native DLLs remain separate and replaceable in libvlc/win-*.
+
+The selected training videos are served by the backend and stored separately
+from client assets in backend/Media/Training. Their creators retain their rights;
+the repository's software license does not license these third-party videos.

@@ -1,0 +1,11 @@
+Third-party training video excerpts; all rights remain with their creators.
+The repository's software license does not apply to these videos.
+
+Sources (the manifest records each excerpt's timing, crop and checksum):
+https://youtu.be/HIReuFwB4-g
+https://youtu.be/2b6Y-GcU_j8
+https://youtu.be/2zCg0xDT48A
+https://youtu.be/fFrQMSZZJ1M
+https://youtu.be/Oc5bIgsg1Iw
+https://youtu.be/mO9iWE499A0
+https://youtu.be/OE8ejGcUAt0

@@ -146,7 +146,7 @@ public partial class ShellViewModel
         var chat = SelectedChat;
         var submitted = Draft;
         var text = submitted.Trim();
-        if (chat == null || text.Length == 0 || Busy) return;
+        if (chat == null || text.Length == 0 || Busy || _api.AntispamBlocked) return;
         if (text.Length > 4096) { Error = "Сообщение длиннее 4096 символов"; return; }
         Busy = true;
         try
@@ -176,7 +176,7 @@ public partial class ShellViewModel
     async Task ForwardTo(ChatItem? target)
     {
         var source = SelectedMessage;
-        if (target == null || source == null || !CanForward || Busy) return;
+        if (target == null || source == null || !CanForward || Busy || _api.AntispamBlocked) return;
         Busy = true;
         try
         {

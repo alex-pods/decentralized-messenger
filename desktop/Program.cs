@@ -27,6 +27,11 @@ internal static class Program
             return ThemeExchangeCheck.Run(args[1]);
         if (args.Length > 2 && args[0] == "--preview")
             (Preview.Server, Preview.OutDir) = (args[1], args[2]);
+        if (args.Length > 2 && args[0] == "--preview-antispam")
+        {
+            (Preview.Server, Preview.OutDir) = (args[1], args[2]);
+            Preview.AntispamOnly = true;
+        }
         if (args.Length > 2 && args[0] == "--preview-mvp")
         {
             (Preview.Server, Preview.OutDir) = (args[1], args[2]);

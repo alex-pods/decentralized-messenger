@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace MessengerDesktop;
 
 /// <summary>REST-клиент backend v4. Авторизация только через Authorization: Bearer.</summary>
-public sealed class MessengerClient : IDisposable
+public sealed partial class MessengerClient : IDisposable
 {
     public static readonly JsonSerializerOptions Json = new()
     {
@@ -19,10 +19,10 @@ public sealed class MessengerClient : IDisposable
     public string ServerBase { get; }
     public string? Token { get; private set; }
 
-    public MessengerClient(string serverBase, string? token = null)
+    public MessengerClient(string serverBase, string? token = null, HttpMessageHandler? handler = null)
     {
         ServerBase = serverBase.Trim().TrimEnd('/');
-        _http = new HttpClient
+        _http = new HttpClient(handler ?? new HttpClientHandler())
         {
             BaseAddress = new Uri(ServerBase + "/"),
             Timeout = TimeSpan.FromSeconds(30),
@@ -242,13 +242,19 @@ public sealed class MessengerClient : IDisposable
 
     public async Task<T?> Send<T>(HttpMethod method, string path, object? body, CancellationToken ct)
     {
+        if (AntispamBlocked && IsMessageMutation(method, path))
+            throw new ApiException(429, "Подтвердите, что вы человек", "antispam_required");
         using var req = new HttpRequestMessage(method, path);
         if (body != null)
             req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
         using var res = await _http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
-            throw ParseError(text, res.StatusCode);
+        {
+            var error = ParseError(text, res.StatusCode);
+            if (error.Code == "antispam_required") { AntispamSupported = true; SetAntispamBlocked(true); }
+            throw error;
+        }
         if (res.StatusCode == HttpStatusCode.NoContent || string.IsNullOrWhiteSpace(text))
             return default;
         return JsonSerializer.Deserialize<T>(text, Json);

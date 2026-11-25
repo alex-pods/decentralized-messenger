@@ -198,6 +198,13 @@
             </DockPanel>
           </Border>
           <StackPanel Grid.Row="2" Background="Transparent" Margin="24,12,24,20" Spacing="8" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
+            <Border x:Name="AntispamBanner" IsVisible="{Binding AntispamRequired}" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Подтвердите, что вы человек" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding AntispamError}" IsVisible="{Binding AntispamError, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" Classes="secondary" TextWrapping="Wrap"/>
+                <Button x:Name="ConfirmAntispam" Content="Подтвердить" Classes="primary" HorizontalAlignment="Left" IsEnabled="{Binding !AntispamBusy}" Click="OnConfirmAntispam"/>
+              </StackPanel>
+            </Border>
             <Border Classes="glass" Padding="12,8" IsVisible="{Binding HasComposeHint}">
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <Border Width="3" Background="{DynamicResource AccentBrush}" Margin="0,0,10,0"/>

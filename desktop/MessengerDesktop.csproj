@@ -5,6 +5,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <RollForward>Major</RollForward>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MessengerDesktop</RootNamespace>
     <AssemblyName>MessengerDesktop</AssemblyName>
@@ -13,6 +14,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="Antispam\LICENSE-three.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Antispam\NOTICE-media.txt" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets\Wallpapers\*.svg" />
     <Content Include="Assets\Wallpapers\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\LUCIDE-LICENSE" CopyToOutputDirectory="PreserveNewest" />
@@ -23,6 +26,9 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.1" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="LibVLCSharp" Version="3.10.2" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
     <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.2.1" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.1" />

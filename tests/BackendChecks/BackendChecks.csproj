@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../backend/MessengerBackend.csproj" />
+    <ProjectReference Include="../../backend/Messenger.Api.csproj" />
   </ItemGroup>
 </Project>

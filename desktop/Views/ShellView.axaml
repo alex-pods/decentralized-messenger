@@ -3,13 +3,19 @@
     <Grid x:Name="ShellGrid" Classes="shell" IsEnabled="{Binding !OverlayOpen}" ColumnDefinitions="344,*">
       <Border Classes="sidebar" Grid.Column="0" x:Name="ChatSidebar">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Margin="24,26,24,18" Spacing="20">
+          <StackPanel DockPanel.Dock="Top" Margin="24,16,24,10" Spacing="12">
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="Сообщения" FontSize="26" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock Text="Сообщения" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
               <Button Grid.Column="1" Classes="icon" Click="OnNewConversation" ToolTip.Tip="Новый разговор" AutomationProperties.Name="Новый разговор"><local:Glyph Data="{StaticResource IcCompose}"/></Button>
             </Grid>
-            <TextBox x:Name="ChatSearch" Classes="search" TextChanged="OnChatFilterChanged" Watermark="Поиск" AutomationProperties.Name="Поиск чатов">
+            <TextBox x:Name="ChatSearch" Classes="search" TextChanged="OnChatFilterChanged" KeyDown="OnChatSearchKeyDown" Watermark="Поиск по чатам" AutomationProperties.Name="Поиск чатов">
               <TextBox.InnerLeftContent><local:Glyph Data="{StaticResource IcSearch}" Width="16" Height="16" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/></TextBox.InnerLeftContent>
+              <TextBox.InnerRightContent>
+                <Button x:Name="ClearChatSearch" Classes="icon" Width="32" Height="32" MinWidth="32" MinHeight="32" IsVisible="False"
+                        Click="OnClearChatSearch" ToolTip.Tip="Очистить поиск" AutomationProperties.Name="Очистить поиск">
+                  <local:Glyph Data="{StaticResource IcClose}" Width="15" Height="15"/>
+                </Button>
+              </TextBox.InnerRightContent>
             </TextBox>
           </StackPanel>
           <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="4">
@@ -29,15 +35,15 @@
 
               </Grid>
             </Button>
-            <Button Grid.Column="1" Classes="icon" Click="OnAccountMenu" Margin="16,0,8,0" VerticalAlignment="Center" ToolTip.Tip="Настройки" AutomationProperties.Name="Настройки"><local:Glyph Data="{StaticResource IcSettings}"/></Button>
+            <Button Grid.Column="1" Classes="icon" Click="OnSettingsClick" Margin="16,0,8,0" VerticalAlignment="Center" ToolTip.Tip="Настройки" AutomationProperties.Name="Настройки"><local:Glyph Data="{StaticResource IcSettings}"/></Button>
             </Grid>
           </Border>
-          <TextBlock x:Name="ChatEmpty" DockPanel.Dock="Bottom" IsVisible="False" Text="Чаты не найдены" Classes="secondary" Margin="24" TextWrapping="Wrap"/>
+          <TextBlock x:Name="ChatEmpty" DockPanel.Dock="Top" IsVisible="False" Text="Чаты не найдены" Classes="secondary" Margin="24,8" TextWrapping="Wrap"/>
           <ListBox Classes="sidebar" ItemsSource="{Binding Chats}" SelectedItem="{Binding SelectedChat, Mode=OneWay}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" x:Name="ChatList">
             <ListBox.ItemTemplate>
               <DataTemplate>
-                <Grid ColumnDefinitions="Auto,*" MinHeight="52" ClipToBounds="True">
-                  <Border Classes="avatar" Width="46" Height="46" ClipToBounds="True" Background="{Binding AvatarColorKey, Converter={StaticResource AvatarBrush}}">
+                <Grid ColumnDefinitions="Auto,*" MinHeight="46" ClipToBounds="True">
+                  <Border Classes="avatar" Width="42" Height="42" ClipToBounds="True" Background="{Binding AvatarColorKey, Converter={StaticResource AvatarBrush}}">
                     <Panel>
                       <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
                       <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding ShowInitial}"/>
@@ -64,11 +70,11 @@
         <Panel>
         <appearance:WallpaperLayer/>
         <Grid RowDefinitions="Auto,*,Auto" IsVisible="{Binding !ShowingPinnedMessages}">
-          <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="84" Margin="28,0" PointerPressed="OnDragAreaPressed">
+          <Border x:Name="ConversationHeader" IsVisible="{Binding HasChat}" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1"><Grid ColumnDefinitions="Auto,Auto,*,Auto" MinHeight="66" Margin="24,0" PointerPressed="OnDragAreaPressed">
             <Button x:Name="BackToChats" Classes="icon" Click="OnShowChats" IsVisible="False" ToolTip.Tip="К чатам">
               <local:Glyph Data="{StaticResource IcArrowLeft}"/>
             </Button>
-            <Button x:Name="ChatIdentity" Classes="chatIdentity" Cursor="Hand" Grid.Column="1" Grid.ColumnSpan="2" Click="OnChatInfoClick" IsEnabled="{Binding HasChat}"
+            <Button x:Name="ChatIdentity" Classes="chatIdentity" Cursor="Hand" Grid.Column="1" Grid.ColumnSpan="2" Click="OnChatInfoClick" IsVisible="{Binding HasChat}"
                     HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0,10" ToolTip.Tip="Открыть профиль или информацию о группе">
               <Grid ColumnDefinitions="Auto,*">
             <Border Classes="avatar" Width="40" Height="40" Margin="0,0,12,0" ClipToBounds="True" IsVisible="{Binding HasChat}" Background="{Binding SelectedChat.AvatarColorKey, Converter={StaticResource AvatarBrush}}">
@@ -118,23 +124,11 @@
                 </Grid>
               </Border>
               <Panel>
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520" Margin="24" IsVisible="{Binding !HasChat}">
-                  <TextBlock Text="С кем поговорим?" Classes="display" HorizontalAlignment="Center"/>
-                  <TextBlock Text="Выберите чат слева или начните новый" Classes="secondary" HorizontalAlignment="Center" TextAlignment="Center"/>
-                  <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,14,0,0">
-                    <Button Classes="large" Command="{Binding ShowDirectCommand}">
-                      <StackPanel Orientation="Horizontal" Spacing="8">
-                        <local:Glyph Data="{StaticResource IcCompose}" Width="16" Height="16"/>
-                        <TextBlock Text="Новый чат" VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Button>
-                    <Button Classes="large" Command="{Binding ShowGroupCommand}">
-                      <StackPanel Orientation="Horizontal" Spacing="8">
-                        <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16"/>
-                        <TextBlock Text="Группа" VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Button>
-                  </StackPanel>
+                <StackPanel x:Name="EmptyConversation" Orientation="Horizontal" HorizontalAlignment="Center"
+                            VerticalAlignment="Center" Spacing="8" Margin="24" IsVisible="{Binding !HasChat}">
+                  <local:Glyph Data="{StaticResource IcBubble}" Width="17" Height="17"
+                               Foreground="{DynamicResource LabelBrush}" VerticalAlignment="Center"/>
+                  <TextBlock Text="Откройте переписку из списка" Classes="secondary" VerticalAlignment="Center"/>
                 </StackPanel>
                 <ListBox x:Name="Log" Classes="log" VerticalAlignment="Bottom" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}" Background="Transparent" Padding="0,16,0,12" ScrollViewer.HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding HasChat}">
                   <ListBox.ItemsPanel>
@@ -198,6 +192,10 @@
             </DockPanel>
           </Border>
           <StackPanel Grid.Row="2" Background="Transparent" Margin="24,12,24,20" Spacing="8" HorizontalAlignment="Stretch" IsVisible="{Binding HasChat}">
+            <Button x:Name="GroupActivityButton" IsVisible="{Binding HasGroupActivity}" Click="OnGroupActivityClick" Classes="row"
+                    HorizontalAlignment="Center" MaxWidth="420" ToolTip.Tip="События группы" AutomationProperties.Name="События группы">
+              <TextBlock Text="{Binding LatestGroupActivity}" Classes="caption" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+            </Button>
             <Border x:Name="AntispamBanner" IsVisible="{Binding AntispamRequired}" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
               <StackPanel Spacing="10">
                 <TextBlock Text="Подтвердите, что вы человек" FontWeight="SemiBold" TextWrapping="Wrap"/>
@@ -229,7 +227,7 @@
         </Panel>
       </Border>
     </Grid>
-    <Border Classes="scrim" Background="{DynamicResource DimBrush}" IsVisible="{Binding OverlayOpen}">
+    <Border x:Name="OverlayScrim" Classes="scrim" Background="{DynamicResource DimBrush}" IsVisible="{Binding OverlayOpen}" PointerPressed="OnOverlayPressed">
       <Border Classes="sheet" MaxHeight="680" Padding="24" HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="480" Margin="20" KeyboardNavigation.TabNavigation="Cycle" x:Name="OverlaySheet">
         <DockPanel>
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,18">
@@ -247,7 +245,7 @@
             <Button Classes="primary large" Content="Создать группу" HorizontalAlignment="Right" Padding="22,0" Command="{Binding CreateGroupCommand}" DockPanel.Dock="Bottom" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}" Margin="0,20,0,0" MinHeight="42"/>
             <views:ProfileEditor DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=profile}"/>
             <views:GroupDetails DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}"/>
-            <views:ConversationDetails DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}"/>
+            <views:ConversationDetails x:Name="GroupDetailsPanel" DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=members}"/>
             <views:ForwardPicker DockPanel.Dock="Top" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>
             <views:PeopleSearch IsVisible="{Binding ShowPeopleSearch}"/>
 

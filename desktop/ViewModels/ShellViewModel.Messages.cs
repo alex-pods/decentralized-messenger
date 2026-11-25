@@ -550,6 +550,10 @@ public partial class ShellViewModel
     {
         switch (e.Type)
         {
+            case "followed" when e.ChatId == SelectedChat?.Id:
+                // Catch changes committed between the initial history read and the server subscription.
+                _ = LoadGroupActivity(SelectedChat);
+                break;
             case "message" when e.Message != null:
                 Incoming(e.ChatId, e.Message, unread: e.Message.SenderId != _me.Id);
                 break;
@@ -601,10 +605,15 @@ public partial class ShellViewModel
             case "member_left":
                 if (e.UserId == _me.Id && e.ChatId is { } left)
                     DropChat(left);
-                else if (e.ChatId == SelectedChat?.Id && Overlay == "members")
-                    _ = LoadMembersPanel();
+                else if (e.ChatId == SelectedChat?.Id)
+                {
+                    _ = LoadGroupActivity(SelectedChat);
+                    if (Overlay == "members") _ = LoadMembersPanel();
+                }
                 break;
             case "member_added":
+                if (e.ChatId == SelectedChat?.Id) _ = LoadGroupActivity(SelectedChat);
+                goto case "member_role_changed";
             case "member_role_changed":
             case "owner_changed":
                 if (e.ChatId == SelectedChat?.Id && Overlay == "members")

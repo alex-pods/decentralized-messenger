@@ -16,6 +16,7 @@ public interface IChatsRepository
     Task<long> CreateGroupAsync(long creatorId, Secret title, IReadOnlyCollection<long> otherMemberIds, CancellationToken ct = default);
     Task HideAsync(long chatId, long userId, CancellationToken ct = default);
     Task<IReadOnlyList<MemberRow>> GetMembersAsync(long chatId, CancellationToken ct = default);
+    Task<IReadOnlyList<GroupActivity>> GetGroupActivityAsync(long chatId, long viewerId, CancellationToken ct = default);
     Task<bool> AddMemberAsync(long chatId, long userId, CancellationToken ct = default);
     Task RemoveMemberAsync(long chatId, long userId, CancellationToken ct = default);
     Task SetRoleAsync(long chatId, long userId, MemberRole role, CancellationToken ct = default);
@@ -26,7 +27,7 @@ public interface IChatsRepository
     Task<IReadOnlyList<long>> GetPeerUserIdsAsync(long userId,CancellationToken ct = default);
 }
 
-public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
+public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepository
 {
     public async Task<bool> ExistsAsync(long chatId, CancellationToken ct = default)
     {
@@ -198,18 +199,24 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
     public async Task<bool> AddMemberAsync(long chatId, long userId, CancellationToken ct = default)
     {
         using var c = db.Open();
+        using var tx = c.BeginTransaction();
         var rows = await c.ExecuteAsync(new CommandDefinition(
             "INSERT OR IGNORE INTO users_chats(user_id, chat_id) VALUES (@userId, @chatId)",
-            new { userId, chatId }, cancellationToken: ct));
+            new { userId, chatId }, tx, cancellationToken: ct));
+        if (rows > 0) await RecordActivity(c, tx, chatId, userId, "joined", ct);
+        tx.Commit();
         return rows > 0;
     }
 
     public async Task RemoveMemberAsync(long chatId, long userId, CancellationToken ct = default)
     {
         using var c = db.Open();
-        await c.ExecuteAsync(new CommandDefinition(
+        using var tx = c.BeginTransaction();
+        var rows = await c.ExecuteAsync(new CommandDefinition(
             "DELETE FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
-            new { chatId, userId }, cancellationToken: ct));
+            new { chatId, userId }, tx, cancellationToken: ct));
+        if (rows > 0) await RecordActivity(c, tx, chatId, userId, "removed", ct);
+        tx.Commit();
     }
 
     public async Task SetRoleAsync(long chatId, long userId, MemberRole role, CancellationToken ct = default)
@@ -269,6 +276,7 @@ public sealed class ChatsRepository(DbConnectionFactory db) : IChatsRepository
             await c.ExecuteAsync(new CommandDefinition(
                 "DELETE FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
                 new { chatId, userId }, tx, cancellationToken: ct));
+            await RecordActivity(c, tx, chatId, userId, "left", ct);
             tx.Commit();
             return new LeaveGroupResult(LeaveResult.Left, Array.Empty<string>());
         }

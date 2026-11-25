@@ -6,6 +6,7 @@ public partial class ShellViewModel
 {
     partial void OnSelectedChatChanged(ChatItem? value)
     {
+        ClearGroupActivity();
         if (_suppress) return;
         SelectedMessage = null;
         ReplyTo = null;
@@ -21,6 +22,7 @@ public partial class ShellViewModel
         }
         value.Unread = false;
         _ = OpenChat(value);
+        _ = LoadGroupActivity(value);
     }
 
     [RelayCommand]
@@ -91,22 +93,36 @@ public partial class ShellViewModel
         Overlay = "group";
     }
 
-    [RelayCommand]
-    async Task Search()
+    partial void OnSearchQueryChanged(string value)
     {
-        var q = SearchQuery.Trim().TrimStart('@');
-        if (q.Length == 0) { SearchHint = "Введите полный тег пользователя"; return; }
+        if (Overlay is "direct" or "group" or "members")
+            _ = SearchPeople(debounce: true);
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    Task Search() => SearchPeople(debounce: false);
+
+    async Task SearchPeople(bool debounce)
+    {
+        var q = SearchQuery.Trim().TrimStart('@').Trim();
         var generation = ++_searchGeneration;
         var overlay = Overlay;
-        Searching = true;
-        SearchHint = "Ищем…";
+        Searching = false;
+        DisposeItems(SearchResults, GroupDraft);
+        SearchHint = "";
+        if (q.Length < 3) return;
         Error = null;
         try
         {
+            if (debounce) await Task.Delay(280);
+            if (generation != _searchGeneration || overlay != Overlay) return;
+            Searching = true;
+            SearchHint = "Ищем…";
             var users = await _api.Search(q);
             if (generation != _searchGeneration || overlay != Overlay) return;
-            DisposeItems(SearchResults, GroupDraft);
-            foreach (var u in users)
+            foreach (var u in users.Where(user => user.Id != _me.Id &&
+                GroupDraft.All(selected => selected.Id != user.Id) &&
+                (overlay != "members" || Members.All(member => member.Id != user.Id))))
             {
                 SearchResults.Add(u);
                 _ = LoadAvatar(u.Id, image =>
@@ -114,9 +130,9 @@ public partial class ShellViewModel
                     if (SearchResults.Contains(u) || GroupDraft.Contains(u)) u.Avatar = CreateAvatar(image);
                 });
             }
-            SearchHint = users.Count == 0 ? "Никого не нашли. Проверьте полный тег." : "Выберите человека в списке";
+            SearchHint = SearchResults.Count == 0 ? "Нет доступных пользователей с таким тегом" : "";
         }
-        catch (Exception ex) { if (generation == _searchGeneration && overlay == Overlay) { Error = Friendly(ex); SearchHint = ""; } }
+        catch (Exception ex) { if (generation == _searchGeneration && overlay == Overlay) SearchHint = Friendly(ex); }
         finally { if (generation == _searchGeneration) Searching = false; }
     }
 
@@ -138,10 +154,12 @@ public partial class ShellViewModel
             {
                 if (GroupDraft.All(u => u.Id != user.Id))
                     GroupDraft.Add(user);
+                ResetSearch();
             }
             else if (Overlay == "members" && SelectedChat != null)
             {
                 await _api.AddMember(SelectedChat.Id, user.Id);
+                ResetSearch();
                 await LoadMembersPanel();
             }
         }

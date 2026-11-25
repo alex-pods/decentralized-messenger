@@ -1,8 +1,8 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.PeopleSearch" x:Name="Root">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" x:Class="MessengerDesktop.Views.Dialogs.PeopleSearch" x:Name="Root">
   <StackPanel Spacing="8" Margin="0,0,0,8">
-    <TextBlock Text="Найти человека по тегу" Classes="field" Margin="0,0,0,4"/>
-    <Grid ColumnDefinitions="*,Auto">
-      <TextBox Text="{Binding SearchQuery}" Watermark="Например, @alex" IsEnabled="{Binding !Searching}">
+    <StackPanel Spacing="6">
+      <TextBlock Text="Поиск человека" Classes="field"/>
+      <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Watermark="Полный тег, например @alex" AutomationProperties.Name="Тег пользователя">
         <TextBox.InnerLeftContent>
           <local:Glyph Data="{StaticResource IcSearch}" Width="15" Height="15" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/>
         </TextBox.InnerLeftContent>
@@ -10,9 +10,8 @@
           <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
         </TextBox.KeyBindings>
       </TextBox>
-      <Button Grid.Column="1" Classes="secondaryAction" Content="Найти" IsEnabled="{Binding !Searching}" Margin="8,0,0,0" MinHeight="40" Command="{Binding SearchCommand}"/>
-    </Grid>
-    <TextBlock Text="{Binding SearchHint}" Classes="caption" TextWrapping="Wrap"/>
+    </StackPanel>
+    <TextBlock Text="{Binding SearchHint}" IsVisible="{Binding SearchHint, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" Classes="caption" TextWrapping="Wrap"/>
     <ListBox Classes="plain" ItemsSource="{Binding SearchResults}" MaxHeight="190">
       <ListBox.ItemTemplate>
         <DataTemplate>

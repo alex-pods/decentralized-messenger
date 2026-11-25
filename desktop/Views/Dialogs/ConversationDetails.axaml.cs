@@ -6,6 +6,13 @@ namespace MessengerDesktop.Views.Dialogs;
 public partial class ConversationDetails : UserControl
 {
     public ConversationDetails() => InitializeComponent();
+    internal void ShowActivity()
+    {
+        RecentActivity.IsExpanded = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => RecentActivity.BringIntoView(), Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
     void OnPinsClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not ShellViewModel vm) return;

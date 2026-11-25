@@ -18,7 +18,9 @@ import urllib.request
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, required=True, help="New directory for PNG screenshots")
-    parser.add_argument("--mvp-only", action="store_true", help="Only account/settings/pins/composer checks")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--mvp-only", action="store_true", help="Only account/settings/pins/composer checks")
+    mode.add_argument("--manual", action="store_true", help="Open a seeded, isolated desktop until the window closes")
     args = parser.parse_args()
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -53,8 +55,13 @@ def main():
                         time.sleep(.1)
                 else:
                     raise RuntimeError("Temporary backend did not become ready")
-                for flags in (["--check", address + "/messenger"], ["--preview-mvp" if args.mvp_only else "--preview", address + "/messenger", str(output)]):
-                    subprocess.run(["dotnet", str(desktop), *flags], cwd=temp, stdout=log, stderr=log, check=True, timeout=240)
+                if args.manual:
+                    print("Opening isolated desktop for manual testing", flush=True)
+                    subprocess.run(["dotnet", str(desktop), "--preview-manual", address + "/messenger", str(output)],
+                                   cwd=temp, stdout=log, stderr=log, check=True)
+                else:
+                    for flags in (["--check", address + "/messenger"], ["--preview-mvp" if args.mvp_only else "--preview", address + "/messenger", str(output)]):
+                        subprocess.run(["dotnet", str(desktop), *flags], cwd=temp, stdout=log, stderr=log, check=True, timeout=240)
             finally:
                 server.terminate()
                 try:
@@ -66,9 +73,9 @@ def main():
                 log.seek(0)
                 # Never dump raw HTTP/WebSocket logs: they can contain test session tokens.
                 for line in log:
-                    if line.startswith(("PASS ", "CHECK FAIL ")):
+                    if line.startswith(("PASS ", "CHECK FAIL ", "PREVIEW FAIL ")):
                         print(line.rstrip())
-    print(f"PASS desktop integration and screenshots: {output}")
+    print(f"PASS {'isolated desktop closed' if args.manual else 'desktop integration and screenshots'}: {output}")
 
 
 if __name__ == "__main__":

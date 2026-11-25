@@ -9,6 +9,14 @@ namespace MessengerDesktop.Views;
 
 public partial class ShellView
 {
+    async void OnGroupActivityClick(object? sender, RoutedEventArgs e)
+    {
+        if (_vm?.SelectedChat is not { IsGroup: true } chat) return;
+        await _vm.ShowMembersCommand.ExecuteAsync(null);
+        if (_vm.SelectedChat?.Id == chat.Id && _vm.Overlay == "members")
+            GroupDetailsPanel.ShowActivity();
+    }
+
     async void OnChatInfoClick(object? sender, RoutedEventArgs e)
     {
         if (_vm?.SelectedChat is not { } chat || TopLevel.GetTopLevel(this) is not Window owner) return;
@@ -46,26 +54,6 @@ public partial class ShellView
         var menu = CreateMenu();
         menu.Items.Add(ActionItem("Новый личный чат", "IcCompose", _vm.ShowDirectCommand));
         menu.Items.Add(ActionItem("Новая группа", "IcGroup", _vm.ShowGroupCommand));
-        menu.Open(anchor);
-    }
-
-    void OnAccountMenu(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Control anchor || _vm == null) return;
-        var menu = CreateMenu();
-        menu.Items.Add(ActionItem("Мой профиль", "IcInfo", _vm.ShowProfileCommand));
-        var settings = new MenuItem
-        {
-            Header = "Настройки",
-            Icon = new Glyph { Data = (Geometry)Application.Current!.FindResource("IcSettings")!, Width = 17, Height = 17 }
-        };
-        settings.Click += OnSettingsClick;
-        menu.Items.Add(settings);
-        var appearance = new MenuItem { Header = "Оформление", Icon = new Glyph { Data = (Geometry)Application.Current!.FindResource("IcPalette")!, Width = 17, Height = 17 } };
-        appearance.Click += OnAppearanceClick;
-        menu.Items.Add(appearance);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(ActionItem("Выйти из аккаунта", "IcLogout", _vm.LogoutCommand));
         menu.Open(anchor);
     }
 

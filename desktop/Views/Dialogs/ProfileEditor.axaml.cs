@@ -75,11 +75,10 @@ public partial class ProfileEditor : UserControl
         catch { if (_profileVm != null) _profileVm.Error = "Не удалось скопировать тег"; }
     }
 
-    async void OnPreferencesClick(object? sender, RoutedEventArgs e)
+    void OnPreferencesClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is ShellViewModel vm && TopLevel.GetTopLevel(this) is Window owner)
-            await new SettingsWindow(vm, (sender as Button)?.Tag as string).ShowDialog(owner);
-        RefreshSummaries();
+            SettingsWindow.Open(vm, owner, (sender as Button)?.Tag as string, RefreshSummaries);
     }
 
     async void OnAppearanceClick(object? sender, RoutedEventArgs e)

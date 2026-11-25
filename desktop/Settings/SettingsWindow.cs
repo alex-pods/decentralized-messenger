@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 
 namespace MessengerDesktop.Settings;
 
@@ -8,6 +9,26 @@ public sealed partial class SettingsWindow : Window
     readonly ShellViewModel _vm = null!;
     bool _loading;
     bool _closed;
+    bool _appearanceOpen;
+
+    public static void Open(ShellViewModel vm, Window owner, string? section = null, Action? onClosed = null)
+    {
+        var dialog = new SettingsWindow(vm, section);
+        void DismissFromOwner(object? sender, PointerPressedEventArgs e)
+        {
+            if (!e.GetCurrentPoint(owner).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            if (!dialog._appearanceOpen) dialog.Close();
+        }
+
+        owner.AddHandler(PointerPressedEvent, DismissFromOwner, RoutingStrategies.Tunnel);
+        dialog.Closed += (_, _) =>
+        {
+            owner.RemoveHandler(PointerPressedEvent, DismissFromOwner);
+            onClosed?.Invoke();
+        };
+        dialog.Show(owner);
+    }
 
     public SettingsWindow() => InitializeComponent();
 
@@ -38,7 +59,12 @@ public sealed partial class SettingsWindow : Window
         };
         TagSearch.IsCheckedChanged += async (_, _) => await ChangeTagSearch();
         Done.Click += (_, _) => Close();
-        Appearance.Click += async (_, _) => await new Appearance.AppearanceWindow(vm.ThemeApi, vm.CurrentUserId).ShowDialog(this);
+        Appearance.Click += async (_, _) =>
+        {
+            _appearanceOpen = true;
+            try { await new Appearance.AppearanceWindow(vm.ThemeApi, vm.CurrentUserId).ShowDialog(this); }
+            finally { _appearanceOpen = false; }
+        };
         AppPreferences.Changed += ShowSaveStatus;
         ShowSaveStatus();
         Closed += (_, _) => { _closed = true; AppPreferences.Changed -= ShowSaveStatus; };

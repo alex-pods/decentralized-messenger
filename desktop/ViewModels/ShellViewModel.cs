@@ -123,7 +123,7 @@ public partial class ShellViewModel : ObservableObject
     public bool HasAvatar => Avatar is not null;
     public long CurrentUserId => _me.Id;
     internal MessengerClient ThemeApi => _api;
-    public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";
+    public string ChatTitle => SelectedChat?.Title ?? "";
     public bool OverlayOpen => Overlay.Length > 0;
     public bool ShowPeopleSearch => Overlay is "direct" or "group";
     public string OverlayTitle => Overlay switch
@@ -179,7 +179,11 @@ public partial class ShellViewModel : ObservableObject
         _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));
         _live.State += s => Dispatcher.UIThread.Post(() => Status = s);
         _live.SessionRevoked += () => Dispatcher.UIThread.Post(() => ForceLogout("Сессия завершена. Войдите снова."));
-        _live.Reconnected += () => Dispatcher.UIThread.Post(() => _ = CatchUpAfterReconnect());
+        _live.Reconnected += () => Dispatcher.UIThread.Post(() =>
+        {
+            _ = CatchUpAfterReconnect();
+            _ = LoadGroupActivity(SelectedChat);
+        });
         _ = _live.RunAsync();
         _ = ReloadChats();
     }

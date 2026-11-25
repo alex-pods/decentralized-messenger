@@ -16,6 +16,7 @@ public static partial class Preview
     public static string? Server { get; set; }
     public static string OutDir { get; set; } = ".";
     public static bool MvpOnly { get; set; }
+    public static bool ManualOnly { get; set; }
 
     static void Resize(Window window, double width)
     {
@@ -29,6 +30,12 @@ public static partial class Preview
         if (AntispamOnly) { await AuditAntispam(window, nav); return; }
         if (SharingOnly) { await AuditSharing(window); return; }
         var (api, me) = await Seed(Server!);
+        if (ManualOnly)
+        {
+            window.Title = "Мессенджер — локальный аудит";
+            nav.Go(new ShellViewModel(nav, api, me));
+            return;
+        }
         if (MvpOnly)
         {
             var model = new ShellViewModel(nav, api, me);
@@ -109,6 +116,7 @@ public static partial class Preview
         await AuditCompactScreens(window, vm);
         await AuditMvp(window, vm);
         await ReviewGallery(window, vm);
+        await AuditInteractions(window, vm, api);
         Dispatcher.UIThread.Post(() => window.Close());
     }
 

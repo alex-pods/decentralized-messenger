@@ -26,6 +26,18 @@
       <views:PeopleSearch Margin="0,14,0,0"/>
     </Expander>
     <views:MemberList/>
+    <Expander x:Name="RecentActivity" Header="Недавние события" HorizontalAlignment="Stretch" IsVisible="{Binding HasGroupActivity}">
+      <ItemsControl ItemsSource="{Binding GroupActivity}" Margin="0,8,0,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Spacing="3" Margin="0,6">
+              <TextBlock Text="{Binding Description}" TextWrapping="Wrap"/>
+              <TextBlock Text="{Binding DateLabel}" Classes="caption"/>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Expander>
     <Border Height="1" Background="{DynamicResource LineBrush}"/>
     <Button Classes="profileRow" Click="OnHideClick">
       <Grid ColumnDefinitions="Auto,*"><local:Glyph Data="{StaticResource IcEyeOff}"/><StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="5"><TextBlock Text="Скрыть чат у себя"/><TextBlock Text="Убрать из своего списка чатов" Classes="caption" TextWrapping="Wrap"/></StackPanel></Grid>

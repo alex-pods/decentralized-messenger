@@ -1,14 +1,14 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="using:Avalonia.Data.Converters"
         xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Settings.SettingsWindow"
         Title="Настройки" Width="520" Height="720" MinWidth="360" MinHeight="420"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource RaisedBrush}">
   <DockPanel Margin="24">
     <StackPanel DockPanel.Dock="Top" Spacing="5" Margin="0,0,0,22">
       <TextBlock Text="Настройки" FontSize="22" FontWeight="SemiBold"/>
-      <TextBlock Text="Сообщения, приватность и оформление" Classes="secondary"/>
     </StackPanel>
     <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,18,0,0">
-      <TextBlock x:Name="SaveStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}"/>
+      <TextBlock x:Name="SaveStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding Text, RelativeSource={RelativeSource Self}, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Text="Сохраняется автоматически" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
         <Button x:Name="Done" Grid.Column="1" Content="Готово" Classes="primary" Padding="24,10"/>
@@ -21,7 +21,7 @@
           <TextBlock Text="Поиск по моему тегу"/>
           <ToggleSwitch x:Name="TagSearch" OnContent="Включено" OffContent="Выключено" AutomationProperties.Name="Поиск по моему тегу"/>
           <TextBlock Text="Разрешить другим находить вас по тегу. Настройка действует на всех ваших устройствах." Classes="secondary" FontSize="13"/>
-          <TextBlock x:Name="PrivacyStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}"/>
+          <TextBlock x:Name="PrivacyStatus" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding Text, RelativeSource={RelativeSource Self}, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
         </StackPanel>
         <Border Height="1" Background="{DynamicResource LineBrush}"/>
         <StackPanel x:Name="MessagesSection" Spacing="10">

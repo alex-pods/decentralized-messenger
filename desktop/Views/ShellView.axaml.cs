@@ -28,9 +28,7 @@ public partial class ShellView : UserControl
         ChatList.SelectionChanged += (_, _) =>
         {
             if (_filtering || ChatList.SelectedItem is not ChatItem chat) return;
-            if (_vm != null) _vm.SelectedChat = chat;
-            _showChats = false;
-            UpdateNavigation();
+            OpenFromSearch(chat);
         };
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
@@ -58,10 +56,18 @@ public partial class ShellView : UserControl
         if (_vm.CanSendDraft && _vm.SendCommand.CanExecute(null)) _vm.SendCommand.Execute(null);
     }
 
-    async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         if (_vm != null && TopLevel.GetTopLevel(this) is Window owner)
-            await new Settings.SettingsWindow(_vm).ShowDialog(owner);
+            SettingsWindow.Open(_vm, owner);
+    }
+
+    void OnOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_vm?.OverlayOpen != true || e.Source != sender ||
+            !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        _vm.CloseOverlayCommand.Execute(null);
+        e.Handled = true;
     }
 
     void OnShellKeyDown(object? sender, KeyEventArgs e)
@@ -94,7 +100,7 @@ public partial class ShellView : UserControl
     void UpdateNavigation()
     {
         bool narrow = Bounds.Width < 780;
-        OverlaySheet.MaxHeight = Math.Max(220, Bounds.Height - 40);
+        OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - 40, 220, 680);
         ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "344,*");
         Grid.SetColumn(ChatSidebar, 0);
         Grid.SetColumn(ScreenBay, narrow ? 0 : 1);
@@ -107,6 +113,37 @@ public partial class ShellView : UserControl
 
     void OnChatFilterChanged(object? sender, TextChangedEventArgs e) => FilterChats();
 
+    void OnClearChatSearch(object? sender, RoutedEventArgs e)
+    {
+        ChatSearch.Clear();
+        ChatSearch.Focus();
+    }
+
+    void OnChatSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && !string.IsNullOrEmpty(ChatSearch.Text))
+            ChatSearch.Clear();
+        else if (e.Key == Key.Down && ChatList.Items.Count > 0)
+        {
+            ChatList.ScrollIntoView(0);
+            if (ChatList.ContainerFromIndex(0) is not { } row) return;
+            row.Focus();
+        }
+        else if (e.Key == Key.Enter && ChatList.Items.FirstOrDefault() is ChatItem first)
+            OpenFromSearch(first);
+        else return;
+        e.Handled = true;
+    }
+
+    void OpenFromSearch(ChatItem chat)
+    {
+        if (_vm != null) _vm.SelectedChat = chat;
+        _showChats = false;
+        UpdateNavigation();
+    }
+
+    static string NormalizeSearch(string value) => value.ToLowerInvariant().Replace('ё', 'е');
+
     void FilterChats()
     {
         if (_vm == null) return;
@@ -114,11 +151,21 @@ public partial class ShellView : UserControl
         try
         {
             var query = ChatSearch.Text?.Trim() ?? "";
-            var visible = _vm.Chats.Where(chat => chat.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var tagOnly = query.StartsWith('@');
+            var terms = NormalizeSearch(query.TrimStart('@')).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            var visible = _vm.Chats.Where(chat =>
+            {
+                var tag = NormalizeSearch(chat.Tag ?? "");
+                var title = tagOnly ? "" : NormalizeSearch(chat.Title);
+                return (!tagOnly || tag.Length > 0) &&
+                       terms.All(term => title.Contains(term, StringComparison.Ordinal) ||
+                                         tag.Contains(term, StringComparison.Ordinal));
+            }).ToArray();
             ChatList.ItemsSource = visible;
             ChatList.SelectedItem = visible.Contains(_vm.SelectedChat) ? _vm.SelectedChat : null;
             ChatEmpty.IsVisible = visible.Length == 0;
-            ChatEmpty.Text = query.Length == 0 ? "Здесь появятся ваши разговоры" : "Чаты не найдены";
+            ChatEmpty.Text = query.Length == 0 ? "Здесь появятся ваши разговоры" : "По этому запросу нет чатов";
+            ClearChatSearch.IsVisible = !string.IsNullOrEmpty(ChatSearch.Text);
         }
         finally { _filtering = false; }
     }
@@ -154,15 +201,9 @@ public partial class ShellView : UserControl
         if (e.PropertyName == nameof(ShellViewModel.SelectedChat))
         {
             FilterChats();
-            if (_vm?.HasChat == true) _showChats = false;
+            _showChats = _vm?.HasChat != true;
             UpdateNavigation();
         }
-    }
-
-    async void OnAppearanceClick(object? sender, RoutedEventArgs e)
-    {
-        if (TopLevel.GetTopLevel(this) is Window owner)
-            await new Appearance.AppearanceWindow(_vm?.ThemeApi, _vm?.CurrentUserId).ShowDialog(owner);
     }
 
     void Hook()

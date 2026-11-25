@@ -8,6 +8,7 @@ public partial class ChatItem : ObservableObject, IDisposable
     public long Id { get; init; }
     public string Type { get; init; } = "";
     public string Title { get; init; } = "";
+    public string? Tag { get; init; }
     public string Kind { get; init; } = "";
     public bool IsGroup => Type == "group";
     public long? AvatarUserId { get; init; }

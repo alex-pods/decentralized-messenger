@@ -21,6 +21,8 @@ public static class ChatsEndpoints
         g.MapGet("/{chatId:long}", GetChatAsync);
         g.MapDelete("/{chatId:long}", HideChatAsync);
         g.MapGet("/{chatId:long}/members", GetMembersAsync);
+        g.MapGet("/{chatId:long}/activity", async (HttpContext http, long chatId, IChatsRepository chats, CancellationToken ct) =>
+            Results.Ok(await chats.GetGroupActivityAsync(chatId, http.User.GetUserId(), ct)));
         g.MapPost("/{chatId:long}/members", AddMemberAsync);
         g.MapDelete("/{chatId:long}/members/{userId:long}", RemoveMemberAsync);
         g.MapPatch("/{chatId:long}/members/{userId:long}", SetRoleAsync);

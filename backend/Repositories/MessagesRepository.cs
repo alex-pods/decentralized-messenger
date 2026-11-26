@@ -142,10 +142,10 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
                     """
                     INSERT INTO messages(
                         chat_id, sender_id, text,
-                        reply_to_id, client_ref, client_ref_payload)
+                        reply_to_id, client_ref, client_ref_payload, sent_at)
                     VALUES (
                         @ChatId, @SenderId, @Text,
-                        @ReplyToId, @ClientRef, @fingerprint)
+                        @ReplyToId, @ClientRef, @fingerprint, strftime('%Y-%m-%d %H:%M:%f', 'now'))
                     RETURNING id
                     """,
                     new
@@ -193,8 +193,8 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
 
         var newId = await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
             """
-            INSERT INTO messages(chat_id, sender_id, text)
-            SELECT @targetChatId, @senderId, src.text
+            INSERT INTO messages(chat_id, sender_id, text, sent_at)
+            SELECT @targetChatId, @senderId, src.text, strftime('%Y-%m-%d %H:%M:%f', 'now')
             FROM messages src
             WHERE src.id = @sourceMessageId
               AND src.content_state = 'stored'

@@ -23,7 +23,8 @@ public sealed class AttachmentsService(
     IChatMembershipRepository memberships,
     IFileStorage files,
     ILogger<AttachmentsService> logger,
-    WsEventPublisher publisher) : IAttachmentsService
+    WsEventPublisher publisher,
+    Messenger.Api.Antispam.AntispamService antispam) : IAttachmentsService
 {
     private const long MaxFileBytes = 10 * 1024 * 1024;
     private const int MaxFiles = 10;
@@ -39,6 +40,7 @@ public sealed class AttachmentsService(
         await RequireMember(message.ChatId, userId);
         if (message.SenderId != userId)
             throw AppException.Forbidden("only the message author may attach files");
+        antispam.RequireUnblocked(userId);
         if (message.ContentState == MessageContentState.Deleted)
             throw AppException.Conflict("message_deleted", "message has been deleted");
         if (message.ContentState == MessageContentState.NotStored)

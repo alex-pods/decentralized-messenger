@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Messenger.Api.Database;
 using Messenger.Api.Infrastructure;
@@ -9,9 +10,9 @@ public interface IUsersRepository
 {
     Task<User?> GetById(long id);
     Task<User?> GetByTag(string tag);
-    Task<List<User>> Search(string query, int limit);
+    Task<List<UserSearchResult>> Search(long viewerId, string query, int limit, bool prefix);
     Task<long> Insert(string tag, Secret name, Secret passwordHash);
-    Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch);
+    Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch, IDbTransaction? transaction = null);
     Task TouchLastSeen(long id);
 }
 
@@ -34,12 +35,33 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
             $"SELECT {Columns} FROM users WHERE tag = @tag COLLATE NOCASE", new { tag });
     }
 
-    public async Task<List<User>> Search(string query, int limit)
+    public async Task<List<UserSearchResult>> Search(long viewerId, string query, int limit, bool prefix)
     {
         using var connection = db.Open();
-        var users = await connection.QueryAsync<User>(
-            $"SELECT {Columns} FROM users WHERE allow_tag_search = 1 AND tag = @query COLLATE NOCASE ORDER BY tag LIMIT @limit",
-            new { query, limit });
+        // The NOCASE tag index serves both the exact lookup and the escaped prefix scan.
+        var predicate = prefix ? "u.tag LIKE @pattern ESCAPE '~'" : "u.tag = @query COLLATE NOCASE";
+        var pattern = prefix ? query.Replace("~", "~~").Replace("%", "~%").Replace("_", "~_") + "%" : null;
+        var users = await connection.QueryAsync<UserSearchResult>(
+            $"""
+            SELECT u.id, u.tag, u.name
+            FROM users u
+            WHERE {predicate} AND (
+                u.allow_tag_search = 1 OR EXISTS (
+                    SELECT 1
+                    FROM users_chats mine
+                    WHERE mine.user_id = @viewerId AND (
+                        EXISTS (
+                            SELECT 1 FROM users_chats peer
+                            WHERE peer.user_id = u.id AND peer.chat_id = mine.chat_id
+                        ) OR EXISTS (
+                            SELECT 1 FROM group_activity history
+                            WHERE history.chat_id = mine.chat_id AND history.user_id = u.id
+                        )
+                    )
+                )
+            )
+            ORDER BY u.tag LIMIT @limit
+            """, new { viewerId, query, pattern, limit });
         return users.ToList();
     }
 
@@ -51,12 +73,13 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
             new { tag, name, passwordHash });
     }
 
-    public async Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch)
+    public async Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch, IDbTransaction? transaction = null)
     {
-        using var connection = db.Open();
+        using var ownedConnection = transaction == null ? db.Open() : null;
+        var connection = transaction?.Connection ?? ownedConnection!;
         await connection.ExecuteAsync(
             "UPDATE users SET name = COALESCE(@name, name), bio = CASE WHEN @updateBio THEN @bio ELSE bio END, allow_tag_search = COALESCE(@allowTagSearch, allow_tag_search) WHERE id = @id",
-            new { id, name, updateBio, bio, allowTagSearch });
+            new { id, name, updateBio, bio, allowTagSearch }, transaction);
     }
 
     public async Task TouchLastSeen(long id)

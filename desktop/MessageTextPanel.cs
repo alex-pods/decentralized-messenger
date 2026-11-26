@@ -16,9 +16,10 @@ public sealed class MessageTextPanel : Panel
         var metadata = Children[1];
         text.Measure(availableSize);
         metadata.Measure(availableSize);
+        _textHeight = text.DesiredSize.Height;
+        if (!metadata.IsVisible) return text.DesiredSize;
         var lastWidth = text.TextLayout.TextLines.LastOrDefault()?.WidthIncludingTrailingWhitespace ?? 0;
         _inline = lastWidth + Gap + metadata.DesiredSize.Width <= availableSize.Width;
-        _textHeight = text.DesiredSize.Height;
         var width = _inline ? Math.Max(text.DesiredSize.Width, lastWidth + Gap + metadata.DesiredSize.Width)
             : Math.Max(text.DesiredSize.Width, metadata.DesiredSize.Width);
         return new Size(width, _textHeight + (_inline ? 0 : metadata.DesiredSize.Height + 3));

@@ -1,25 +1,55 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.ForwardPicker" x:Name="Root">
-  <StackPanel Spacing="12">
-  <TextBlock Text="Выберите получателя" Classes="secondary"/>
-  <TextBox x:Name="DestinationSearch" Watermark="Найти чат" TextChanged="OnSearchChanged"/>
-  <TextBlock x:Name="NoResults" Text="Чаты не найдены" Classes="caption" IsVisible="False"/>
-  <ListBox x:Name="Destinations" Classes="plain" ItemsSource="{Binding Chats}" MaxHeight="360">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <Expander x:Name="SourcePreview" Padding="8,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,9">
+    <Expander.Header>
+      <Panel>
+        <TextBlock Text="{Binding ForwardSource.Text}" MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                   Classes="secondary" IsVisible="{Binding !IsExpanded, ElementName=SourcePreview}"/>
+        <TextBlock Text="Исходное сообщение" Classes="secondary"
+                   IsVisible="{Binding IsExpanded, ElementName=SourcePreview}"/>
+      </Panel>
+    </Expander.Header>
+    <ScrollViewer MaxHeight="104" Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled" AllowAutoHide="False">
+      <SelectableTextBlock Text="{Binding ForwardSource.Text}" TextWrapping="Wrap" Margin="8,4,6,6"/>
+    </ScrollViewer>
+  </Expander>
+  <TextBox x:Name="DestinationSearch" Grid.Row="1" Classes="search" Watermark="Имя, группа или @тег" TextChanged="OnSearchChanged" Margin="0,0,0,8"
+           KeyDown="OnSearchKeyDown" AutomationProperties.Name="Поиск получателя">
+    <TextBox.InnerLeftContent>
+      <local:Glyph Data="{StaticResource IcSearch}" Width="16" Height="16" Margin="10,0,0,0" Foreground="{DynamicResource LabelBrush}"/>
+    </TextBox.InnerLeftContent>
+    <TextBox.InnerRightContent>
+      <local:DismissButton x:Name="ClearDestination" Classes="compact" IsVisible="False"
+              Click="OnClearSearch" ToolTip.Tip="Очистить поиск" AutomationProperties.Name="Очистить поиск"/>
+    </TextBox.InnerRightContent>
+  </TextBox>
+  <Grid Grid.Row="2" MinHeight="46">
+  <ListBox x:Name="Destinations" Classes="recipient" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+           ScrollViewer.AllowAutoHide="False"
+           SelectionChanged="OnRecipientChanged" AutomationProperties.Name="Чаты для пересылки">
     <ListBox.ItemTemplate>
       <DataTemplate>
-        <Button Classes="row" Command="{Binding DataContext.ForwardToCommand, ElementName=Root}" CommandParameter="{Binding}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12">
-          <Grid ColumnDefinitions="Auto,*">
-            <Border Classes="avatar" Width="30" Height="30" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Classes="avatar" Classes.groupAvatar="{Binding IsGroup}" Width="32" Height="32" ClipToBounds="True" Background="{Binding AvatarColorKey, Converter={StaticResource AvatarBrush}}">
               <Panel>
                 <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
                 <TextBlock Classes="avatarText" Text="{Binding Title, Converter={StaticResource Initial}}" IsVisible="{Binding ShowInitial}"/>
-                <local:Glyph Data="{StaticResource IcGroup}" Width="16" Height="16" StrokeWidth="1.8" Foreground="{DynamicResource OnFieldBrush}" IsVisible="{Binding IsGroup}"/>
               </Panel>
             </Border>
-            <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{Binding SearchSubtitle}" Classes="caption" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <local:Glyph Grid.Column="2" Classes="recipientCheck" Data="{StaticResource IcCheck}" Width="16" Height="16"
+                         Margin="8,0,0,0" Foreground="{DynamicResource AccentBrush}"/>
           </Grid>
-        </Button>
       </DataTemplate>
     </ListBox.ItemTemplate>
   </ListBox>
-  </StackPanel>
+  <TextBlock x:Name="NoResults" Classes="secondary" TextWrapping="Wrap" IsVisible="False" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+  </Grid>
+  <Button x:Name="SendForward" Grid.Row="3" Classes="primary forwardAction" HorizontalAlignment="Stretch" Padding="18,8" Margin="0,9,0,0"
+          Content="Переслать" Command="{Binding ForwardToCommand}" CommandParameter="{Binding SelectedItem, ElementName=Destinations}"
+          IsEnabled="False"/>
+  </Grid>
 </UserControl>

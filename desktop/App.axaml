@@ -30,5 +30,6 @@
     <FluentTheme/>
     <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
     <StyleInclude Source="avares://MessengerDesktop/Styles/Theme.axaml"/>
+    <StyleInclude Source="avares://MessengerDesktop/Styles/Controls.axaml"/>
   </Application.Styles>
 </Application>

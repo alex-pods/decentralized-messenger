@@ -17,7 +17,8 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
     ];
 
     public static ThemeSettings Current { get; private set; } = Presets[0];
-    static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    public static event Action? Changed;
+    internal static string FilePath { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "messenger-desktop", "appearance.json");
 
     public static void Restore()
@@ -73,18 +74,29 @@ public sealed record ThemeSettings(string Name, bool Dark, string Background, st
             foreach (var key in keys) app.Resources[key] = new SolidColorBrush(color);
         }
         Set(background, "ChassisBrush", "MainFill", "PanelFill", "RowHover");
-        Set(surface, "RaisedBrush", "SidebarFill", "FieldBrush", "SheetFill", "ToastFill", "GlassFill", "ScreenInset", "BubbleTheirs");
+        Set(surface, "RaisedBrush", "SidebarFill", "FieldBrush", "SheetFill", "ToastFill", "GlassFill", "ScreenInset");
+        var incoming = theme.Dark ? Blend(text, surface, .05) : surface;
+        var outgoing = Blend(accent, surface, theme.Dark ? .26 : .18);
+        Set(incoming, "BubbleTheirs");
+        Set(outgoing, "BubbleMine");
+        Set(Blend(text, incoming, theme.Dark ? .16 : .10), "BubbleTheirsEdge");
+        Set(Blend(text, outgoing, theme.Dark ? .14 : .10), "BubbleMineEdge");
         Set(text, "InkBrush", "OnFieldBrush", "LabelPrimary", "TitleText");
         Set(muted, "LabelBrush", "OnFieldMutedBrush", "LabelSecondary", "LabelTertiary");
         Set(line, "LineBrush", "SeparatorBrush", "FieldBorder", "GlassEdge", "PanelEdge", "RaisedEdge", "WellEdge");
+        Set(Blend(text, surface, .65), "FocusBrush");
+        Set(Blend(text, surface, .32), "InputOutlineBrush");
         Set(hover, "WellBrush", "ElevatedFill", "HoverFill", "GlassFillHover", "GlassFillPressed", "FieldFill", "FieldFillHover", "AccentFillHover", "AccentFillPressed", "SelectionFill", "DialFill");
         Set(accent, "AccentBrush", "OnlineBrush", "SelectionEdge");
-        Set(Blend(accent, surface, theme.Dark ? .26 : .18), "BubbleMine");
         Set(bubble, "AccentFill");
-        Set(Blend(accent, surface, theme.Dark ? .16 : .08), "QuoteFill");
+        var quote = Blend(accent, surface, theme.Dark ? .16 : .08);
+        Set(quote, "QuoteFill");
+        Set(Blend(text, quote, .84), "QuoteTextBrush");
         Set(theme.Dark ? Color.Parse("#FF9696") : Color.Parse("#A52835"), "DangerBrush");
+        Set(theme.Dark ? Colors.Black : Colors.White, "DangerActionTextBrush");
         Set(Contrast(accent, Colors.Black) > Contrast(accent, Colors.White) ? Colors.Black : Colors.White, "ActionTextBrush");
         Current = theme;
+        Changed?.Invoke();
     }
 
     public static double Contrast(Color first, Color second)

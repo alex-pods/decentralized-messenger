@@ -7,20 +7,24 @@ namespace MessengerDesktop;
 public sealed record PinListItem(long MessageId, string Text, bool Local, bool CanRemove,
     bool Mine, string? Sender, string? Time)
 {
-    public string Scope => Local ? "Только для меня · на этом устройстве" : "Для всех";
+    public string Scope => Local ? "На этом устройстве" : "Для всех";
+    public string OpenLabel => "Перейти к сообщению: " + MessageMapper.Trim(Text, 120);
+    public string RemoveLabel => Local ? "Открепить на этом устройстве" : "Открепить для всех";
+    public string Attribution => string.Join(" · ", new[] { Mine ? "Вы" : Sender, Time }.Where(part => !string.IsNullOrWhiteSpace(part)));
 }
 
 public partial class ShellViewModel
 {
     private readonly List<PinListItem> _stripPins = new();
     public ObservableCollection<PinListItem> PinList { get; } = new();
-    [ObservableProperty] private bool _showingPinnedMessages;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WorkspaceTitle))]
+    private bool _showingPinnedMessages;
 
     public bool PinListEmpty => PinList.Count == 0;
     public bool CanPinLocally => HasChat && SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public string LocalPinActionLabel => SelectedChat != null && SelectedMessage != null &&
         ReadLocalPins().Any(p => p.ChatId == SelectedChat.Id && p.MessageId == SelectedMessage.Id)
-            ? "Открепить у себя" : "Закрепить для себя";
+            ? "Открепить на устройстве" : "Закрепить на устройстве";
 
     List<LocalPinStore.Entry> ReadLocalPins()
     {
@@ -64,7 +68,7 @@ public partial class ShellViewModel
         var mine = senderId == _me.Id;
         var name = senderId is { } sender && !mine && IsGroup && _names.TryGetValue(sender, out var knownName)
             ? knownName : null;
-        return new(id, text, local, canRemove, mine, name, sentAt?.ToLocalTime().ToString("HH:mm"));
+        return new(id, text, local, canRemove, mine, name, sentAt?.ToLocalTime().ToString("dd.MM.yyyy · HH:mm"));
     }
 
     void UpdateLocalPin(long chatId, long messageId, string? text)
@@ -119,8 +123,9 @@ public partial class ShellViewModel
     async Task OpenPinFromList(PinListItem pin)
     {
         if (SelectedChat is not { } chat) return;
+        ResetWorkspace();
         ClosePinList();
-        await JumpToPin(chat, pin.MessageId);
+        await JumpToMessage(chat, pin.MessageId, cyclePin: true);
     }
 
     [RelayCommand]

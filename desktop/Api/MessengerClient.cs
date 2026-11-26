@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace MessengerDesktop;
 
 /// <summary>REST-клиент backend v4. Авторизация только через Authorization: Bearer.</summary>
-public sealed class MessengerClient : IDisposable
+public sealed partial class MessengerClient : IDisposable
 {
     public static readonly JsonSerializerOptions Json = new()
     {
@@ -19,10 +19,10 @@ public sealed class MessengerClient : IDisposable
     public string ServerBase { get; }
     public string? Token { get; private set; }
 
-    public MessengerClient(string serverBase, string? token = null)
+    public MessengerClient(string serverBase, string? token = null, HttpMessageHandler? handler = null)
     {
         ServerBase = serverBase.Trim().TrimEnd('/');
-        _http = new HttpClient
+        _http = new HttpClient(handler ?? new HttpClientHandler())
         {
             BaseAddress = new Uri(ServerBase + "/"),
             Timeout = TimeSpan.FromSeconds(30),
@@ -77,8 +77,10 @@ public sealed class MessengerClient : IDisposable
     public async Task<ProfileDto> GetUser(long id, CancellationToken ct = default) =>
         await Send<ProfileDto>(HttpMethod.Get, $"users/{id}", null, ct) ?? throw new ApiException(500, "Пустой профиль");
 
-    public async Task<List<UserCardDto>> Search(string query, CancellationToken ct = default) =>
-        await Send<List<UserCardDto>>(HttpMethod.Get, "users/search?query=" + Uri.EscapeDataString(query), null, ct) ?? new();
+    public async Task<List<UserCardDto>> Search(string query, CancellationToken ct = default, bool prefix = false) =>
+        await Send<List<UserCardDto>>(HttpMethod.Get,
+            "users/search?query=" + Uri.EscapeDataString(query) + (prefix ? "&prefix=true" : ""),
+            null, ct) ?? new();
 
     public Task UpdateProfile(string? displayName, string? bio, CancellationToken ct = default) =>
         UpdateProfile(displayName, bio, null, ct);
@@ -91,13 +93,13 @@ public sealed class MessengerClient : IDisposable
             ["allow_tag_search"] = allowTagSearch
         }, ct);
 
-    public async Task UploadAvatar(string filePath, CancellationToken ct = default)
+    public async Task UpdateProfileWithAvatar(string displayName, string bio, byte[] photo, string fileName, CancellationToken ct = default)
     {
         using var content = new MultipartFormDataContent();
-        await using var file = File.OpenRead(filePath);
-        using var fileContent = new StreamContent(file);
-        content.Add(fileContent, "file", Path.GetFileName(filePath));
-        using var req = new HttpRequestMessage(HttpMethod.Post, "users/me/avatar") { Content = content };
+        content.Add(new StringContent(displayName), "display_name");
+        content.Add(new StringContent(bio), "bio");
+        content.Add(new ByteArrayContent(photo), "file", fileName);
+        using var req = new HttpRequestMessage(HttpMethod.Post, "users/me/profile") { Content = content };
         using var res = await _http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
@@ -242,13 +244,19 @@ public sealed class MessengerClient : IDisposable
 
     public async Task<T?> Send<T>(HttpMethod method, string path, object? body, CancellationToken ct)
     {
+        if (AntispamBlocked && IsMessageMutation(method, path))
+            throw new ApiException(429, "Подтвердите, что вы человек", "antispam_required");
         using var req = new HttpRequestMessage(method, path);
         if (body != null)
             req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
         using var res = await _http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
-            throw ParseError(text, res.StatusCode);
+        {
+            var error = ParseError(text, res.StatusCode);
+            if (error.Code == "antispam_required") { AntispamSupported = true; SetAntispamBlocked(true); }
+            throw error;
+        }
         if (res.StatusCode == HttpStatusCode.NoContent || string.IsNullOrWhiteSpace(text))
             return default;
         return JsonSerializer.Deserialize<T>(text, Json);

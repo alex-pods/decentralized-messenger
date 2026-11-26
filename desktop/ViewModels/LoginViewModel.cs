@@ -10,10 +10,12 @@ public partial class LoginViewModel : ObservableObject
 
     private readonly Navigator _nav;
 
-    [ObservableProperty] private string _server = "http://127.0.0.1:5080/messenger";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ServerAddress))]
+    private string _server = "http://127.0.0.1:5080/messenger";
     [ObservableProperty] private string _login = "";
     [ObservableProperty] private string _password = "";
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private string? _connectionError;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AuthAction))]
     private bool _busy;
@@ -28,14 +30,15 @@ public partial class LoginViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AuthTitle))]
-    [NotifyPropertyChangedFor(nameof(AuthDescription))]
     [NotifyPropertyChangedFor(nameof(AuthAction))]
     [NotifyPropertyChangedFor(nameof(ModePrompt))]
     [NotifyPropertyChangedFor(nameof(ModeAction))]
     private bool _isRegistration;
 
-    public string AuthTitle => IsRegistration ? "Создать аккаунт" : "Войти в Messenger";
-    public string AuthDescription => IsRegistration ? "Придумайте логин и пароль для этого сервера" : "Введите данные вашего аккаунта";
+    public string AuthTitle => IsRegistration ? "Новый аккаунт" : "Вход";
+    public string ServerAddress => Uri.TryCreate(Server.Trim(), UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host)
+        ? uri.Authority + (uri.AbsolutePath == "/" ? "" : uri.AbsolutePath.TrimEnd('/'))
+        : "Укажите адрес сервера";
     public string AuthAction => Busy ? "Подождите…" : IsRegistration ? "Создать аккаунт" : "Войти";
     public string ModePrompt => IsRegistration ? "Уже есть аккаунт?" : "Нет аккаунта?";
     public string ModeAction => IsRegistration ? "Войти" : "Создать аккаунт";
@@ -55,14 +58,16 @@ public partial class LoginViewModel : ObservableObject
     async Task Auth(bool register)
     {
         if (Busy) return;
+        Error = null;
+        ConnectionError = null;
         var server = Server.Trim().TrimEnd('/');
         var login = Login.Trim();
         var password = Password;
-        if (!server.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-            !server.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var serverUri) ||
+            serverUri.Scheme is not ("http" or "https") || string.IsNullOrEmpty(serverUri.Host))
         {
             ShowConnection = true;
-            Error = "Адрес сервера должен начинаться с http:// или https://";
+            ConnectionError = "Укажите адрес сервера, начиная с http:// или https://";
             return;
         }
         if (!LoginRe.IsMatch(login))
@@ -90,11 +95,18 @@ public partial class LoginViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Error = ex is ApiException or HttpRequestException ? Friendly(ex) : ex.Message;
+            if (ex is HttpRequestException or TaskCanceledException)
+            {
+                ShowConnection = true;
+                ConnectionError = Friendly(ex);
+            }
+            else Error = Friendly(ex);
             api.Dispose();
         }
         finally { Busy = false; }
     }
+
+    partial void OnServerChanged(string value) => ConnectionError = null;
 
     /// <summary>Текст для UI: у ApiException берём русский error; машинный code — в ApiException.Code.</summary>
     public static string Friendly(Exception ex) => ex switch

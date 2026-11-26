@@ -5,6 +5,7 @@ using Messenger.Api.Contracts.Requests;
 using Messenger.Api.Infrastructure;
 using Messenger.Api.Contracts.Responses;
 using Messenger.Api.Realtime;
+using Messenger.Api.Antispam;
 
 namespace Messenger.Api.Services;
 
@@ -28,7 +29,8 @@ public sealed class MessagesService(
     IFileStorage files,
     ILogger<MessagesService> logger,
     IReactionsService reactions,
-    WsEventPublisher publisher) : IMessagesService
+    WsEventPublisher publisher,
+    AntispamService antispam) : IMessagesService
 {
     private const int MaxTextLength = 4096;
 
@@ -77,6 +79,7 @@ public sealed class MessagesService(
                     "Reply target must be in the same chat");
         }
 
+        antispam.CheckSend(senderId, chatId, request.ClientRef);
         var result = await messages.AddAsync(
             new NewMessage(chatId, senderId, text, request.ReplyToId, request.ClientRef), ct);
         if (!result.ContentMatches)
@@ -102,6 +105,7 @@ public sealed class MessagesService(
         if (source.ContentState != MessageContentState.Stored)
             throw AppException.Conflict("message_not_forwardable", "Only stored messages can be forwarded");
 
+        antispam.CheckSend(userId, targetChatId, null);
         var forwarded = await messages.ForwardAsync(messageId, targetChatId, userId, ct)
             ?? throw new NotFoundException("Message not found");
 
@@ -128,6 +132,7 @@ public sealed class MessagesService(
             throw new ValidationException(
                 $"Text must be 1..{MaxTextLength} characters");
 
+        antispam.RequireUnblocked(editorId);
         var edited = await messages.EditAsync(messageId, text, ct)
             ?? throw new NotFoundException("Message not found");
 

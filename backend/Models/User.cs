@@ -12,3 +12,5 @@ public sealed record User(
     string? LastSeenAt,
     long AllowTagSearch,
     Secret PasswordHash);
+
+public sealed record UserSearchResult(long Id, string Tag, Secret Name);

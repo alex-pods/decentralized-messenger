@@ -11,7 +11,9 @@ public sealed class Navigator
 
 public static class SessionStore
 {
-    static string FilePath => Path.Combine(
+    static string FilePath => Preview.Server != null
+        ? Path.Combine(Preview.OutDir, "test-session.json")
+        : Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "messenger-desktop", "session.json");
 

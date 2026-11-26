@@ -76,7 +76,7 @@ public sealed partial class AntispamWindow : Window
             _ready = true; _startButton.IsEnabled = true;
         };
         _scene.Failed += () => Fail("Не удалось запустить 3D-сцену. Проверьте драйвер видеокарты.");
-        Opened += (_, _) => { _ = StartupTimeout(); };
+        Opened += (_, _) => { _ = StartupTimeout(); _ = ShowOptionalMode(); };
         Deactivated += (_, _) => { if (_armed && !_ended) Fail("Проверка прервана: окно потеряло фокус."); };
         KeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; if (ShowingResult) DismissResult(); else Fail("Проверка прервана."); } };
         PropertyChanged += (_, e) => { if (_armed && e.Property == WindowStateProperty && WindowState != WindowState.FullScreen) Fail("Проверка прервана: выход из полного экрана."); };

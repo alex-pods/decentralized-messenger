@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Media/Training/*.mp4;Media/Training/NOTICE.txt"
+    <Content Include="Media/Training/NOTICE.txt"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Update="Media/Training/manifest.json"

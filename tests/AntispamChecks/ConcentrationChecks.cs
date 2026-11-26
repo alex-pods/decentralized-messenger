@@ -4,6 +4,7 @@ using System.Text.Json;
 using MessengerDesktop;
 using MessengerDesktop.Antispam;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 static class ConcentrationChecks
 {
@@ -31,14 +32,16 @@ static class ConcentrationChecks
     static void Check(bool condition,string message){if(!condition)throw new Exception(message);}
     public static async Task Run(string root)
     {
-        var bundled=new Messenger.Api.Antispam.AntispamMediaCatalog(new ConfigurationBuilder().Build());
-        Check(bundled.Available&&bundled.Clips.Count==8,"Bundled media missing from build output");
-        Check(bundled.Clips.All(c=>c.AverageColor!=null),"Bundled palette metadata missing");
+        using var remote = new HttpClient();
+        using var bundledManifest = JsonDocument.Parse(File.ReadAllBytes(
+            Path.Combine(AppContext.BaseDirectory, "Media", "Training", "manifest.json")));
+        Check(bundledManifest.RootElement.GetProperty("clips").GetArrayLength() == 8, "Packaged manifest is incomplete");
         var missing=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{
             {"MESSENGER_ANTISPAM_MEDIA",Path.Combine(root,"missing-catalog")}}).Build();
-        try{new Messenger.Api.Antispam.AntispamMediaCatalog(missing);throw new Exception("Invalid explicit media path silently fell back");}
+        using var missingCatalog = CreateCatalog(missing);
+        try{await missingCatalog.LoadAsync(remote, CancellationToken.None);throw new Exception("Invalid explicit media path silently fell back");}
         catch(DirectoryNotFoundException){}
-        Console.WriteLine("PASS bundled media: complete verified catalog without configuration; explicit override fails closed");
+        Console.WriteLine("PASS packaged catalog manifest and fail-closed local override");
         foreach(var (w,h) in new[]{(1920,1080),(1280,720),(2560,1440)})
         {
             var corners=TrainingStand.ProjectCorners(new AimCamera(),w,h);
@@ -66,12 +69,13 @@ static class ConcentrationChecks
         void Save(ConcentrationClip value)=>File.WriteAllText(manifest,JsonSerializer.Serialize(new{version=1,clips=new[]{value}},new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         Save(descriptor);File.WriteAllBytes(Path.Combine(media,"test-015.mp4"),bytes);
         var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"MESSENGER_ANTISPAM_MEDIA",media}}).Build();
-        var catalog=new Messenger.Api.Antispam.AntispamMediaCatalog(config);
+        using var catalog = CreateCatalog(config);
+        await catalog.LoadAsync(remote, CancellationToken.None);
         Check(catalog.Available&&catalog.Clips.Count==1,"Valid media rejected");
         Save(descriptor with{Id="../escape"});
-        try{new Messenger.Api.Antispam.AntispamMediaCatalog(config);throw new Exception("Traversal accepted");}catch(InvalidDataException){}
+        try{await catalog.LoadAsync(remote, CancellationToken.None);throw new Exception("Traversal accepted");}catch(InvalidDataException){}
         Save(descriptor with{Sha256=new string('0',64)});
-        try{new Messenger.Api.Antispam.AntispamMediaCatalog(config);throw new Exception("Bad hash accepted");}catch(InvalidDataException){}
+        try{await catalog.LoadAsync(remote, CancellationToken.None);throw new Exception("Bad hash accepted");}catch(InvalidDataException){}
         var handler=new MediaHandler(bytes);
         using var api=new MessengerClient("http://test.invalid/api/dev","test-token",handler);
         var path=await api.DownloadConcentrationClip(descriptor,null,CancellationToken.None);
@@ -87,6 +91,9 @@ static class ConcentrationChecks
         finally {File.Delete(path);}
         Console.WriteLine("PASS media allowlist, traversal rejection, checksums, authenticated download, verified cache and failed-download cleanup");
     }
+    static Messenger.Api.Antispam.AntispamMediaCatalog CreateCatalog(IConfiguration config) =>
+        new(config, new(true), NullLogger<Messenger.Api.Antispam.AntispamMediaCatalog>.Instance);
+
     sealed class MediaHandler(byte[] data):HttpMessageHandler
     {
         public int Count;public bool Corrupt;

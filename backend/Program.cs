@@ -16,6 +16,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<AntispamRepository>();
 builder.Services.AddSingleton<AntispamService>();
 builder.Services.AddSingleton<AntispamMediaCatalog>();
+builder.Services.AddHostedService(services => services.GetRequiredService<AntispamMediaCatalog>());
 var allowedOrigins =
     (builder.Configuration["MESSENGER_ALLOWED_ORIGINS"] ?? "")
     .Split(

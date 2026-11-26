@@ -10,7 +10,7 @@ namespace MessengerDesktop.Antispam;
 public sealed partial class AntispamWindow
 {
     readonly Button _startButton = new() { Content="Начать", IsEnabled=false };
-    readonly ToggleSwitch _concentration = new() { OnContent="Повышенная концентрация",OffContent="Повышенная концентрация" };
+    readonly ToggleSwitch _concentration = new() { OnContent="Повышенная концентрация",OffContent="Повышенная концентрация",IsVisible=false };
     Control _startScreen = null!;
     ConcentrationVideo? _video;
     float[]? _music;
@@ -42,6 +42,17 @@ public sealed partial class AntispamWindow
         content.Children.Add(_concentration);
         _startScreen=new Grid { Background=Brush.Parse("#F5101C27"),Children={content} };
         return _startScreen;
+    }
+
+    async Task ShowOptionalMode()
+    {
+        try
+        {
+            var clips = await _api.GetConcentrationClips(_closed.Token);
+            if (!_ended && clips.Length > 0) _concentration.IsVisible = true;
+        }
+        catch (Exception ex) when (ex is ApiException or HttpRequestException or OperationCanceledException
+            or System.Text.Json.JsonException) { }
     }
 
     async Task StartTraining()

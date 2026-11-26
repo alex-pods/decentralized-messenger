@@ -440,6 +440,9 @@ local_run.log
 swagger_local.json
 keys/
 files/
+/assets/training/
+/backend/assets/training/
+/backend/Media/Training/*.mp4
 
 /backend-v2/**/bin/
 /backend-v2/**/obj/

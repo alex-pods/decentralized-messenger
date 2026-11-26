@@ -11,6 +11,7 @@ import tarfile
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlsplit
 
 MANAGED = 'io.messenger.deploy'
 SOURCE = 'io.messenger.source'
@@ -74,6 +75,14 @@ def validate(request):
         if type(request.get(key,False)) is not bool: raise ValueError('Invalid '+key+' flag')
     if request.get('profile', 'legacy') not in ['current', 'legacy', 'v2']: raise ValueError('Invalid backend profile')
     if type(request.get('antiflood',False)) is not bool: raise ValueError('Invalid antiflood flag')
+    source = request.get('asset_source')
+    if source is not None:
+        if (request.get('profile') != 'current' or not isinstance(source, str) or len(source) > 2048
+                or '\\' in source or any(c.isspace() or ord(c) < 32 for c in source)):
+            raise ValueError('Invalid asset source for this backend profile')
+        url = urlsplit(source)
+        if url.scheme != 'https' or not url.hostname or '@' in url.netloc or url.port == 0 or '?' in source or '#' in source:
+            raise ValueError('Asset source must be an HTTPS directory URL')
     if request['action'] in ['preflight', 'deploy']:
         if type(request.get('port')) is not int or not 1024 <= request['port'] <= 65535: raise ValueError('Invalid API port')
         if request.get('listen') not in ['127.0.0.1', '0.0.0.0']: raise ValueError('Invalid bind address')
@@ -159,6 +168,8 @@ def deploy(request):
                '-e','MESSENGER_DEV_SEED=false',
                '-e','MESSENGER_ANTISPAM='+str(request.get('antiflood',False)).lower()]
         if profile=='v2': extra+=['-e','DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1']
+        if request.get('asset_source'):
+            extra += ['-e', 'MESSENGER_ASSET_SOURCE=' + request['asset_source']]
         container_id = docker('create', '--name', container, '--label', MANAGED+'=true',
             '--label', SOURCE+'='+source, '--restart', 'unless-stopped', '--read-only',
             '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '128',

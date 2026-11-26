@@ -10,6 +10,7 @@ services:
     environment:
       MESSENGER_PATH_BASE: ${MESSENGER_PATH_BASE:-}
       MESSENGER_ANTISPAM: ${MESSENGER_ANTISPAM:-false}
+      MESSENGER_ASSET_SOURCE: ${MESSENGER_ASSET_SOURCE:-}
     volumes:
       - messenger-data:/state
     restart: unless-stopped

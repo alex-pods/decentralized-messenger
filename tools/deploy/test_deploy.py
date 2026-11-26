@@ -87,6 +87,15 @@ class DeployTests(unittest.TestCase):
         for value in ['/etc/bundle.tar.gz','/tmp/messenger-deploy-x/../../bundle.tar.gz']:
             with self.assertRaises(ValueError): remote.upload_path(value)
 
+    def test_optional_asset_source_validation(self):
+        req = {'action': 'preflight', 'name': 'test', 'port': 18090, 'listen': '127.0.0.1',
+               'path_base': '', 'profile': 'current'}
+        remote.validate({**req, 'asset_source': 'https://assets.example.org/release/'})
+        for source in ['http://assets.example.org/', 'https://user@assets.example.org/',
+                       'https://assets.example.org/?token=x', 'https://assets.example.org/#v1', '\n']:
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                remote.validate({**req, 'asset_source': source})
+
     def test_failed_readiness_removes_only_created_container_and_keeps_volume(self):
         with tempfile.TemporaryDirectory() as directory:
             archive=Path(directory)/'bundle'; archive.write_bytes(b'fake')

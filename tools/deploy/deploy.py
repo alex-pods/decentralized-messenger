@@ -159,6 +159,7 @@ def main():
     deploy.add_argument('--project', help='Compatible Messenger .csproj path relative to repository')
     deploy.add_argument('--profile', choices=['current', 'legacy', 'v2'], default='current')
     deploy.add_argument('--antiflood', action='store_true', help='Enable the optional server-side send limit')
+    deploy.add_argument('--asset-source', help='HTTPS directory for optional assets (current profile)')
     deploy.add_argument('--port', type=int, default=18090, help='Backend TCP port (not the SSH port)')
     deploy.add_argument('--listen', choices=['127.0.0.1', '0.0.0.0'], default='127.0.0.1')
     deploy.add_argument('--path-base', default='', help='Optional proxy prefix, e.g. /api/dev')
@@ -183,7 +184,7 @@ def main():
     name = args.name or instance_name(args.repo, args.branch)
     request = {'action': 'preflight', 'name': name, 'repo': args.repo, 'branch': args.branch,
                'port': args.port, 'listen': args.listen, 'path_base': args.path_base, 'profile': args.profile,
-               'antiflood': args.antiflood}
+               'antiflood': args.antiflood, 'asset_source': args.asset_source}
     info = ssh.call(request)
     with tempfile.TemporaryDirectory(prefix='messenger-deploy-') as directory:
         archive, revision = build(args, Path(directory), info['runtime'])

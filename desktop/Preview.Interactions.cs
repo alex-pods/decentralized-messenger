@@ -379,8 +379,8 @@ public static partial class Preview
                 "Empty conversation still shows chat header");
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var center = empty.TranslatePoint(new Point(empty.Bounds.Width / 2, empty.Bounds.Height / 2), shell)!.Value;
-                Expect(empty.Text == "Выберите чат" && Math.Abs(center.X - shell.Bounds.Width / 2) < 2,
+                var center = empty.TranslatePoint(new Point(empty.Bounds.Width / 2, empty.Bounds.Height / 2), pane)!.Value;
+                Expect(empty.Text == "Выберите чат" && Math.Abs(center.X - pane.Bounds.Width / 2) < 2,
                     "Empty conversation does not use the centered, single-line prompt");
             });
             await Shot(window, $"audit-empty-{(dark ? "dark" : "light")}");
@@ -392,28 +392,29 @@ public static partial class Preview
         await Dispatcher.UIThread.InvokeAsync(() => vm.SelectedChat = vm.Chats.First(chat => chat.Title.StartsWith("Максим")));
         await Until(() => header.IsEffectivelyVisible && !empty.IsEffectivelyVisible && !sidebar.IsEffectivelyVisible,
             "Selecting a conversation did not open it in the compact window");
-        await Dispatcher.UIThread.InvokeAsync(() => Resize(window, 1440));
-        await Until(() => window.ClientSize.Width > 1420 && pane.Bounds.Width > 1100 && composer.IsEffectivelyVisible,
-            "Wide conversation layout did not open");
         var log = shell.FindControl<ListBox>("Log")!;
         await Until(() => log.GetVisualDescendants().OfType<Grid>().Any(row => row.Classes.Contains("messageRow")),
-            "The message column did not load");
-        await Dispatcher.UIThread.InvokeAsync(() =>
+            "The message list did not load");
+        foreach (var (width, sidebarVisible) in new[] { (360, false), (900, true), (1440, true) })
         {
-            var headerLeft = headerContent.TranslatePoint(default, pane)!.Value.X;
-            Expect(headerLeft is >= 10 and <= 18 && pane.Bounds.Width - headerLeft - headerContent.Bounds.Width is >= 10 and <= 18,
-                "Chat header no longer spans the pane");
-            var row = log.GetVisualDescendants().OfType<Grid>().First(control => control.Classes.Contains("messageRow"));
-            foreach (var control in new Control[] { row, composer })
-                Expect(control.TranslatePoint(new Point(control.Bounds.Width / 2, 0), shell) is { } center &&
-                    Math.Abs(center.X - shell.Bounds.Width / 2) < 2, "Chat content is off the window axis");
-        });
-        await Shot(window, "audit-centered-chat-wide");
-        await Dispatcher.UIThread.InvokeAsync(() => Resize(window, 900));
-        await Until(() => composer.TranslatePoint(default, pane) is { X: >= 12 } && composer.Bounds.Width > 510 &&
-            sidebar.IsEffectivelyVisible, "The chat column overlapped the sidebar or became too narrow");
+            await Dispatcher.UIThread.InvokeAsync(() => Resize(window, width));
+            await Until(() => Math.Abs(shell.Bounds.Width - width) < 2 && sidebar.IsEffectivelyVisible == sidebarVisible &&
+                Math.Abs(composer.Bounds.Width - (pane.Bounds.Width - 28)) < 2, $"The composer did not fill the chat area at {width}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var row = log.GetVisualDescendants().OfType<Grid>().First(control => control.Classes.Contains("messageRow"));
+                foreach (var control in new Control[] { headerContent, row, composer })
+                {
+                    var left = control.TranslatePoint(default, pane)!.Value.X;
+                    var right = pane.Bounds.Width - left - control.Bounds.Width;
+                    Expect(left is >= 12 and <= 16 && right is >= 12 and <= 32,
+                        $"{control.Name ?? "Message row"} does not span the chat area at {width}");
+                }
+            });
+        }
+        await Shot(window, "audit-full-width-chat-wide");
         await Dispatcher.UIThread.InvokeAsync(() => Resize(window, 1180));
-        Console.WriteLine("PASS chat layout: window centering, sidebar clearance, wide header and compact navigation");
+        Console.WriteLine("PASS chat layout: full-width messages, header and composer at 360, 900 and 1440");
     }
 
     static void Press(Control target, Window root)

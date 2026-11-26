@@ -178,7 +178,7 @@
                   </ListBox.ItemsPanel>
                   <ListBox.DataTemplates>
                     <DataTemplate DataType="local:GroupActivityLine">
-                      <StackPanel Classes="groupEvent">
+                      <StackPanel Classes="groupEvent" Margin="14,0">
                         <Border Classes="historyLabel" IsVisible="{Binding StartsDay}" CornerRadius="5"
                                 Padding="8,2" Margin="0,7,0,9">
                           <TextBlock Text="{Binding DayLabel}" Classes="caption" FontWeight="Medium"/>
@@ -200,7 +200,7 @@
                       </StackPanel>
                     </DataTemplate>
                     <DataTemplate DataType="local:MessageItem">
-                      <Grid RowDefinitions="Auto,Auto" Classes="messageRow" ContextRequested="OnMessageContextRequested">
+                      <Grid RowDefinitions="Auto,Auto" Classes="messageRow" Margin="14,0" ContextRequested="OnMessageContextRequested">
                         <Border Classes="historyLabel" IsVisible="{Binding StartsDay}" CornerRadius="5" Padding="8,2" Margin="0,7,0,9">
                           <TextBlock Text="{Binding DayLabel}" Classes="caption" FontWeight="Medium"/>
                         </Border>
@@ -255,7 +255,7 @@
                     </DataTemplate>
                   </ListBox.DataTemplates>
                 </ListBox>
-                <Button x:Name="LoadOlderMessages" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0" Classes="small" Command="{Binding LoadOlderCommand}" IsVisible="{Binding HasOlderTimeline}">
+                <Button HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0" Classes="small" Command="{Binding LoadOlderCommand}" IsVisible="{Binding HasOlderTimeline}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <local:Glyph Data="{StaticResource IcChevronUp}" Width="12" Height="12" StrokeWidth="2"/>
                     <TextBlock Text="Показать раньше"/>
@@ -264,7 +264,7 @@
               </Panel>
             </DockPanel>
           </Border>
-          <StackPanel x:Name="ConversationControls" Grid.Row="2" Background="Transparent" Margin="14,2,14,12" Spacing="4" IsVisible="{Binding HasChat}">
+          <StackPanel Grid.Row="2" Background="Transparent" Margin="14,2,14,12" Spacing="4" IsVisible="{Binding HasChat}">
             <Border x:Name="AntispamBanner" IsVisible="{Binding AntispamRequired}" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
               <StackPanel Spacing="10">
                 <TextBlock Text="Подтвердите, что вы человек" FontWeight="SemiBold" TextWrapping="Wrap"/>

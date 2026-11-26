@@ -37,6 +37,26 @@ public partial class ShellView
         else _vm?.BackWorkspace();
     }
 
+    void UpdateWorkspaceFrame(bool narrow, double sidebarWidth)
+    {
+        var margin = default(Thickness);
+        if (!narrow)
+        {
+            const double inset = 18;
+            var paneWidth = Bounds.Width - sidebarWidth;
+            var available = paneWidth - 2 * inset;
+            var center = Bounds.Width / 2 - sidebarWidth;
+            // Shift the panel only when centering would make it too narrow.
+            var width = Math.Clamp(2 * (center - inset), Math.Min(540, available), Math.Min(656, available));
+            var left = Math.Clamp(center - width / 2, inset, paneWidth - width - inset);
+            margin = new Thickness(left, inset, paneWidth - left - width, inset);
+        }
+        WorkspaceFrame.Margin = margin;
+        WorkspaceFrame.CornerRadius = new CornerRadius(narrow ? 0 : 10);
+        WorkspaceFrame.BorderThickness = new Thickness(narrow ? 0 : 1);
+        ConversationWallpaper.IsVisible = !narrow || _visiblePage == null;
+    }
+
     void PresentWorkspace()
     {
         if (_vm is not { } vm) return;

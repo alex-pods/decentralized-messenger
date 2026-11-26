@@ -108,7 +108,7 @@ public partial class ShellView : UserControl
         bool narrow = Bounds.Width < 780;
         UpdateOverlayLayout();
         var sidebarWidth = narrow ? 0 : ChatSidebarWidth;
-        UpdateContentLayout(narrow, sidebarWidth);
+        UpdateWorkspaceFrame(narrow, sidebarWidth);
         ShellGrid.ColumnDefinitions = narrow
             ? new ColumnDefinitions("*")
             : new ColumnDefinitions { new(sidebarWidth, GridUnitType.Pixel), new(1, GridUnitType.Star) };
@@ -118,34 +118,6 @@ public partial class ShellView : UserControl
         ChatSidebar.IsVisible = !narrow || showList;
         ScreenBay.IsVisible = !narrow || !showList;
         BackToChats.IsVisible = narrow;
-    }
-
-    void UpdateContentLayout(bool narrow, double sidebarWidth)
-    {
-        var workspaceInset = narrow ? 0 : 18;
-        var workspace = ContentInsets(sidebarWidth, workspaceInset, narrow ? double.PositiveInfinity : 656);
-        WorkspaceFrame.Margin = new Thickness(workspace.Left, workspaceInset, workspace.Right, workspaceInset);
-        WorkspaceFrame.CornerRadius = new CornerRadius(narrow ? 0 : 10);
-        WorkspaceFrame.BorderThickness = new Thickness(narrow ? 0 : 1);
-        ConversationWallpaper.IsVisible = !narrow || _visiblePage == null;
-
-        var chat = ContentInsets(sidebarWidth, 14, 1000);
-        ConversationControls.Margin = new Thickness(chat.Left, 2, chat.Right, 12);
-        Log.Padding = new Thickness(chat.Left, 10, chat.Right, 8);
-        EmptyConversation.Margin = chat;
-        LoadOlderMessages.Margin = new Thickness(chat.Left, 12, chat.Right, 0);
-    }
-
-    Thickness ContentInsets(double sidebarWidth, double gutter, double maxWidth)
-    {
-        var paneWidth = Bounds.Width - sidebarWidth;
-        var available = Math.Max(0, paneWidth - 2 * gutter);
-        var center = Bounds.Width / 2 - sidebarWidth;
-        var centeredWidth = 2 * (center - gutter);
-        // Give the column room to wrap before shifting it toward the chat pane.
-        var width = Math.Clamp(centeredWidth, Math.Min(540, available), Math.Min(maxWidth, available));
-        var left = gutter + Math.Clamp(center - width / 2 - gutter, 0, available - width);
-        return new Thickness(left, 0, Math.Max(gutter, paneWidth - left - width), 0);
     }
 
     void UpdateOverlayLayout()

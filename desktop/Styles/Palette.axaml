@@ -38,6 +38,8 @@
       <SolidColorBrush x:Key="LabelSecondary" Color="{StaticResource Label}"/>
       <SolidColorBrush x:Key="LabelTertiary" Color="{StaticResource Label}"/>
       <SolidColorBrush x:Key="DangerBrush" Color="#9E2B2B"/>
+      <SolidColorBrush x:Key="FocusBrush" Color="#506780"/>
+      <SolidColorBrush x:Key="InputOutlineBrush" Color="#B0BAC4"/>
       <SolidColorBrush x:Key="DangerActionTextBrush" Color="#FFFFFF"/>
       <SolidColorBrush x:Key="OnlineBrush" Color="{StaticResource Accent}"/>
       <SolidColorBrush x:Key="SeparatorBrush" Color="#E3E7EB"/>
@@ -52,8 +54,11 @@
       <SolidColorBrush x:Key="FieldFillHover" Color="#C5CCCF"/>
       <SolidColorBrush x:Key="FieldBorder" Color="#DCE2E6"/>
       <SolidColorBrush x:Key="DimBrush" Color="#B3181E22"/>
-      <SolidColorBrush x:Key="BubbleTheirs" Color="Transparent"/>
+      <SolidColorBrush x:Key="BubbleTheirs" Color="{StaticResource Raised}"/>
+      <SolidColorBrush x:Key="QuoteTextBrush" Color="{StaticResource Ink}"/>
       <SolidColorBrush x:Key="BubbleMine" Color="#E7F2ED"/>
+      <SolidColorBrush x:Key="BubbleTheirsEdge" Color="#DFE5E1"/>
+      <SolidColorBrush x:Key="BubbleMineEdge" Color="#CFDDD4"/>
       <SolidColorBrush x:Key="ScreenInset" Color="#FAFBFC"/>
       <SolidColorBrush x:Key="GlassEdge" Color="#DCE2E6"/>
       <SolidColorBrush x:Key="PanelEdge" Color="#DCE2E6"/>

@@ -6,25 +6,22 @@
 
 
   <ScrollViewer Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled" AllowAutoHide="False" ClipToBounds="True">
-    <Grid Margin="32,50" RowDefinitions="Auto,*">
-      <TextBlock Text="Messenger" FontWeight="SemiBold" FontSize="18" Margin="0,0,0,48"/>
-      <Border Grid.Row="1" MaxWidth="360" HorizontalAlignment="Stretch" VerticalAlignment="Center">
-<StackPanel Spacing="0">
-          <local:Glyph Data="{StaticResource IcBubble}" Width="28" Height="28" StrokeWidth="1.7"
-                       Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Left"/>
-          <TextBlock Text="{Binding AuthTitle}" FontSize="24" FontWeight="SemiBold" LetterSpacing="-0.4"
-                     HorizontalAlignment="Left" Margin="0,12,0,0"/>
-          <TextBlock Text="{Binding AuthDescription}" Classes="secondary" FontSize="14" TextWrapping="Wrap"
-                     HorizontalAlignment="Left" Margin="0,6,0,18"/>
-
+    <Grid Margin="18,24">
+      <Border MaxWidth="408" HorizontalAlignment="Stretch" VerticalAlignment="Center" Classes="sheet" Padding="22">
+        <StackPanel Spacing="0">
+          <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,0,0,16">
+            <local:Glyph Data="{StaticResource IcBubble}" Width="17" Height="17" Foreground="{DynamicResource AccentBrush}"/>
+            <TextBlock Text="Messenger" FontSize="14" FontWeight="Medium" Classes="secondary" VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock Text="{Binding AuthTitle}" FontSize="25" FontWeight="SemiBold" HorizontalAlignment="Left" Margin="0,0,0,14"/>
           <TextBlock Classes="field" Text="Логин"/>
-          <TextBox  Text="{Binding Login}" Watermark="Введите логин" Margin="0,4,0,12"/>
+          <TextBox Text="{Binding Login}" Classes="authInput" AutomationProperties.Name="Логин" Margin="0,4,0,12"/>
 
           <TextBlock Classes="field" Text="Пароль"/>
-          <TextBox x:Name="PasswordBox"  Margin="0,4,0,0"
-                   Text="{Binding Password}" PasswordChar="•" Watermark="Введите пароль">
+          <TextBox x:Name="PasswordBox" Classes="authInput" Margin="0,4,0,0"
+                   Text="{Binding Password}" PasswordChar="•" AutomationProperties.Name="Пароль">
             <TextBox.InnerRightContent>
-              <Button Classes="icon" Width="36" Height="36" Padding="8" Margin="0,0,4,0"
+              <Button Classes="icon" Width="36" Height="36" Padding="7" Margin="0,0,4,0"
                       AutomationProperties.Name="Показать пароль"
                       Click="OnTogglePassword">
                 <Panel>
@@ -43,17 +40,20 @@
           <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"
                      FontSize="13" Margin="0,8,0,0"
                      IsVisible="{Binding Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+          <TextBlock Text="{Binding ConnectionError}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"
+                     FontSize="13" Margin="0,8,0,0"
+                     IsVisible="{Binding ConnectionError, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
 
           <Button Classes="primary" Content="{Binding AuthAction}" HorizontalAlignment="Stretch" Margin="0,16,0,0"
-                  Command="{Binding SubmitCommand}"
+                  Command="{Binding SubmitCommand}" MinHeight="42"
                   IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
 
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,14,0,0" Spacing="6">
             <TextBlock Text="{Binding ModePrompt}" Classes="secondary" FontSize="14" VerticalAlignment="Center"/>
-            <Button Classes="link" Command="{Binding SwitchModeCommand}" Padding="0"
+            <Button Classes="link" Command="{Binding SwitchModeCommand}" Padding="0" MinHeight="28"
                     VerticalAlignment="Center"
                     IsEnabled="{Binding Busy, Converter={StaticResource Not}}">
-              <TextBlock Text="{Binding ModeAction}" FontSize="14"/>
+              <TextBlock Text="{Binding ModeAction}" FontSize="14" TextDecorations="Underline"/>
             </Button>
           </StackPanel>
 
@@ -64,8 +64,10 @@
             <Grid ColumnDefinitions="Auto,*,Auto">
               <local:Glyph Data="{StaticResource IcGear}" Width="16" Height="16"
                            Foreground="{DynamicResource LabelBrush}" VerticalAlignment="Center"/>
-              <TextBlock Grid.Column="1" Text="Настройки подключения" Margin="8,0,0,0"
-                         VerticalAlignment="Center" FontSize="14"/>
+              <StackPanel Grid.Column="1" Margin="8,0,8,0" VerticalAlignment="Center" Spacing="3">
+                <TextBlock Text="Сервер" FontSize="14"/>
+                <TextBlock Text="{Binding ServerAddress}" Classes="caption" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ServerAddress}"/>
+              </StackPanel>
               <Panel Grid.Column="2" VerticalAlignment="Center">
                 <local:Glyph Data="{StaticResource IcChevronRight}" Width="14" Height="14"
                              Foreground="{DynamicResource LabelBrush}"
@@ -79,7 +81,8 @@
 
           <StackPanel Spacing="4" Margin="0,4,0,6" IsVisible="{Binding ShowConnection}">
             <TextBlock Classes="field" Text="Сервер"/>
-            <TextBox  Text="{Binding Server}" Watermark="https://…/messenger"/>
+            <TextBox Text="{Binding Server}" Classes="authInput" Watermark="https://…/messenger" AutomationProperties.Name="Адрес сервера"
+                     Classes.invalid="{Binding ConnectionError, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
             <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,4,0,0"
                        Text="Аккаунты разных серверов независимы."/>
           </StackPanel>

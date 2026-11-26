@@ -77,8 +77,10 @@ public sealed partial class MessengerClient : IDisposable
     public async Task<ProfileDto> GetUser(long id, CancellationToken ct = default) =>
         await Send<ProfileDto>(HttpMethod.Get, $"users/{id}", null, ct) ?? throw new ApiException(500, "Пустой профиль");
 
-    public async Task<List<UserCardDto>> Search(string query, CancellationToken ct = default) =>
-        await Send<List<UserCardDto>>(HttpMethod.Get, "users/search?query=" + Uri.EscapeDataString(query), null, ct) ?? new();
+    public async Task<List<UserCardDto>> Search(string query, CancellationToken ct = default, bool prefix = false) =>
+        await Send<List<UserCardDto>>(HttpMethod.Get,
+            "users/search?query=" + Uri.EscapeDataString(query) + (prefix ? "&prefix=true" : ""),
+            null, ct) ?? new();
 
     public Task UpdateProfile(string? displayName, string? bio, CancellationToken ct = default) =>
         UpdateProfile(displayName, bio, null, ct);
@@ -91,13 +93,13 @@ public sealed partial class MessengerClient : IDisposable
             ["allow_tag_search"] = allowTagSearch
         }, ct);
 
-    public async Task UploadAvatar(string filePath, CancellationToken ct = default)
+    public async Task UpdateProfileWithAvatar(string displayName, string bio, byte[] photo, string fileName, CancellationToken ct = default)
     {
         using var content = new MultipartFormDataContent();
-        await using var file = File.OpenRead(filePath);
-        using var fileContent = new StreamContent(file);
-        content.Add(fileContent, "file", Path.GetFileName(filePath));
-        using var req = new HttpRequestMessage(HttpMethod.Post, "users/me/avatar") { Content = content };
+        content.Add(new StringContent(displayName), "display_name");
+        content.Add(new StringContent(bio), "bio");
+        content.Add(new ByteArrayContent(photo), "file", fileName);
+        using var req = new HttpRequestMessage(HttpMethod.Post, "users/me/profile") { Content = content };
         using var res = await _http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)

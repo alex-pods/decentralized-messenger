@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Messenger.Api.Database;
 using Messenger.Api.Models;
@@ -7,7 +8,7 @@ namespace Messenger.Api.Repositories;
 public interface IAvatarsRepository
 {
     Task<Dictionary<long, Avatar>> GetByUserIds(IReadOnlyCollection<long> userIds);
-    Task Upsert(Avatar avatar);
+    Task<string?> Swap(Avatar avatar, IDbTransaction transaction);
 }
 
 public sealed class AvatarsRepository(DbConnectionFactory db) : IAvatarsRepository
@@ -22,14 +23,17 @@ public sealed class AvatarsRepository(DbConnectionFactory db) : IAvatarsReposito
         return rows.ToDictionary(avatar => avatar.UserId);
     }
 
-    public async Task Upsert(Avatar avatar)
+    public async Task<string?> Swap(Avatar avatar, IDbTransaction transaction)
     {
-        using var connection = db.Open();
+        var connection = transaction.Connection!;
+        var previous = await connection.QuerySingleOrDefaultAsync<string>(
+            "SELECT path FROM avatars WHERE user_id = @UserId", avatar, transaction);
         await connection.ExecuteAsync(
             """
             INSERT INTO avatars(user_id, path, content_type) VALUES(@UserId, @Path, @ContentType)
             ON CONFLICT(user_id) DO UPDATE SET path = excluded.path, content_type = excluded.content_type,
                 updated_at = CURRENT_TIMESTAMP
-            """, avatar);
+            """, avatar, transaction);
+        return previous;
     }
 }

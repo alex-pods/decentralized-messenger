@@ -6,7 +6,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 namespace MessengerDesktop.Appearance;
 
-public sealed partial class AppearanceWindow
+public sealed partial class AppearanceEditor
 {
     readonly MessengerClient? _api;
     readonly long? _owner;
@@ -32,7 +32,8 @@ public sealed partial class AppearanceWindow
             }
         };
         _exchange.Children.Add(new TextBlock { Text = "Обмен темами", FontWeight = FontWeight.SemiBold });
-        _exchange.Children.Add(new TextBlock { Text = "Файл можно передать напрямую. Ссылка хранит тему на вашем сервере.", Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
+        _exchange.Children.Add(new TextBlock { Text = "Фон остаётся на этом устройстве и не входит в тему при обмене.", Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
+        _exchange.Children.Add(new TextBlock { Text = "Файл", Classes = { "field" } });
         var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,*") };
         var import = new Button { Content = "Импорт файла", Classes = { "secondaryAction" }, HorizontalAlignment = HorizontalAlignment.Stretch };
         var export = new Button { Content = "Экспорт файла", Classes = { "secondaryAction" }, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -57,8 +58,9 @@ public sealed partial class AppearanceWindow
         });
         Grid.SetColumn(export, 2);
         actions.Children.Add(import); actions.Children.Add(export); _exchange.Children.Add(actions);
-        var linkInput = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,Auto"), Margin = new Thickness(0, 6, 0, 0) };
-        var load = new Button { Content = "Открыть ссылку", Classes = { "secondaryAction" }, VerticalAlignment = VerticalAlignment.Stretch };
+        var load = new Button { Content = "Загрузить тему", Classes = { "secondaryAction" }, HorizontalAlignment = HorizontalAlignment.Stretch,
+            FontSize = 13, Padding = new Thickness(6, 8), IsEnabled = false };
+        Avalonia.Automation.AutomationProperties.SetName(load, "Загрузить тему по ссылке");
         load.Click += async (_, _) => await Transfer(async () =>
         {
             if (!Uri.TryCreate(_themeLink.Text?.Trim(), UriKind.Absolute, out var uri)) throw new InvalidDataException("Проверьте ссылку.");
@@ -69,7 +71,7 @@ public sealed partial class AppearanceWindow
             Load(share.Theme); ThemeSettings.Apply(share.Theme);
             _exchangeStatus.Text = "Тема открыта в предпросмотре. Можно изменить и сохранить свою копию.";
         });
-        var publish = new Button { Content = "Опубликовать копию", Classes = { "secondaryAction" }, IsEnabled = _api != null };
+        var publish = new Button { Content = "Опубликовать на сервере", Classes = { "secondaryAction" }, IsEnabled = _api != null };
         publish.Click += async (_, _) => await Transfer(async () =>
         {
             ThemeExchange.Validate(ThemeSettings.Current);
@@ -86,7 +88,14 @@ public sealed partial class AppearanceWindow
                 new { version = _remote.Version, theme = ThemeSettings.Current }, default);
             _exchangeStatus.Text = "Тема обновлена по прежней ссылке.";
         });
-        var copy = new Button { Content = "Копировать ссылку", Classes = { "secondaryAction" } };
+        var copy = new Button { Content = "Копировать ссылку", Classes = { "secondaryAction" }, HorizontalAlignment = HorizontalAlignment.Stretch,
+            IsEnabled = false,
+            FontSize = 13, Padding = new Thickness(6, 8) };
+        _themeLink.TextChanged += (_, _) =>
+        {
+            load.IsEnabled = !string.IsNullOrWhiteSpace(_themeLink.Text);
+            copy.IsEnabled = Uri.TryCreate(_themeLink.Text?.Trim(), UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+        };
         copy.Click += async (_, _) => await Transfer(async () =>
         {
             if (!Uri.TryCreate(_themeLink.Text?.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != "https")
@@ -94,17 +103,17 @@ public sealed partial class AppearanceWindow
             if (Clipboard == null) throw new InvalidOperationException("Буфер обмена недоступен.");
             await Clipboard.SetTextAsync(uri.AbsoluteUri); _exchangeStatus.Text = "Ссылка скопирована.";
         });
-        Grid.SetColumn(load, 2);
-        linkInput.Children.Add(_themeLink); linkInput.Children.Add(load); _exchange.Children.Add(linkInput);
+        _exchange.Children.Add(new TextBlock { Text = "Ссылка на сервере", Classes = { "field" }, Margin = new Thickness(0, 4, 0, 0) });
+        _exchange.Children.Add(_themeLink);
         Avalonia.Automation.AutomationProperties.SetName(_themeLink, "Ссылка на тему");
-        var links = new WrapPanel { Orientation = Orientation.Horizontal };
-        foreach (var button in new[] { publish, copy })
-        {
-            button.Padding = new Thickness(10, 7);
-            button.Margin = new Thickness(0, 0, 8, 4);
-            links.Children.Add(button);
-        }
-        _exchange.Children.Add(links); _exchange.Children.Add(_updateShared); _exchange.Children.Add(_exchangeStatus);
+        var links = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,*") };
+        Grid.SetColumn(copy, 2);
+        links.Children.Add(load);
+        links.Children.Add(copy);
+        _exchange.Children.Add(links);
+        _exchange.Children.Add(publish);
+        _exchange.Children.Add(_updateShared);
+        _exchange.Children.Add(_exchangeStatus);
         return _exchange;
     }
     async Task Transfer(Func<Task> action)

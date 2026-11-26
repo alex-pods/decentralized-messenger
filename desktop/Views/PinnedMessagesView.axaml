@@ -1,47 +1,42 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.PinnedMessagesView" x:Name="Root">
-  <Grid RowDefinitions="Auto,*">
-    <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,*" MinHeight="84" Margin="20,0">
-        <Button x:Name="BackFromPinnedMessages" Classes="icon" Margin="0,0,12,0" VerticalAlignment="Center"
-                ToolTip.Tip="Назад в чат" AutomationProperties.Name="Назад в чат" Command="{Binding ClosePinListCommand}">
-          <local:Glyph Data="{StaticResource IcArrowLeft}"/>
-        </Button>
-        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4" Margin="0,12">
-          <TextBlock Text="Закреплённые сообщения" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
-          <TextBlock Text="{Binding ChatTitle}" Classes="caption" TextTrimming="CharacterEllipsis"/>
-        </StackPanel>
-      </Grid>
-    </Border>
-    <Grid Grid.Row="1">
+  <Grid>
       <ScrollViewer Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled" AllowAutoHide="False" ClipToBounds="True">
-        <ItemsControl ItemsSource="{Binding PinList}" Margin="20" MaxWidth="680" HorizontalAlignment="Stretch">
+        <ItemsControl ItemsSource="{Binding PinList}" Margin="14" MaxWidth="628" HorizontalAlignment="Stretch">
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Margin="0,0,0,12">
+              <Border Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,6">
                 <Grid ColumnDefinitions="*,Auto">
-                  <Button Classes="pinCard" Padding="16" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                          ToolTip.Tip="Перейти к сообщению" Command="{Binding DataContext.OpenPinFromListCommand, ElementName=Root}" CommandParameter="{Binding}">
-                    <StackPanel Spacing="9">
-                      <TextBlock Text="{Binding Scope}" FontSize="12" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap"/>
-                      <TextBlock Text="{Binding Text}" FontSize="15" LineHeight="21" TextWrapping="Wrap" MaxLines="5" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding Attribution}" Classes="caption" TextWrapping="Wrap"/>
-                    </StackPanel>
+                  <Button Classes="pinCard" Padding="11,8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          Cursor="Hand" ToolTip.Tip="Перейти к сообщению" AutomationProperties.Name="{Binding OpenLabel}"
+                          Command="{Binding DataContext.OpenPinFromListCommand, ElementName=Root}" CommandParameter="{Binding}">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="4">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <local:Glyph Data="{StaticResource IcDevice}" Width="14" Height="14" IsVisible="{Binding Local}"/>
+                          <local:Glyph Data="{StaticResource IcPin}" Width="14" Height="14" IsVisible="{Binding !Local}"/>
+                          <TextBlock Text="{Binding Scope}" Classes="caption"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding Text}" FontSize="14" TextWrapping="Wrap" MaxLines="4" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Attribution}" Classes="caption" TextWrapping="Wrap"/>
+                      </StackPanel>
+                      <local:Glyph Grid.Column="1" Data="{StaticResource IcChevronRight}" Width="16" Height="16"
+                                   Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </Grid>
                   </Button>
-                  <local:DismissButton Grid.Column="1" Classes="compact" VerticalAlignment="Top" Margin="0,8,6,0"
-                          ToolTip.Tip="Открепить сообщение" AutomationProperties.Name="Открепить сообщение" IsVisible="{Binding CanRemove}"
-                          Command="{Binding DataContext.RemovePinFromListCommand, ElementName=Root}" CommandParameter="{Binding}"/>
+                  <Button Grid.Column="1" Classes="icon" Width="36" VerticalAlignment="Center" Margin="4,0,5,0"
+                          ToolTip.Tip="Действия закрепа" AutomationProperties.Name="Действия закрепа" IsVisible="{Binding CanRemove}"
+                          Click="OnPinActions">
+                    <local:Glyph Data="{StaticResource IcMore}" Width="16" Height="16"/>
+                  </Button>
                 </Grid>
               </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
-      <StackPanel Spacing="12" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="28" MaxWidth="340" IsVisible="{Binding PinListEmpty}">
-        <local:Glyph Data="{StaticResource IcPin}" Width="28" Height="28" Foreground="{DynamicResource LabelBrush}" HorizontalAlignment="Center"/>
-        <TextBlock Text="Пока ничего не закреплено" FontSize="18" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap"/>
-        <TextBlock Text="Откройте меню сообщения и закрепите его для себя или для всех участников." Classes="secondary" TextAlignment="Center"/>
+      <StackPanel Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="22" MaxWidth="330" IsVisible="{Binding PinListEmpty}">
+        <TextBlock Text="Закрепов пока нет" Classes="title" TextWrapping="Wrap"/>
       </StackPanel>
-    </Grid>
   </Grid>
 </UserControl>

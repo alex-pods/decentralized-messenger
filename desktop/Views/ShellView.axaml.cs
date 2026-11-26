@@ -33,6 +33,7 @@ public partial class ShellView : UserControl
         ChatList.AddHandler(InputElement.TappedEvent, OnChatTapped, RoutingStrategies.Bubble, handledEventsToo: true);
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
+        DetachedFromVisualTree += (_, _) => CancelSidebarSearch();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
         ComposerInput.AddHandler(InputElement.KeyDownEvent, OnComposerKeyDown, RoutingStrategies.Tunnel);
         AttachedToVisualTree += (_, _) => { AppPreferences.Changed += UpdateSendHint; UpdateSendHint(); };
@@ -59,8 +60,7 @@ public partial class ShellView : UserControl
 
     void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
-        if (_vm != null && TopLevel.GetTopLevel(this) is Window owner)
-            SettingsWindow.Open(_vm, owner);
+        _vm?.NavigateWorkspace(WorkspacePage.Settings);
     }
 
     void OnOverlayPressed(object? sender, PointerPressedEventArgs e)
@@ -75,6 +75,8 @@ public partial class ShellView : UserControl
     {
         if (e.Key == Key.K && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _vm?.OverlayOpen == false)
         {
+            _vm.ResetWorkspace();
+            _vm.ClosePinListCommand.Execute(null);
             _showChats = true;
             UpdateNavigation();
             ChatSearch.Focus();
@@ -84,6 +86,7 @@ public partial class ShellView : UserControl
         {
             if (_vm.OverlayOpen) _vm.CloseOverlayCommand.Execute(null);
             else if (_vm.ShowingPinnedMessages) _vm.ClosePinListCommand.Execute(null);
+            else if (_vm.Workspace != null) _vm.BackWorkspace();
             else if (_vm.HasComposeHint) _vm.CancelComposeCommand.Execute(null);
             else _vm.SelectedMessage = null;
             e.Handled = true;
@@ -92,6 +95,7 @@ public partial class ShellView : UserControl
 
     bool _showChats = true;
     long? _presentedChatId;
+    const double ChatSidebarWidth = 300;
 
     void OnShowChats(object? sender, RoutedEventArgs e)
     {
@@ -102,21 +106,71 @@ public partial class ShellView : UserControl
     void UpdateNavigation()
     {
         bool narrow = Bounds.Width < 780;
-        var compactSheet = Bounds.Width < 480;
-        OverlaySheet.Margin = new Thickness(compactSheet ? 12 : 20);
-        OverlaySheet.Padding = new Thickness(compactSheet ? 16 : 24);
-        OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - OverlaySheet.Margin.Top * 2, 100, 680);
-        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "344,*");
+        UpdateOverlayLayout();
+        var sidebarWidth = narrow ? 0 : ChatSidebarWidth;
+        UpdateContentLayout(narrow, sidebarWidth);
+        ShellGrid.ColumnDefinitions = narrow
+            ? new ColumnDefinitions("*")
+            : new ColumnDefinitions { new(sidebarWidth, GridUnitType.Pixel), new(1, GridUnitType.Star) };
         Grid.SetColumn(ChatSidebar, 0);
         Grid.SetColumn(ScreenBay, narrow ? 0 : 1);
-        ChatSidebar.IsVisible = !narrow || _showChats;
-        ScreenBay.IsVisible = !narrow || !_showChats;
+        var showList = _showChats && _visiblePage == null;
+        ChatSidebar.IsVisible = !narrow || showList;
+        ScreenBay.IsVisible = !narrow || !showList;
         BackToChats.IsVisible = narrow;
+    }
+
+    void UpdateContentLayout(bool narrow, double sidebarWidth)
+    {
+        var workspaceInset = narrow ? 0 : 18;
+        var workspace = ContentInsets(sidebarWidth, workspaceInset, narrow ? double.PositiveInfinity : 656);
+        WorkspaceFrame.Margin = new Thickness(workspace.Left, workspaceInset, workspace.Right, workspaceInset);
+        WorkspaceFrame.CornerRadius = new CornerRadius(narrow ? 0 : 10);
+        WorkspaceFrame.BorderThickness = new Thickness(narrow ? 0 : 1);
+        ConversationWallpaper.IsVisible = !narrow || _visiblePage == null;
+
+        var chat = ContentInsets(sidebarWidth, 14, 1000);
+        ConversationControls.Margin = new Thickness(chat.Left, 2, chat.Right, 12);
+        Log.Padding = new Thickness(chat.Left, 10, chat.Right, 8);
+        EmptyConversation.Margin = chat;
+        LoadOlderMessages.Margin = new Thickness(chat.Left, 12, chat.Right, 0);
+    }
+
+    Thickness ContentInsets(double sidebarWidth, double gutter, double maxWidth)
+    {
+        var paneWidth = Bounds.Width - sidebarWidth;
+        var available = Math.Max(0, paneWidth - 2 * gutter);
+        var center = Bounds.Width / 2 - sidebarWidth;
+        var centeredWidth = 2 * (center - gutter);
+        // Give the column room to wrap before shifting it toward the chat pane.
+        var width = Math.Clamp(centeredWidth, Math.Min(540, available), Math.Min(maxWidth, available));
+        var left = gutter + Math.Clamp(center - width / 2 - gutter, 0, available - width);
+        return new Thickness(left, 0, Math.Max(gutter, paneWidth - left - width), 0);
+    }
+
+    void UpdateOverlayLayout()
+    {
+        var compactSheet = Bounds.Width < 480;
+        var forwarding = _vm?.Overlay == "forward";
+        var inset = compactSheet ? 12 : 20;
+        var upperInset = forwarding && Bounds.Height >= 520 ? Math.Clamp(Bounds.Height * .16, 20, 144) : inset;
+        OverlaySheet.Margin = new Thickness(inset, upperInset, inset, inset);
+        OverlaySheet.Padding = new Thickness(compactSheet ? 16 : 20);
+        OverlaySheet.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        OverlaySheet.VerticalAlignment = forwarding ? Avalonia.Layout.VerticalAlignment.Top : Avalonia.Layout.VerticalAlignment.Center;
+        OverlaySheet.MaxWidth = _vm?.Overlay switch
+        {
+            "direct" => 384,
+            "group" => 428,
+            "forward" => 442,
+            _ => 420
+        };
+        OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - OverlaySheet.Margin.Top - OverlaySheet.Margin.Bottom, 100, 680);
     }
 
     bool _filtering;
 
-    void OnChatFilterChanged(object? sender, TextChangedEventArgs e) => FilterChats();
+    void OnChatFilterChanged(object? sender, TextChangedEventArgs e) => UpdateSidebarSearch();
 
     void OnClearChatSearch(object? sender, RoutedEventArgs e)
     {
@@ -128,6 +182,12 @@ public partial class ShellView : UserControl
     {
         if (e.Key == Key.Escape && !string.IsNullOrEmpty(ChatSearch.Text))
             ChatSearch.Clear();
+        else if (!string.IsNullOrEmpty(_sidebarQuery) && e.Key is Key.Down or Key.Enter)
+        {
+            if (HasSearchPreedit()) return;
+            if (e.Key == Key.Enter) SubmitSidebarSearch();
+            else SearchResultButtons().FirstOrDefault()?.Focus();
+        }
         else if (e.Key == Key.Down && ChatList.Items.Count > 0)
         {
             ChatList.ScrollIntoView(0);
@@ -142,14 +202,19 @@ public partial class ShellView : UserControl
 
     void OpenFromSearch(ChatItem chat)
     {
-        if (_vm != null) _vm.SelectedChat = chat;
+        if (_vm is { } vm)
+        {
+            vm.ResetWorkspace();
+            vm.ClosePinListCommand.Execute(null);
+            vm.SelectedChat = chat;
+        }
         _showChats = false;
         UpdateNavigation();
     }
 
     void OnChatTapped(object? sender, TappedEventArgs e)
     {
-        if (Bounds.Width >= 780 || !_showChats || e.Source is not Visual source) return;
+        if ((_visiblePage == null && (Bounds.Width >= 780 || !_showChats)) || e.Source is not Visual source) return;
         var row = source as ListBoxItem ?? source.FindAncestorOfType<ListBoxItem>();
         if (row?.DataContext is ChatItem chat && ReferenceEquals(chat, _vm?.SelectedChat))
             OpenFromSearch(chat);
@@ -161,13 +226,9 @@ public partial class ShellView : UserControl
         _filtering = true;
         try
         {
-            var query = ChatSearch.Text?.Trim() ?? "";
-            var visible = ChatSearchFilter.Match(_vm.Chats, query);
-            ChatList.ItemsSource = visible;
-            ChatList.SelectedItem = visible.Contains(_vm.SelectedChat) ? _vm.SelectedChat : null;
-            ChatEmpty.IsVisible = visible.Length == 0;
-            ChatEmpty.Text = query.Length == 0 ? "Здесь появятся ваши разговоры" : "По этому запросу нет чатов";
-            ClearChatSearch.IsVisible = !string.IsNullOrEmpty(ChatSearch.Text);
+            if (!ChatList.Items.SequenceEqual(_vm.Chats)) ChatList.ItemsSource = _vm.Chats.ToArray();
+            ChatList.SelectedItem = _vm.Chats.Contains(_vm.SelectedChat!) ? _vm.SelectedChat : null;
+            UpdateSidebarResults();
         }
         finally { _filtering = false; }
     }
@@ -176,14 +237,9 @@ public partial class ShellView : UserControl
 
     void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ShellViewModel.ShowingPinnedMessages))
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (_vm?.ShowingPinnedMessages == true) PinnedMessages.FindControl<Button>("BackFromPinnedMessages")!.Focus();
-                else if (OpenPinnedMessages.IsEffectivelyVisible) OpenPinnedMessages.Focus();
-            }, DispatcherPriority.Loaded);
-        }
+        if (e.PropertyName == nameof(ShellViewModel.Overlay)) UpdateOverlayLayout();
+        if (e.PropertyName is nameof(ShellViewModel.ShowingPinnedMessages) or nameof(ShellViewModel.Workspace))
+            PresentWorkspace();
         if (e.PropertyName == nameof(ShellViewModel.OverlayOpen))
         {
             Dispatcher.UIThread.Post(() =>
@@ -197,6 +253,7 @@ public partial class ShellView : UserControl
                     else OverlaySheet.GetVisualDescendants().OfType<Button>().FirstOrDefault(c => c.IsEffectivelyVisible)?.Focus();
                     OverlayScroll.ScrollToHome();
                 }
+                else if (WorkspaceBack.IsEffectivelyVisible) WorkspaceBack.Focus();
                 else ComposerInput.Focus();
             }, DispatcherPriority.Loaded);
         }
@@ -212,6 +269,7 @@ public partial class ShellView : UserControl
 
     void Hook()
     {
+        CancelSidebarSearch();
         if (_vm != null)
         {
             _vm.Chats.CollectionChanged -= OnChatsChanged;
@@ -225,8 +283,10 @@ public partial class ShellView : UserControl
             _vm.Chats.CollectionChanged += OnChatsChanged;
             _vm.PropertyChanged += OnShellPropertyChanged;
             FilterChats();
+            UpdateSidebarSearch();
             _vm.ScrollToEnd += Scroll;
             _vm.ScrollToMessage += ScrollTo;
+            PresentWorkspace();
         }
         EnsureLogHooks();
     }
@@ -249,6 +309,14 @@ public partial class ShellView : UserControl
     }
 
     void OnLogTemplateApplied(object? sender, TemplateAppliedEventArgs e) => BindLogScrollViewer();
+
+    void OnTimelineSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_vm is not { } vm || sender is not ListBox list) return;
+        vm.SelectedMessage = list.SelectedItem as MessageItem;
+        if (list.SelectedItem is GroupActivityLine)
+            list.SetCurrentValue(ListBox.SelectedItemProperty, null);
+    }
 
     void BindLogScrollViewer()
     {
@@ -280,13 +348,26 @@ public partial class ShellView : UserControl
 
     void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        // Offset не менялся (только extent) — тоже синхронизируем после догрузки истории.
+        if (_visiblePage == null && sender is ScrollViewer scroll && ReferenceEquals(_logScroll, scroll))
+        {
+            var gap = scroll.Extent.Height - scroll.Viewport.Height - scroll.Offset.Y;
+            var previousGap = gap - e.ExtentDelta.Y + e.ViewportDelta.Y + e.OffsetDelta.Y;
+            var resized = Math.Abs(e.ViewportDelta.Y) > .5;
+            if ((resized || e.ExtentDelta.Y > .5) && previousGap <= 16)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_visiblePage == null && ReferenceEquals(_logScroll, scroll) && (resized || _vm?.IsRevealingMessage != true))
+                        scroll.ScrollToEnd();
+                }, DispatcherPriority.Background);
+            }
+        }
         Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
     }
 
     void SyncPinFromViewport()
     {
-        if (_vm == null || !_vm.HasPins || _vm.Messages.Count == 0) return;
+        if (_visiblePage != null || _vm == null || !_vm.HasPins || _vm.Messages.Count == 0) return;
         var list = _log ?? this.FindControl<ListBox>("Log");
         if (list == null) return;
 
@@ -303,10 +384,9 @@ public partial class ShellView : UserControl
             var bottom = y + c.Bounds.Height;
             if (bottom <= 0 || y >= viewH) continue;
             if (bottom <= bestBottom) continue;
-            var idx = list.IndexFromContainer(c);
-            if (idx < 0 || idx >= _vm.Messages.Count) continue;
+            if (c.Content is not MessageItem message) continue;
             bestBottom = bottom;
-            lastVisible = _vm.Messages[idx];
+            lastVisible = message;
         }
 
         if (lastVisible != null)
@@ -315,10 +395,13 @@ public partial class ShellView : UserControl
 
     void Scroll()
     {
-        if (_vm == null || _vm.Messages.Count == 0) return;
-        if (this.FindControl<ListBox>("Log") is { } list)
-            list.ScrollIntoView(_vm.Messages[^1]);
-        Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
+        var chatId = _vm?.SelectedChat?.Id;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_visiblePage != null || chatId == null || _vm?.SelectedChat?.Id != chatId || _vm.Timeline.Count == 0) return;
+            _logScroll?.ScrollToEnd();
+            SyncPinFromViewport();
+        }, DispatcherPriority.Background);
     }
 
     void ScrollTo(MessageItem item)

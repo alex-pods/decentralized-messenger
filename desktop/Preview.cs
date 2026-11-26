@@ -59,7 +59,7 @@ public static partial class Preview
             {
                 login.SwitchModeCommand.Execute(null);
                 login.ShowConnection = true;
-                login.Error = "Не удалось подключиться к серверу. Проверьте адрес.";
+                login.ConnectionError = "Не удалось подключиться к серверу. Проверьте адрес.";
             }
         });
         await Task.Delay(100);
@@ -107,7 +107,7 @@ public static partial class Preview
         await Task.Delay(1500);
         await Shot(window, "members");
 
-        await Dispatcher.UIThread.InvokeAsync(() => vm.CloseOverlayCommand.Execute(null));
+        await Dispatcher.UIThread.InvokeAsync(vm.BackWorkspace);
         await Dispatcher.UIThread.InvokeAsync(() => vm.ShowProfileCommand.Execute(null));
         await Task.Delay(1200);
         await Shot(window, "profile");
@@ -122,6 +122,7 @@ public static partial class Preview
 
     static async Task AuditScreens(Window window, ShellViewModel vm)
     {
+        await Dispatcher.UIThread.InvokeAsync(vm.ResetWorkspace);
         var shell = await Dispatcher.UIThread.InvokeAsync(() => window.GetVisualDescendants().OfType<ShellView>().Single());
         foreach (var preset in Appearance.ThemeSettings.Presets)
         {
@@ -136,7 +137,7 @@ public static partial class Preview
             new MessageItem { SenderId = 2, SentAt = start.AddMinutes(2) },
             new MessageItem { SenderId = 2, SentAt = start.AddDays(1) }
         };
-        ShellViewModel.GroupMessages(grouped);
+        ShellViewModel.GroupTimeline(grouped);
         if (!grouped[0].StartsDay || grouped[1].StartsRun || !grouped[2].StartsRun || !grouped[3].StartsDay)
             throw new Exception("Message author/day grouping failed");
         await Dispatcher.UIThread.InvokeAsync(() =>
@@ -154,7 +155,8 @@ public static partial class Preview
             }
         });
         var multiline = new MessageDto { SenderId = 1, Text = "Первая строка\nВторая строка" };
-        if (!MessageMapper.Body(multiline).Contains('\n') || MessageMapper.Preview(multiline, 2, _ => "Александр").Contains('\n'))
+        var chatPreview = MessageMapper.MapChat(new ChatDto { Type = "group", LastMessage = multiline }, 2, _ => "Александр");
+        if (!MessageMapper.Body(multiline).Contains('\n') || chatPreview.Preview.Contains('\n'))
             throw new Exception("Message body and sidebar newline handling are inconsistent");
         var originalChat = vm.SelectedChat!;
         var otherChat = vm.Chats.First(c => c.Id != originalChat.Id);
@@ -189,17 +191,20 @@ public static partial class Preview
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     vm.Error = null;
-                    vm.Overlay = screen;
+                    OpenPreviewScreen(vm, screen);
                 });
                 await Task.Delay(120);
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    if (shell.FindControl<Grid>("ShellGrid")!.IsEnabled) throw new Exception("Modal leaves background enabled");
+                    var inline = screen is "profile" or "members";
+                    Expect(shell.FindControl<Grid>("ShellGrid")!.IsEnabled == inline, "Inline page or dialog has the wrong shell state");
+                    Expect(shell.FindControl<Border>("WorkspaceSurface")!.IsVisible == inline, "Profile or group missed the workspace");
                 });
                 await Shot(window, screen + "-" + suffix);
             }
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                vm.ResetWorkspace();
                 vm.CloseOverlayCommand.Execute(null);
                 vm.SelectedMessage = vm.Messages.First();
                 vm.ReplyCommand.Execute(null);
@@ -216,7 +221,7 @@ public static partial class Preview
             await Task.Delay(180);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (!appearance.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "✓ " + theme.Name))
+                if (!appearance.GetVisualDescendants().OfType<Button>().Any(b => Equals(b.Tag, theme.Name) && b.Classes.Contains("active")))
                     throw new Exception("Current theme is not marked in appearance settings");
             });
             await Shot(appearance, "appearance-" + suffix);
@@ -278,7 +283,7 @@ public static partial class Preview
         await Task.Delay(150);
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            if (!shell.FindControl<TextBlock>("ChatEmpty")!.IsVisible) throw new Exception("Missing empty-search state");
+            if (!shell.FindControl<TextBlock>("SearchStatus")!.IsVisible) throw new Exception("Missing empty-search state");
         });
         await Shot(window, "search-empty");
         await Dispatcher.UIThread.InvokeAsync(() => shell.FindControl<TextBox>("ChatSearch")!.Text = "");
@@ -288,7 +293,7 @@ public static partial class Preview
             {
                 Resize(window, width);
                 window.Height = 600;
-                vm.Overlay = "profile";
+                OpenPreviewScreen(vm, "profile");
             });
             await Task.Delay(150);
             await Shot(window, "profile-" + width);
@@ -297,6 +302,7 @@ public static partial class Preview
         {
             Resize(window, 1180);
             window.Height = 780;
+            vm.ResetWorkspace();
             vm.CloseOverlayCommand.Execute(null);
             Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]);
         });
@@ -314,18 +320,35 @@ public static partial class Preview
         await Shot(window, "group-filled-360");
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
+            window.Height = 560;
+            for (var i = 0; i < 12; i++)
+                vm.GroupDraft.Add(new UserCardDto { Id = -200 - i, DisplayName = "Александра Константинопольская", Tag = $"alex_{i:00}" });
+        });
+        await Until(() =>
+        {
+            var draftViewport = shell.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "GroupDraftViewport");
+            var tag = shell.GetVisualDescendants().OfType<TextBox>().Single(control => control.Name == "PersonTag" && control.IsEffectivelyVisible);
+            return draftViewport.Extent.Height > draftViewport.Viewport.Height &&
+                tag.TranslatePoint(new Point(0, tag.Bounds.Height), shell.FindControl<Border>("OverlaySheet")!) is { } edge &&
+                edge.Y < shell.FindControl<Border>("OverlaySheet")!.Bounds.Height - shell.FindControl<Button>("SubmitGroup")!.Bounds.Height;
+        }, "Many participants hid the group search field or escaped their viewport");
+        await Shot(window, "group-many-selected-360");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            foreach (var extra in vm.GroupDraft.Skip(1).ToArray()) vm.RemoveDraftCommand.Execute(extra);
             vm.RemoveDraftCommand.Execute(vm.GroupDraft.Single());
             if (vm.GroupDraft.Count != 0) throw new Exception("Removing a selected group member failed");
             vm.SearchResults.Clear();
             vm.CloseOverlayCommand.Execute(null);
             Resize(window, 1180);
+            window.Height = 780;
             shell.OpenMessageMenu(shell.FindControl<ListBox>("Log")!, vm.Messages.First(m => !m.Mine));
             if (shell.ActiveMessageMenu!.Items.OfType<MenuItem>().Any(item => Equals(item.Header, "Редактировать")))
                 throw new Exception("Foreign message exposes edit action");
             shell.ActiveMessageMenu.Close();
         });
         Task<bool>? confirmation = null;
-        await Dispatcher.UIThread.InvokeAsync(() => { confirmation = Views.Dialogs.ConfirmAction.Show(shell, "Удалить сообщение у всех?", "Сообщение исчезнет у всех участников. Отменить это действие нельзя.", "Удалить"); });
+        await Dispatcher.UIThread.InvokeAsync(() => { confirmation = Views.Dialogs.ConfirmAction.Show(shell, "Удалить сообщение у всех?", "Сообщение исчезнет у всех участников. Отменить это действие нельзя.", "Удалить у всех"); });
         await Task.Delay(150);
         var confirmWindow = await Dispatcher.UIThread.InvokeAsync(() =>
             ((Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Windows.Single(w => w.Title == "Удалить сообщение у всех?"));
@@ -357,10 +380,10 @@ public static partial class Preview
             await Dispatcher.UIThread.InvokeAsync(() => vm.SelectedChat = vm.Chats.First(c => c.Title == "Дизайн-команда"));
             await Task.Delay(300);
             await Shot(window, prefix + "-group");
-            await Dispatcher.UIThread.InvokeAsync(() => vm.Overlay = "profile");
+            await Dispatcher.UIThread.InvokeAsync(() => OpenPreviewScreen(vm, "profile"));
             await Task.Delay(100);
             await Shot(window, prefix + "-profile");
-            await Dispatcher.UIThread.InvokeAsync(() => { vm.CloseOverlayCommand.Execute(null); vm.ShowGroupCommand.Execute(null); vm.GroupTitle = "Поездка на выходные"; });
+            await Dispatcher.UIThread.InvokeAsync(() => { vm.ResetWorkspace(); vm.ShowGroupCommand.Execute(null); vm.GroupTitle = "Поездка на выходные"; });
             await Task.Delay(100);
             await Shot(window, prefix + "-new-group");
             await Dispatcher.UIThread.InvokeAsync(() => vm.CloseOverlayCommand.Execute(null));
@@ -370,6 +393,15 @@ public static partial class Preview
             await Dispatcher.UIThread.InvokeAsync(() => appearance.Close());
         }
         await Dispatcher.UIThread.InvokeAsync(() => Appearance.ThemeSettings.Apply(Appearance.ThemeSettings.Presets[0]));
+    }
+
+    static void OpenPreviewScreen(ShellViewModel vm, string screen)
+    {
+        vm.ResetWorkspace();
+        vm.CloseOverlayCommand.Execute(null);
+        if (screen == "profile") vm.ShowProfileCommand.Execute(null);
+        else if (screen == "members") vm.ShowMembersCommand.Execute(null);
+        else vm.Overlay = screen;
     }
 
     static Task Shot(Control window, string name) => Dispatcher.UIThread.InvokeAsync(() =>

@@ -1,46 +1,29 @@
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Interactivity;
+using Avalonia.Threading;
 
 namespace MessengerDesktop.Settings;
 
-public sealed partial class SettingsWindow : Window
+public sealed partial class SettingsPage : UserControl
 {
     readonly ShellViewModel _vm = null!;
     bool _loading;
-    bool _closed;
-    bool _appearanceOpen;
+    bool _opened;
 
-    public static void Open(ShellViewModel vm, Window owner, string? section = null, Action? onClosed = null)
-    {
-        var dialog = new SettingsWindow(vm, section);
-        void DismissFromOwner(object? sender, PointerPressedEventArgs e)
-        {
-            if (!e.GetCurrentPoint(owner).Properties.IsLeftButtonPressed) return;
-            e.Handled = true;
-            if (!dialog._appearanceOpen) dialog.Close();
-        }
+    public SettingsPage() => InitializeComponent();
 
-        owner.AddHandler(PointerPressedEvent, DismissFromOwner, RoutingStrategies.Tunnel);
-        dialog.Closed += (_, _) =>
-        {
-            owner.RemoveHandler(PointerPressedEvent, DismissFromOwner);
-            onClosed?.Invoke();
-        };
-        dialog.Show(owner);
-    }
-
-    public SettingsWindow() => InitializeComponent();
-    void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => Views.MainWindow.DragFrom(this, e);
-
-    public SettingsWindow(ShellViewModel vm, string? section = null) : this()
+    public SettingsPage(ShellViewModel vm, string? section = null) : this()
     {
         _vm = vm;
-        Opened += (_, _) =>
+        DataContext = vm;
+        AttachedToVisualTree += (_, _) =>
         {
-            if (section != null)
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => this.FindControl<Control>(section)?.BringIntoView(), Avalonia.Threading.DispatcherPriority.Loaded);
+            AppPreferences.Changed += ShowSaveStatus;
+            ShowSaveStatus();
+            if (!_opened && section != null)
+                Dispatcher.UIThread.Post(() => this.FindControl<Control>(section)?.BringIntoView(), DispatcherPriority.Loaded);
+            _opened = true;
         };
+        DetachedFromVisualTree += (_, _) => AppPreferences.Changed -= ShowSaveStatus;
         var prefs = AppPreferences.Current;
         ControlEnterLabel.Text = OperatingSystem.IsMacOS() ? "⌘ + Enter" : "Ctrl + Enter";
         TagSearch.IsChecked = vm.AllowTagSearch;
@@ -52,25 +35,16 @@ public sealed partial class SettingsWindow : Window
         BindChoice(DoubleReply, prefs.DoubleClick == DoubleClickAction.Reply, () => SetDoubleClick(DoubleClickAction.Reply));
         BindChoice(DoubleReact, prefs.DoubleClick == DoubleClickAction.React, () => SetDoubleClick(DoubleClickAction.React));
         Reactions.Select(prefs.DoubleClickReaction);
-        Reactions.IsVisible = prefs.DoubleClick == DoubleClickAction.React;
+        CurrentReaction.Emoji = prefs.DoubleClickReaction;
+        ReactionChoices.IsVisible = prefs.DoubleClick == DoubleClickAction.React;
         Reactions.Picked += emoji =>
         {
             AppPreferences.Update(p => p with { DoubleClickReaction = emoji });
             Reactions.Select(emoji);
+            CurrentReaction.Emoji = emoji;
         };
         TagSearch.IsCheckedChanged += async (_, _) => await ChangeTagSearch();
-        Done.Click += (_, _) => Close();
-        CloseSettings.Click += (_, _) => Close();
-        Appearance.Click += async (_, _) =>
-        {
-            _appearanceOpen = true;
-            try { await new Appearance.AppearanceWindow(vm.ThemeApi, vm.CurrentUserId).ShowDialog(this); }
-            finally { _appearanceOpen = false; }
-        };
-        AppPreferences.Changed += ShowSaveStatus;
-        ShowSaveStatus();
-        Closed += (_, _) => { _closed = true; AppPreferences.Changed -= ShowSaveStatus; };
-        KeyDown += (_, e) => { if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
+        Appearance.Click += (_, _) => vm.NavigateWorkspace(WorkspacePage.Appearance);
     }
 
     void ShowSaveStatus() => SaveStatus.Text = AppPreferences.SaveError;
@@ -84,7 +58,8 @@ public sealed partial class SettingsWindow : Window
     void SetDoubleClick(DoubleClickAction action)
     {
         AppPreferences.Update(p => p with { DoubleClick = action });
-        Reactions.IsVisible = action == DoubleClickAction.React;
+        ReactionChoices.IsVisible = action == DoubleClickAction.React;
+        if (!ReactionChoices.IsVisible) ReactionChoices.IsExpanded = false;
     }
 
     async Task ChangeTagSearch()
@@ -94,7 +69,6 @@ public sealed partial class SettingsWindow : Window
         TagSearch.IsEnabled = false;
         PrivacyStatus.Text = null;
         var error = await _vm.SetTagSearchAsync(wanted);
-        if (_closed) return;
         if (error != null)
         {
             _loading = true;

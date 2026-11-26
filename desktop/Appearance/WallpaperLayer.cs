@@ -63,7 +63,7 @@ public sealed class WallpaperLayer : Control
             var scale = Math.Max(Bounds.Width / source.Width, Bounds.Height / source.Height);
             var size = new Size(source.Width * scale, source.Height * scale);
             context.DrawImage(_bitmap, source, new Rect((Bounds.Width - size.Width) / 2, (Bounds.Height - size.Height) / 2, size.Width, size.Height));
-            context.FillRectangle(new SolidColorBrush(Color.Parse(theme.Background), theme.Dark ? .36 : .16), bounds);
+            context.FillRectangle(new SolidColorBrush(Color.Parse(theme.Background), theme.Dark ? .72 : .52), bounds);
         }
         else
             for (double y = 0; y < Bounds.Height; y += source.Height)

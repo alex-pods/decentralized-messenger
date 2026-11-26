@@ -7,11 +7,9 @@ public partial class ShellViewModel
         if (userId == _me.Id) return "Это ваш профиль";
         try
         {
-            var id = await _api.CreateDirect(userId);
-            await ReloadChats();
-            var chat = Chats.FirstOrDefault(c => c.Id == id);
-            if (chat == null) return "Не удалось открыть чат. Попробуйте ещё раз.";
+            var chat = await FindOrCreateDirect(userId);
             CloseOverlay();
+            ResetWorkspace();
             SelectedChat = chat;
             return null;
         }

@@ -6,17 +6,12 @@ public partial class ShellViewModel
 {
     int _membersRequest;
     public bool CanInviteMembers => IsGroup && _myRole is "owner" or "admin";
-    public string MembersSummary => $"Участники: {Members.Count}";
-    public string GroupRoleText => _myRole switch
-    {
-        "owner" => "Вы — владелец группы", "admin" => "Вы — администратор", _ => "Вы — участник группы"
-    };
     [RelayCommand]
     async Task ShowMembers()
     {
         if (SelectedChat == null) return;
         ResetSearch();
-        Overlay = "members";
+        NavigateWorkspace(WorkspacePage.Members);
         try { await LoadMembersPanel(); }
         catch (Exception ex) { Error = Friendly(ex); }
     }
@@ -45,7 +40,15 @@ public partial class ShellViewModel
                     Title = string.IsNullOrWhiteSpace(m.DisplayName) ? "@" + m.Tag : m.DisplayName,
                     TagLabel = "@" + m.Tag,
                     Role = m.Role,
-                    RoleLabel = m.Role switch { "owner" => "владелец", "admin" => "админ", _ => "участник" },
+                    RoleLabel = (m.Id == _me.Id, m.Role) switch
+                    {
+                        (true, "owner") => "вы, владелец",
+                        (true, "admin") => "вы, администратор",
+                        (true, _) => "вы",
+                        (_, "owner") => "владелец",
+                        (_, "admin") => "администратор",
+                        _ => ""
+                    },
                     PromoteLabel = m.Role == "admin" ? "Снять права администратора" : "Назначить администратором",
                     CanKick = chat.IsGroup && staff && m.Id != _me.Id && m.Role != "owner" && (m.Role != "admin" || owner),
                     CanPromote = chat.IsGroup && owner && m.Id != _me.Id && m.Role != "owner",
@@ -59,8 +62,6 @@ public partial class ShellViewModel
             }
             OnPropertyChanged(nameof(CanDeleteEveryone));
             OnPropertyChanged(nameof(CanInviteMembers));
-            OnPropertyChanged(nameof(MembersSummary));
-            OnPropertyChanged(nameof(GroupRoleText));
             OnPropertyChanged(nameof(CanManagePins));
             OnPropertyChanged(nameof(CanPin));
             RefreshPinList();

@@ -2,14 +2,17 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 namespace MessengerDesktop.Views.Dialogs;
 public partial class MemberList : UserControl
 {
     public MemberList() => InitializeComponent();
-    async void OnOpenProfile(object? sender, RoutedEventArgs e)
+    internal ScrollViewer? Viewport => GroupMembers.FindDescendantOfType<ScrollViewer>();
+    internal ListBox List => GroupMembers;
+    void OnOpenProfile(object? sender, RoutedEventArgs e)
     {
-        if (sender is Control { DataContext: MemberRow member } && DataContext is ShellViewModel vm && TopLevel.GetTopLevel(this) is Window owner)
-            await new UserProfileWindow(vm, member.Id).ShowDialog(owner);
+        if (sender is Control { DataContext: MemberRow member } && DataContext is ShellViewModel vm)
+            vm.NavigateWorkspace(WorkspacePage.Contact, member.Id);
     }
     void OnMemberMenu(object? sender, RoutedEventArgs e)
     {

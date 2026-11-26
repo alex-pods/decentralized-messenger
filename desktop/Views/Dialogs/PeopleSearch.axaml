@@ -1,22 +1,29 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters" x:Class="MessengerDesktop.Views.Dialogs.PeopleSearch" x:Name="Root">
-  <StackPanel Spacing="8" Margin="0,0,0,8">
+  <StackPanel Spacing="8">
     <StackPanel Spacing="6">
-      <TextBlock Text="Поиск человека" Classes="field"/>
-      <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Watermark="Полный тег, например @alex" AutomationProperties.Name="Тег пользователя">
+      <TextBlock Text="Тег пользователя" Classes="field"/>
+      <TextBox x:Name="PersonTag" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" Watermark="@alex"
+               KeyDown="OnTagKeyDown" AutomationProperties.Name="Тег пользователя">
         <TextBox.InnerLeftContent>
           <local:Glyph Data="{StaticResource IcSearch}" Width="15" Height="15" Margin="12,0,0,0" Foreground="{DynamicResource LabelBrush}"/>
         </TextBox.InnerLeftContent>
-        <TextBox.KeyBindings>
-          <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}"/>
-        </TextBox.KeyBindings>
+        <TextBox.InnerRightContent>
+          <local:DismissButton Classes="compact" Click="OnClearTag" AutomationProperties.Name="Очистить тег"
+            IsVisible="{Binding Text, ElementName=PersonTag, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+        </TextBox.InnerRightContent>
       </TextBox>
     </StackPanel>
+    <TextBlock Text="Можно ввести начало тега." Classes="caption"
+               IsVisible="{Binding Text, ElementName=PersonTag, Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
     <TextBlock Text="{Binding SearchHint}" IsVisible="{Binding SearchHint, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" Classes="caption" TextWrapping="Wrap"/>
-    <ListBox Classes="plain" ItemsSource="{Binding SearchResults}" MaxHeight="190">
+    <ListBox x:Name="TagResults" Classes="plain personMatches" ItemsSource="{Binding SearchResults}" MaxHeight="190"
+             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.AllowAutoHide="False">
       <ListBox.ItemTemplate>
         <DataTemplate>
-          <Button Classes="row" Command="{Binding DataContext.PickUserCommand, ElementName=Root}" CommandParameter="{Binding}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12">
-            <Grid ColumnDefinitions="Auto,*">
+          <Button Classes="secondaryAction personResult" Command="{Binding DataContext.PickUserCommand, ElementName=Root}" CommandParameter="{Binding}"
+                  AutomationProperties.Name="{Binding Label}"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="8,6" Margin="0,2">
+            <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="avatar" Width="30" Height="30" ClipToBounds="True" Background="{Binding Id, Converter={StaticResource AvatarBrush}}">
                 <Panel>
                   <Image Source="{Binding Avatar}" Stretch="UniformToFill" IsVisible="{Binding HasAvatar}"/>
@@ -27,6 +34,12 @@
                 <TextBlock Text="{Binding NameLabel}" TextTrimming="CharacterEllipsis"/>
                 <TextBlock Text="{Binding TagLabel}" Classes="caption" TextTrimming="CharacterEllipsis"/>
               </StackPanel>
+              <Panel Grid.Column="2" Width="16" Height="16" Margin="8,0,0,0">
+                <local:Glyph Data="{StaticResource IcCompose}" Width="16" Height="16"
+                             IsVisible="{Binding DataContext.IsOpeningDirectChat, ElementName=Root}"/>
+                <local:Glyph Data="{StaticResource IcPlus}" Width="16" Height="16"
+                             IsVisible="{Binding !DataContext.IsOpeningDirectChat, ElementName=Root}"/>
+              </Panel>
             </Grid>
           </Button>
         </DataTemplate>

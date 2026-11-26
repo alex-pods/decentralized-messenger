@@ -104,14 +104,15 @@ def check_upgrade(previous, current):
         with running(current, upgraded):
             events = request(chat + "/activity", owner)
             assert [event["kind"] for event in events] == ["removed", "joined"]
+            assert [event["userId"] for event in events] == [guest_id, guest_id]
             assert request(chat + "/messages", owner)[0]["text"] == text
 
         with closing(sqlite3.connect(upgraded)) as db:
             assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
             assert db.execute("PRAGMA foreign_key_check").fetchall() == []
             assert db.execute("SELECT text FROM messages WHERE id = ?", (message,)).fetchone() == encrypted_before
-            assert db.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall() == [
-                *original_migrations, ("007_group_activity.sql",)]
+            expected = set(original_migrations) | {("006_antispam.sql",), ("007_group_activity.sql",)}
+            assert set(db.execute("SELECT id FROM schema_migrations").fetchall()) == expected
         print("PASS upgrade: pre-existing session, unchanged ciphertext, history and pin, new activity after restart, SQLite integrity")
 
 

@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
@@ -92,7 +94,18 @@ public static partial class Preview
             messageButton.RaiseEvent(new PointerReleasedEventArgs(messageButton, pointer, window, position, 2,
                 new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased), KeyModifiers.None, MouseButton.Left));
             Expect(shell.ActiveMessageMenu?.IsOpen == true, "Message button press was swallowed by the log handler");
-            shell.ActiveMessageMenu!.Close();
+        });
+        var menu = shell.ActiveMessageMenu!;
+        var actions = (ReactionPicker)menu.Items.OfType<MenuItem>().First().Header!;
+        await Until(() => actions.Children.OfType<Button>().Count(button => button.IsVisible) == ReactionCatalog.Main.Count + 1,
+            "Message menu opened with the entire reaction palette");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var toggle = actions.Children.OfType<Button>().Single(button => button.Tag == null);
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Expect(menu.IsOpen && actions.Children.OfType<Button>().Count(button => button.IsVisible) ==
+                ReactionCatalog.Main.Count + ReactionCatalog.More.Count + 1, "More reactions did not expand in the open menu");
+            menu.Close();
         });
         await Dispatcher.UIThread.InvokeAsync(() => vm.SelectedMessage = vm.Messages.First(m => !m.IsDeleted));
         await OnUiAsync(() => vm.TogglePinCommand.ExecuteAsync(null));
@@ -107,6 +120,31 @@ public static partial class Preview
         });
         var serverPins = await vm.ThemeApi.GetPins(vm.SelectedChat!.Id);
         Expect(serverPins.Count == 1, "Local pin was sent to the server");
+        await Dispatcher.UIThread.InvokeAsync(() => vm.ShowPinListCommand.Execute(null));
+        Button? pinActions = null;
+        await Until(() =>
+        {
+            pinActions = shell.GetVisualDescendants().OfType<Button>().FirstOrDefault(button =>
+                button.IsEffectivelyVisible && button.DataContext is PinListItem { Local: false } &&
+                AutomationProperties.GetName(button) == "Действия закрепа");
+            return pinActions != null;
+        }, "Shared pin action is missing");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            pinActions!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var pinMenu = pinActions.ContextMenu!;
+            Expect(pinMenu.IsOpen, "Pin actions menu did not open");
+            pinMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Открепить для всех"))
+                .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            pinMenu.Close();
+        });
+        var windows = (IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!;
+        await Until(() => windows.Windows.Any(dialog => dialog.Title == "Открепить сообщение для всех?"),
+            "Shared pin was removed without confirmation");
+        await Dispatcher.UIThread.InvokeAsync(() => windows.Windows.Single(dialog => dialog.Title == "Открепить сообщение для всех?")
+            .GetVisualDescendants().OfType<Button>().Single(button => Equals(button.Content, "Отмена"))
+            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+        Expect((await vm.ThemeApi.GetPins(vm.SelectedChat!.Id)).Count == 1, "Cancelling shared unpin removed the server pin");
 
         foreach (var dark in new[] { false, true })
         foreach (var width in new[] { 1180, 360 })
@@ -122,9 +160,13 @@ public static partial class Preview
             await Shot(window, "mvp-pins-" + suffix);
             await OnUiAsync(() => vm.OpenPinFromListCommand.ExecuteAsync(vm.PinList.First()));
             Expect(!vm.ShowingPinnedMessages, "Pin did not return to conversation");
-            foreach (var (name, text) in new[] { ("empty", ""), ("text", "Привет! Встретимся завтра?"), ("multiline", "Первая строка\nВторая строка\nТретья строка") })
+            await Dispatcher.UIThread.InvokeAsync(() => log.FindDescendantOfType<ScrollViewer>()!.ScrollToEnd());
+            await Until(() => AtEnd(log), "Message history did not scroll to the latest message");
+            foreach (var (name, text) in new[] { ("empty", ""), ("text", "Привет! Встретимся завтра?"), ("multiline", "Первая строка\nВторая строка\nТретья строка"),
+                ("long", new string('я', 3960)) })
             {
                 await Dispatcher.UIThread.InvokeAsync(() => { vm.Draft = text; input.Focus(); });
+                await Until(() => AtEnd(log), $"History lost the latest message after resizing the composer at {suffix}");
                 await Task.Delay(100);
                 await Shot(window, $"mvp-composer-{name}-{suffix}");
                 await Dispatcher.UIThread.InvokeAsync(() =>
@@ -135,6 +177,7 @@ public static partial class Preview
                     var watermarkOrigin = watermark.TranslatePoint(new Point(), input)!.Value;
                     var textOrigin = presenter.TranslatePoint(new Point(), input)!.Value;
                     Expect(Math.Abs(watermarkOrigin.X - textOrigin.X) <= 1, "Watermark and text start at different X positions");
+                    Expect(AtEnd(log), "Part of the latest message was cut off after resizing the composer");
                     if (name == "empty")
                     {
                         var labelCenter = watermark.TranslatePoint(new Point(0, watermark.Bounds.Height / 2), shell)!.Value.Y;
@@ -149,15 +192,21 @@ public static partial class Preview
             await Dispatcher.UIThread.InvokeAsync(() => vm.Draft = "");
             var settings = await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var dialog = new SettingsWindow(vm) { Width = width == 360 ? 360 : 520, Height = width == 360 ? 600 : 760 };
-                dialog.Show(window); return dialog;
+                vm.NavigateWorkspace(WorkspacePage.Settings);
+                return (SettingsPage)shell.FindControl<ContentControl>("WorkspaceContent")!.Content!;
             });
             await Task.Delay(150);
-            await Shot(settings, "mvp-settings-" + suffix);
-            await Dispatcher.UIThread.InvokeAsync(() => settings.GetVisualDescendants().OfType<ScrollViewer>().First().ScrollToEnd());
+            await Shot(window, "mvp-settings-" + suffix);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var react = settings.FindControl<Expander>("ReactionChoices")!;
+                Expect(!react.IsExpanded, "Choosing a reaction expands all options on entry");
+                react.IsExpanded = true;
+                settings.GetVisualDescendants().OfType<ScrollViewer>().First().ScrollToEnd();
+            });
             await Task.Delay(150);
-            await Shot(settings, "mvp-settings-bottom-" + suffix);
-            await Dispatcher.UIThread.InvokeAsync(() => settings.Close());
+            await Shot(window, "mvp-settings-bottom-" + suffix);
+            await Dispatcher.UIThread.InvokeAsync(vm.BackWorkspace);
             await OnUiAsync(() => vm.ShowProfileCommand.ExecuteAsync(null));
             await Task.Delay(100);
             await Shot(window, "mvp-account-" + suffix);
@@ -171,7 +220,6 @@ public static partial class Preview
             await Task.Delay(100);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var viewport = shell.FindControl<Border>("OverlaySheet")!;
                 foreach (var control in profile.GetVisualDescendants().Where(c => c.IsEffectivelyVisible).OfType<Control>())
                 {
                     if (control is not TextBox && control is not Button) continue;
@@ -186,19 +234,23 @@ public static partial class Preview
                 vm.DisplayName = "Несохранённое имя";
                 profile.FindControl<Button>("CancelEdit")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Expect(vm.DisplayName == originalName && !profile.FindControl<StackPanel>("EditPanel")!.IsVisible, "Cancel did not restore profile and account screen");
-                vm.CloseOverlayCommand.Execute(null);
+                vm.BackWorkspace();
             });
         }
 
         await Dispatcher.UIThread.InvokeAsync(() => { Resize(window, 1180); window.Height = 780; ThemeSettings.Apply(ThemeSettings.Presets[0]); });
-        var preferences = await Dispatcher.UIThread.InvokeAsync(() => { var dialog = new SettingsWindow(vm); dialog.Show(window); return dialog; });
+        var preferences = await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            vm.NavigateWorkspace(WorkspacePage.Settings);
+            return (SettingsPage)shell.FindControl<ContentControl>("WorkspaceContent")!.Content!;
+        });
         var oldPrivacy = vm.AllowTagSearch;
         await Dispatcher.UIThread.InvokeAsync(() => preferences.FindControl<ToggleSwitch>("TagSearch")!.IsChecked = !oldPrivacy);
         await Until(() => preferences.FindControl<ToggleSwitch>("TagSearch")!.IsEnabled, "Privacy update did not complete");
         Expect((await vm.ThemeApi.GetMe()).AllowTagSearch == !oldPrivacy, "Privacy switch did not reach backend");
         await Dispatcher.UIThread.InvokeAsync(() => preferences.FindControl<ToggleSwitch>("TagSearch")!.IsChecked = oldPrivacy);
         await Until(() => preferences.FindControl<ToggleSwitch>("TagSearch")!.IsEnabled, "Privacy restoration did not complete");
-        await Dispatcher.UIThread.InvokeAsync(() => preferences.Close());
+        await Dispatcher.UIThread.InvokeAsync(vm.BackWorkspace);
 
         foreach (var pin in vm.PinList.ToArray()) await OnUiAsync(() => vm.RemovePinFromListCommand.ExecuteAsync(pin));
         await Dispatcher.UIThread.InvokeAsync(() => vm.ShowPinListCommand.Execute(null));
@@ -209,6 +261,12 @@ public static partial class Preview
         await AuditConversations(window, vm);
         await AuditWallpapers(window, vm);
         Console.WriteLine("PASS MVP: composer alignment at 360/1180 in light/dark, send keys, double-click reply/reaction, privacy API, local/shared pins and empty state");
+    }
+
+    static bool AtEnd(ListBox messageLog)
+    {
+        var scroll = messageLog.FindDescendantOfType<ScrollViewer>();
+        return scroll != null && scroll.Extent.Height - scroll.Viewport.Height - scroll.Offset.Y <= 1;
     }
 
     static async Task AuditComposerKeys(TextBox input, ShellViewModel vm)

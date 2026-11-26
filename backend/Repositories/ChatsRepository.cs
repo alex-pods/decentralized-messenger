@@ -16,7 +16,7 @@ public interface IChatsRepository
     Task<long> CreateGroupAsync(long creatorId, Secret title, IReadOnlyCollection<long> otherMemberIds, CancellationToken ct = default);
     Task HideAsync(long chatId, long userId, CancellationToken ct = default);
     Task<IReadOnlyList<MemberRow>> GetMembersAsync(long chatId, CancellationToken ct = default);
-    Task<IReadOnlyList<GroupActivity>> GetGroupActivityAsync(long chatId, long viewerId, CancellationToken ct = default);
+    Task<IReadOnlyList<GroupActivity>> GetGroupActivityAsync(long chatId, long viewerId, long? beforeId = null, CancellationToken ct = default);
     Task<bool> AddMemberAsync(long chatId, long userId, CancellationToken ct = default);
     Task RemoveMemberAsync(long chatId, long userId, CancellationToken ct = default);
     Task SetRoleAsync(long chatId, long userId, MemberRole role, CancellationToken ct = default);

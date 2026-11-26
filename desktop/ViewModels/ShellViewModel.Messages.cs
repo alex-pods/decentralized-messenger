@@ -82,22 +82,19 @@ public partial class ShellViewModel
         OnPropertyChanged(nameof(CanDeleteEveryone));
         OnPropertyChanged(nameof(CanManagePins));
         OnPropertyChanged(nameof(CanInviteMembers));
-        OnPropertyChanged(nameof(GroupRoleText));
         OnPropertyChanged(nameof(CanPin));
         if (!replace) return;
-        var texts = messages.ToDictionary(m => m.Id, MessageMapper.Body);
         Messages.Clear();
-        foreach (var m in messages) Messages.Add(MessageMapper.ToItem(m, _me.Id, NameOf, texts));
+        foreach (var m in messages) Messages.Add(MessageMapper.ToItem(m, _me.Id, NameOf));
         HasMore = messages.Count >= 50;
         if (messages.Count == 0)
         {
-            chat.Preview = "Нет сообщений";
+            chat.SetPreview(null, null);
             chat.Time = "";
         }
         else
         {
-            chat.Preview = MessageMapper.Preview(messages[^1], _me.Id, NameOf);
-            chat.Time = MessageMapper.FormatTime(messages[^1].SentAt);
+            UpdateChatPreview(chat, messages[^1]);
         }
     }
 
@@ -105,21 +102,32 @@ public partial class ShellViewModel
     async Task LoadOlder()
     {
         var chat = SelectedChat;
-        if (chat == null || Messages.Count == 0 || !HasMore || Busy) return;
+        if (chat == null || !HasOlderTimeline || Busy) return;
         var gen = _openGen;
         var fetch = ++_historyFetch;
-        var beforeId = Messages[0].Id;
+        var beforeId = HasMore ? Messages.FirstOrDefault()?.Id : null;
+        var beforeActivity = HasMoreActivity ? _activity.Keys.Min() : (long?)null;
         Busy = true;
         try
         {
-            var page = await _api.GetMessages(chat.Id, 50, beforeId: beforeId);
+            var page = beforeId is { } messageId ? await _api.GetMessages(chat.Id, 50, beforeId: messageId) : null;
             if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return;
             await Ui(() =>
             {
                 if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return;
-                InsertOlder(page);
-                HasMore = page.Count >= 50;
+                if (page != null)
+                {
+                    InsertOlder(page);
+                    HasMore = page.Count >= 50;
+                }
             });
+            if (beforeActivity is { } activityId)
+            {
+                var olderEvents = (await GetActivity(chat.Id, activityId)).Where(item => item.Id < activityId).ToArray();
+                if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return;
+                HasMoreActivity = olderEvents.Length == ActivityPageSize;
+                AddActivity(olderEvents);
+            }
         }
         catch (Exception ex)
         {
@@ -131,10 +139,8 @@ public partial class ShellViewModel
     void InsertOlder(List<MessageDto> page)
     {
         if (page.Count == 0) return;
-        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-        foreach (var m in page) texts[m.Id] = MessageMapper.Body(m);
         for (var i = 0; i < page.Count; i++)
-            Messages.Insert(i, MessageMapper.ToItem(page[i], _me.Id, NameOf, texts));
+            Messages.Insert(i, MessageMapper.ToItem(page[i], _me.Id, NameOf));
     }
 
     bool SameChat(int gen, long chatId) =>
@@ -210,8 +216,6 @@ public partial class ShellViewModel
 
     void MergePage(ChatItem chat, List<MessageDto> page)
     {
-        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-        foreach (var m in page) texts[m.Id] = MessageMapper.Body(m);
         foreach (var m in page)
         {
             var existing = Messages.FirstOrDefault(x => x.Id == m.Id);
@@ -219,25 +223,21 @@ public partial class ShellViewModel
             {
                 var idx = 0;
                 while (idx < Messages.Count && Messages[idx].Id < m.Id) idx++;
-                Messages.Insert(idx, MessageMapper.ToItem(m, _me.Id, NameOf, texts));
+                Messages.Insert(idx, MessageMapper.ToItem(m, _me.Id, NameOf));
             }
             else
             {
-                var fresh = MessageMapper.ToItem(m, _me.Id, NameOf, texts);
+                var fresh = MessageMapper.ToItem(m, _me.Id, NameOf);
                 existing.Text = fresh.Text;
                 existing.Meta = fresh.Meta;
-                existing.Reply = fresh.Reply;
                 existing.Forwarded = fresh.Forwarded;
                 existing.ForwardedTip = fresh.ForwardedTip;
                 existing.IsDeleted = fresh.IsDeleted;
                 existing.IsNotStored = fresh.IsNotStored;
             }
         }
-        if (page.Count > 0)
-        {
-            chat.Preview = MessageMapper.Preview(page[^1], _me.Id, NameOf);
-            chat.Time = MessageMapper.FormatTime(page[^1].SentAt);
-        }
+        UpdateReplyPreviews();
+        if (page.Count > 0) UpdateChatPreview(chat, page[^1]);
     }
 
     async Task LoadPins(ChatItem chat, int gen)
@@ -293,8 +293,6 @@ public partial class ShellViewModel
         OnPropertyChanged(nameof(HasPins));
         OnPropertyChanged(nameof(PinText));
         OnPropertyChanged(nameof(PinScope));
-        OnPropertyChanged(nameof(PinCounter));
-        OnPropertyChanged(nameof(CanUnpinShown));
     }
 
     void UpsertPin(MessageDto message)
@@ -344,10 +342,15 @@ public partial class ShellViewModel
     async Task ShowPinned()
     {
         if (SelectedChat is { } chat && ShownPin is { } pin)
-            await JumpToPin(chat, pin.MessageId);
+            await JumpToMessage(chat, pin.MessageId, cyclePin: true);
     }
 
-    async Task JumpToPin(ChatItem chat, long messageId)
+    internal bool IsRevealingMessage => Environment.TickCount64 < _pinSyncQuietUntil;
+
+    internal Task JumpToReply(long messageId) =>
+        SelectedChat is { } chat ? JumpToMessage(chat, messageId, cyclePin: false) : Task.CompletedTask;
+
+    async Task JumpToMessage(ChatItem chat, long messageId, bool cyclePin)
     {
         var gen = _openGen;
         var jump = ++_pinJump;
@@ -355,7 +358,7 @@ public partial class ShellViewModel
 
         if (Messages.Any(m => m.Id == messageId))
         {
-            RevealPinned(messageId);
+            RevealMessage(messageId, cyclePin);
             return;
         }
 
@@ -387,9 +390,12 @@ public partial class ShellViewModel
             {
                 if (fetch != _historyFetch || !SameJump(gen, jump, chat.Id)) return;
                 if (older.Count > 0)
+                {
                     PrependMessages(older);
+                    UpdateTimeline();
+                }
                 HasMore = hasMore;
-                RevealPinned(messageId);
+                RevealMessage(messageId, cyclePin);
             });
         }
         catch (Exception ex)
@@ -407,22 +413,19 @@ public partial class ShellViewModel
     void PrependMessages(List<MessageDto> older)
     {
         // Вставляем в начало, без Clear() всей ленты — меньше шансов сломать раскладку списка.
-        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-        foreach (var message in older)
-            texts[message.Id] = MessageMapper.Body(message);
         var prefix = new MessageItem[older.Count];
         for (var i = 0; i < older.Count; i++)
-            prefix[i] = MessageMapper.ToItem(older[i], _me.Id, NameOf, texts);
+            prefix[i] = MessageMapper.ToItem(older[i], _me.Id, NameOf);
         for (var i = prefix.Length - 1; i >= 0; i--)
             Messages.Insert(0, prefix[i]);
     }
 
-    void RevealPinned(long messageId)
+    void RevealMessage(long messageId, bool cyclePin)
     {
         var item = Messages.FirstOrDefault(m => m.Id == messageId);
         if (item == null)
         {
-            Error = "Закреплённое сообщение не найдено в истории";
+            Error = "Сообщение не найдено в истории";
             return;
         }
 
@@ -435,6 +438,7 @@ public partial class ShellViewModel
             try { ScrollToMessage?.Invoke(target); }
             catch { /* список мог уже смениться */ }
         }, DispatcherPriority.Background);
+        if (!cyclePin) return;
         var at = _stripPins.FindIndex(p => p.MessageId == messageId);
         if (at >= 0 && _stripPins.Count > 1)
             _pinIndex = (at + 1) % _stripPins.Count;
@@ -443,13 +447,6 @@ public partial class ShellViewModel
 
     bool SameJump(int gen, int jump, long chatId) =>
         jump == _pinJump && SameChat(gen, chatId);
-
-    [RelayCommand]
-    async Task UnpinShown()
-    {
-        if (ShownPin is { } pin && CanUnpinShown)
-            await RemovePinFromList(pin);
-    }
 
     [RelayCommand]
     async Task TogglePin()
@@ -609,7 +606,7 @@ public partial class ShellViewModel
                 else if (e.ChatId == SelectedChat?.Id)
                 {
                     _ = LoadGroupActivity(SelectedChat);
-                    if (Overlay == "members") _ = LoadMembersPanel();
+                    if (HasWorkspacePage(WorkspacePage.Members)) _ = LoadMembersPanel();
                 }
                 break;
             case "member_added":
@@ -617,7 +614,7 @@ public partial class ShellViewModel
                 goto case "member_role_changed";
             case "member_role_changed":
             case "owner_changed":
-                if (e.ChatId == SelectedChat?.Id && Overlay == "members")
+                if (e.ChatId == SelectedChat?.Id && HasWorkspacePage(WorkspacePage.Members))
                     _ = LoadMembersPanel();
                 break;
             case "reaction_added":
@@ -648,16 +645,13 @@ public partial class ShellViewModel
             _ = ReloadChats();
             return;
         }
-        chat.Preview = MessageMapper.Preview(message, _me.Id, NameOf);
-        chat.Time = MessageMapper.FormatTime(message.SentAt);
+        UpdateChatPreview(chat, message);
         if (unread && SelectedChat?.Id != chat.Id) chat.Unread = true;
         if (SelectedChat?.Id != chat.Id) return;
-        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-        texts[message.Id] = MessageMapper.Body(message);
         var existing = Messages.FirstOrDefault(m => m.Id == message.Id);
         if (existing == null)
         {
-            var item = MessageMapper.ToItem(message, _me.Id, NameOf, texts);
+            var item = MessageMapper.ToItem(message, _me.Id, NameOf);
             var idx = 0;
             while (idx < Messages.Count && Messages[idx].Id < item.Id) idx++;
             Messages.Insert(idx, item);
@@ -666,15 +660,15 @@ public partial class ShellViewModel
         }
         else
         {
-            var fresh = MessageMapper.ToItem(message, _me.Id, NameOf, texts);
+            var fresh = MessageMapper.ToItem(message, _me.Id, NameOf);
             existing.Text = fresh.Text;
             existing.Meta = fresh.Meta;
-            existing.Reply = fresh.Reply;
             existing.Forwarded = fresh.Forwarded;
             existing.ForwardedTip = fresh.ForwardedTip;
             existing.IsDeleted = fresh.IsDeleted;
             existing.IsNotStored = fresh.IsNotStored;
             existing.SetReactions(fresh.ReactionUsers);
+            UpdateReplyPreviews();
         }
     }
 
@@ -684,12 +678,32 @@ public partial class ShellViewModel
         var last = Messages.LastOrDefault();
         if (last == null)
         {
-            SelectedChat.Preview = "Нет сообщений";
+            SelectedChat.SetPreview(null, null);
             SelectedChat.Time = "";
+            UpdateChatOrder(SelectedChat, 0);
             return;
         }
-        var who = last.Mine ? "Вы" : last.SenderName;
-        SelectedChat.Preview = MessageMapper.Trim($"{who}: {last.Text}", 120);
+        SelectedChat.SetPreview(MessageMapper.PreviewAuthor(last.SenderId, _me.Id, NameOf), last.Text);
         SelectedChat.Time = last.Meta.Split(" · ", 2, StringSplitOptions.None)[0];
+        UpdateChatOrder(SelectedChat, last.Id);
+    }
+
+    void UpdateChatPreview(ChatItem chat, MessageDto message)
+    {
+        if (message.Id < chat.LastMessageId) return;
+        chat.SetPreview(MessageMapper.PreviewAuthor(message.SenderId, _me.Id, NameOf), MessageMapper.Body(message));
+        chat.Time = MessageMapper.FormatTime(message.SentAt);
+        UpdateChatOrder(chat, message.Id);
+    }
+
+    void UpdateChatOrder(ChatItem chat, long lastMessageId)
+    {
+        if (chat.LastMessageId == lastMessageId) return;
+        chat.LastMessageId = lastMessageId;
+        var index = Chats.IndexOf(chat);
+        if (index < 0) return;
+        var target = Chats.Count(other => other.LastMessageId > lastMessageId ||
+                                          other.LastMessageId == lastMessageId && other.Id > chat.Id);
+        if (target != index) Chats.Move(index, target);
     }
 }

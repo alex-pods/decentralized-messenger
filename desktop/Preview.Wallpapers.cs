@@ -148,6 +148,11 @@ public static partial class Preview
             await Dispatcher.UIThread.InvokeAsync(() => ExpectRangeWithinSlot(shortSlider));
             await Task.Delay(150);
             await Shot(dialog, $"wallpaper-settings-short-{mode}");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                dialog.GetVisualDescendants().OfType<ToggleButton>().Single(button => button.Name == "ToggleThemePreview").IsChecked = true);
+            await Until(() => dialog.GetVisualDescendants().OfType<Border>().Any(border =>
+                border.Name == "ThemePreview" && border.IsEffectivelyVisible), "Chat preview was unreachable from the compact theme editor");
+            await Shot(dialog, $"wallpaper-live-preview-short-{mode}");
             await AuditCompactColorEditor(dialog, mode);
             await Dispatcher.UIThread.InvokeAsync(dialog.Close);
             Expect(WallpaperSettings.Current == imported with { Blur = 12 }, "Cancel did not restore wallpaper and blur");
@@ -193,6 +198,9 @@ public static partial class Preview
             var hue = slider.Value;
             slider.Value = (hue + 60) % 360;
             Expect(ThemeSettings.Current.Accent != "#8855BB", "Changing hue did not update the theme");
+            var baseName = ThemeSettings.Presets[mode == "dark" ? 1 : 0].Name;
+            Expect(dialog.GetVisualDescendants().OfType<Button>().Any(button => Equals(button.Tag, baseName) && button.Classes.Contains("active")),
+                "Editing the accent cleared the active base theme");
             ExpectRangeWithinSlot(slider);
             var scroll = slider.FindAncestorOfType<ScrollViewer>()!;
             var pickerTop = picker.TranslatePoint(new Point(), viewport)!.Value.Y;
@@ -223,6 +231,9 @@ public static partial class Preview
                handle.Background is ISolidColorBrush handleBrush && handleBrush.Color == accent &&
                track.DecreaseButton!.Background is ISolidColorBrush fillBrush && fillBrush.Color == accent,
             $"{slider.GetType().Name} rail and handle do not match the current theme");
+        if (slider is ColorSlider)
+            Expect(rail.Background is LinearGradientBrush && track.DecreaseButton?.Opacity == 0,
+                "Hue has no visible scale for choosing a color");
         foreach (var visual in new Control[] { track, track.Thumb! })
         {
             var origin = visual.TranslatePoint(new Point(), slider)!.Value;

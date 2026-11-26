@@ -9,35 +9,47 @@ namespace MessengerDesktop.Views;
 
 public partial class ShellView
 {
-    async void OnGroupActivityClick(object? sender, RoutedEventArgs e)
+    async void OnReplyQuoteClick(object? sender, RoutedEventArgs e)
     {
-        if (_vm?.SelectedChat is not { IsGroup: true } chat) return;
-        await _vm.ShowMembersCommand.ExecuteAsync(null);
-        if (_vm.SelectedChat?.Id == chat.Id && _vm.Overlay == "members")
-            GroupDetailsPanel.ShowActivity();
+        if (_vm is not { } vm) return;
+        var target = sender is Control { DataContext: MessageItem quote } ? quote.ReplyToId : vm.ReplyTo?.Id;
+        if (target is { } id) await vm.JumpToReply(id);
+        e.Handled = true;
     }
 
     async void OnChatInfoClick(object? sender, RoutedEventArgs e)
     {
-        if (_vm?.SelectedChat is not { } chat || TopLevel.GetTopLevel(this) is not Window owner) return;
+        if (_vm?.SelectedChat is not { } chat) return;
         if (!chat.IsGroup && chat.AvatarUserId is { } userId)
-            await new Dialogs.UserProfileWindow(_vm, userId).ShowDialog(owner);
+            _vm.NavigateWorkspace(WorkspacePage.Contact, userId);
         else await _vm.ShowMembersCommand.ExecuteAsync(null);
     }
 
-    async void OnSenderProfileClick(object? sender, RoutedEventArgs e)
+    void OnSenderProfileClick(object? sender, RoutedEventArgs e)
     {
-        if (_vm != null && sender is Control { DataContext: MessageItem message } && TopLevel.GetTopLevel(this) is Window owner)
-            await new Dialogs.UserProfileWindow(_vm, message.SenderId).ShowDialog(owner);
+        if (_vm != null && sender is Control { DataContext: MessageItem message })
+            _vm.NavigateWorkspace(WorkspacePage.Contact, message.SenderId);
         e.Handled = true;
     }
+
+    void OnActivityProfileClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: GroupActivityLine { Event.UserId: { } userId } })
+            _vm?.NavigateWorkspace(WorkspacePage.Contact, userId);
+        e.Handled = true;
+    }
+
+    static Glyph MenuIcon(string name) => new()
+    {
+        Data = (Geometry)Application.Current!.FindResource(name)!, Width = 17, Height = 17
+    };
 
     internal static MenuItem ActionItem(string title, string icon, ICommand command, object? parameter = null) => new()
     {
         Header = title,
         Command = command,
         CommandParameter = parameter,
-        Icon = new Glyph { Data = (Geometry)Application.Current!.FindResource(icon)!, Width = 17, Height = 17 }
+        Icon = MenuIcon(icon)
     };
 
     internal static ContextMenu CreateMenu()
@@ -83,7 +95,7 @@ public partial class ShellView
         ActiveMessageMenu = menu;
         if (!message.IsDeleted)
         {
-            var reactions = new ReactionPicker { Width = 264 };
+            var reactions = new ReactionPicker(compact: true) { Width = 264 };
             reactions.Picked += emoji => { _vm.ToggleReactionCommand.Execute(emoji); menu.Close(); };
             menu.Items.Add(new MenuItem { Header = reactions });
             menu.Items.Add(new Separator());
@@ -91,7 +103,7 @@ public partial class ShellView
         }
         if (!message.IsDeleted && !message.IsNotStored)
         {
-            var copy = new MenuItem { Header = "Копировать текст" };
+            var copy = new MenuItem { Header = "Копировать текст", Icon = MenuIcon("IcCopy") };
             copy.Click += async (_, _) =>
             {
                 try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(message.Text); }
@@ -100,17 +112,30 @@ public partial class ShellView
             menu.Items.Add(copy);
         }
         if (_vm.CanForward) menu.Items.Add(ActionItem("Переслать", "IcForward", _vm.ShowForwardCommand));
-        if (_vm.CanPinLocally) menu.Items.Add(ActionItem(_vm.LocalPinActionLabel, "IcPin", _vm.ToggleLocalPinCommand));
-        if (_vm.CanPin) menu.Items.Add(ActionItem(_vm.PinActionLabel, "IcPin", _vm.TogglePinCommand));
         if (_vm.CanEdit) menu.Items.Add(ActionItem("Редактировать", "IcEdit", _vm.BeginEditCommand));
+        if (_vm.CanPinLocally) menu.Items.Add(ActionItem(_vm.LocalPinActionLabel, "IcDevice", _vm.ToggleLocalPinCommand));
+        if (_vm.CanPin && !_vm.SelectedIsPinned) menu.Items.Add(ActionItem(_vm.PinActionLabel, "IcPin", _vm.TogglePinCommand));
+        else if (_vm.CanPin)
+        {
+            var unpin = new MenuItem { Header = _vm.PinActionLabel, Icon = MenuIcon("IcPinOff") };
+            unpin.Click += async (_, _) =>
+            {
+                var vm = _vm;
+                var chatId = vm?.SelectedChat?.Id;
+                if (vm != null && await PinnedMessagesView.ConfirmSharedUnpin(this) && vm.SelectedChat?.Id == chatId &&
+                    vm.SelectedMessage == message && vm.SelectedIsPinned)
+                    await vm.TogglePinCommand.ExecuteAsync(null);
+            };
+            menu.Items.Add(unpin);
+        }
         menu.Items.Add(new Separator());
         menu.Items.Add(ActionItem("Удалить у меня", "IcTrash", _vm.DeleteForMeCommand));
         if (_vm.CanDeleteEveryone)
         {
-            var delete = new MenuItem { Header = "Удалить у всех" };
+            var delete = new MenuItem { Header = "Удалить у всех", Icon = MenuIcon("IcTrash"), Classes = { "danger" } };
             delete.Click += async (_, _) =>
             {
-                if (await Dialogs.ConfirmAction.Show(this, "Удалить сообщение у всех?", "Сообщение исчезнет у всех участников. Отменить это действие нельзя.", "Удалить") && _vm?.SelectedMessage == message)
+                if (await Dialogs.ConfirmAction.Show(this, "Удалить сообщение у всех?", "Сообщение исчезнет у всех участников. Отменить это действие нельзя.", "Удалить у всех") && _vm?.SelectedMessage == message)
                     _vm.DeleteForEveryoneCommand.Execute(null);
             };
             menu.Items.Add(delete);

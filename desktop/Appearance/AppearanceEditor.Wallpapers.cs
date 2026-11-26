@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -7,10 +8,11 @@ using Avalonia.Platform.Storage;
 
 namespace MessengerDesktop.Appearance;
 
-public sealed partial class AppearanceWindow
+public sealed partial class AppearanceEditor
 {
     readonly WallpaperSettings _originalWallpaper = WallpaperSettings.Current;
     readonly List<Button> _wallpaperCards = new();
+    readonly UniformGrid _wallpaperChoices = new() { Columns = 2 };
     readonly Slider _blur = new() { Name = "WallpaperBlur", Classes = { "messengerRange" },
         Minimum = 0, Maximum = 20, TickFrequency = 1, SmallChange = 1, IsSnapToTickEnabled = true };
     readonly TextBlock _blurLabel = new() { Classes = { "secondary" }, VerticalAlignment = VerticalAlignment.Center,
@@ -22,21 +24,21 @@ public sealed partial class AppearanceWindow
     {
         var section = new StackPanel { Name = "WallpaperSection", Spacing = 12 };
         section.Children.Add(new TextBlock { Text = "Фон переписки", FontSize = 16, FontWeight = FontWeight.SemiBold });
-        var choices = new WrapPanel();
         foreach (var (id, label) in WallpaperSettings.Presets)
         {
-            var thumb = new Border { Height = 62, CornerRadius = new CornerRadius(6), ClipToBounds = true,
+            var thumb = new Border { Height = 48, CornerRadius = new CornerRadius(5), ClipToBounds = true,
                 Child = new WallpaperLayer { Preview = new(id) } };
-            var card = new Button { Name = "Wallpaper_" + id.Replace('-', '_'), Tag = id, Width = 108,
+            var card = new Button { Name = "Wallpaper_" + id.Replace('-', '_'), Tag = id, HorizontalAlignment = HorizontalAlignment.Stretch,
                 Padding = new Thickness(5), Margin = new Thickness(0, 0, 8, 8), HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Content = new StackPanel { Spacing = 8, Children = { thumb, new TextBlock { Text = label, HorizontalAlignment = HorizontalAlignment.Center } } } };
+                Content = new StackPanel { Spacing = 4, Children = { thumb, new TextBlock { Text = label, HorizontalAlignment = HorizontalAlignment.Center } } } };
             Avalonia.Automation.AutomationProperties.SetName(card, label);
             card.Click += (_, _) => SelectWallpaper(new(id, Blur: WallpaperSettings.Current.Blur));
             _wallpaperCards.Add(card);
-            choices.Children.Add(card);
+            _wallpaperChoices.Children.Add(card);
         }
-        section.Children.Add(choices);
-        var choose = new Button { Name = "ChooseWallpaper", Content = "Выбрать изображение…", HorizontalAlignment = HorizontalAlignment.Left };
+        section.Children.Add(_wallpaperChoices);
+        var choose = new Button { Name = "ChooseWallpaper", Content = "Выбрать изображение…", Classes = { "secondaryAction" },
+            HorizontalAlignment = HorizontalAlignment.Left };
         choose.Click += async (_, _) =>
         {
             if (_importing) return;
@@ -59,6 +61,7 @@ public sealed partial class AppearanceWindow
             finally { _importing = false; choose.IsEnabled = true; if (_closed) WallpaperSettings.Prune(); }
         };
         section.Children.Add(choose);
+        section.Children.Add(new TextBlock { Text = "PNG, JPEG или WebP · до 20 МБ", Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
         section.Children.Add(_wallpaperStatus);
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         row.Children.Add(new TextBlock { Text = "Размытие", FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center });
@@ -68,12 +71,9 @@ public sealed partial class AppearanceWindow
         {
             if (!_closed && !_loadingWallpaper) SelectWallpaper(WallpaperSettings.Current with { Blur = _blur.Value });
         };
-        var blurControl = new Border { Name = "WallpaperBlurField", Padding = new Thickness(12, 9, 12, 2), CornerRadius = new CornerRadius(8),
+        var blurControl = new Border { Name = "WallpaperBlurField", Padding = new Thickness(4, 0, 4, 0),
             Child = new StackPanel { Spacing = 2, Children = { row, _blur } } };
-        blurControl.Bind(Border.BackgroundProperty, new DynamicResourceExtension("FieldFill"));
         section.Children.Add(blurControl);
-        section.Children.Add(new TextBlock { Text = "PNG, JPEG или WebP · до 20 МБ. Фон сохраняется на этом устройстве и не входит в ссылку на цветовую тему.",
-            Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
         section.Children.Add(new TextBlock { Text = "Узоры: Hero Patterns · Steve Schoger · CC BY 4.0", Classes = { "caption" }, TextWrapping = TextWrapping.Wrap });
         RefreshWallpaperControls();
         return section;
@@ -99,8 +99,9 @@ public sealed partial class AppearanceWindow
         }
         _blur.Value = current.Blur;
         _blur.IsEnabled = current.Kind != "none";
-        _blurLabel.Text = current.Blur == 0 ? "Без размытия" : $"{current.Blur:0} / 20";
-        _wallpaperStatus.Text = current.Kind == "custom" ? "Ваше изображение · сохранена копия" : "Можно поставить своё фото или рисунок.";
+        _blurLabel.Text = _blur.IsEnabled ? $"{current.Blur:0} / 20" : "Нет фона";
+        _wallpaperStatus.Text = "Изображение сохранено на этом устройстве";
+        _wallpaperStatus.IsVisible = current.Kind == "custom";
         _loadingWallpaper = false;
     }
 }

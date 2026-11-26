@@ -45,8 +45,10 @@ public partial class ForwardPicker : UserControl
 
     void Reset()
     {
+        SourcePreview.IsExpanded = false;
         DestinationSearch.Clear();
         Destinations.SelectedItem = null;
+        Destinations.FindDescendantOfType<ScrollViewer>()?.ScrollToHome();
         Filter();
     }
 
@@ -64,8 +66,11 @@ public partial class ForwardPicker : UserControl
         var selectedId = (Destinations.SelectedItem as ChatItem)?.Id;
         var query = DestinationSearch.Text?.Trim() ?? "";
         var matches = _vm.Overlay == "forward" ? ChatSearchFilter.Match(_vm.Chats, query) : [];
-        Destinations.ItemsSource = matches;
-        Destinations.SelectedItem = matches.FirstOrDefault(chat => chat.Id == selectedId);
+        if (!Destinations.Items.SequenceEqual(matches))
+        {
+            Destinations.ItemsSource = matches;
+            Destinations.SelectedItem = matches.FirstOrDefault(chat => chat.Id == selectedId);
+        }
         Destinations.IsVisible = matches.Length > 0;
         ClearDestination.IsVisible = !string.IsNullOrEmpty(DestinationSearch.Text);
         NoResults.IsVisible = matches.Length == 0;

@@ -1,4 +1,6 @@
+using System.Data;
 using Messenger.Api.Common.Errors;
+using Messenger.Api.Database;
 using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
 using Messenger.Api.Repositories;
@@ -9,7 +11,8 @@ namespace Messenger.Api.Services;
 
 public interface IAvatarsService
 {
-    Task<string> Upload(long userId, IFormFile file, CancellationToken cancellationToken);
+    Task<string> Upload(long userId, IFormFile file, CancellationToken cancellationToken,
+        Func<IDbTransaction, Task>? updateProfile = null);
     Task<AvatarDownload> GetDownload(long userId);
 }
 
@@ -17,6 +20,7 @@ public sealed record AvatarDownload(string Path, string ContentType);
 
 public sealed class AvatarsService(
     IAvatarsRepository avatars,
+    DbConnectionFactory db,
     IFileStorage files,
     ILogger<AvatarsService> logger,
     WsEventPublisher publisher)  : IAvatarsService
@@ -26,16 +30,14 @@ public sealed class AvatarsService(
     public async Task<string> Upload(
         long userId,
         IFormFile file,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<IDbTransaction, Task>? updateProfile = null)
     {
         if (file.Length == 0)
             throw AppException.BadRequest("file must not be empty");
 
         if (file.Length > MaxAvatarBytes)
             throw AppException.PayloadTooLarge("avatar exceeds 5 MB");
-
-        var oldAvatarPath = (await avatars.GetByUserIds([userId]))
-            .GetValueOrDefault(userId)?.Path;
 
         await using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, cancellationToken);
@@ -50,12 +52,15 @@ public sealed class AvatarsService(
 
         await using var content = new MemoryStream(bytes, writable: false);
 
+        string? oldAvatarPath;
         try
         {
             await files.Write(relativePath, content, cancellationToken);
-
-            await avatars.Upsert(
-                new Avatar(userId, relativePath, contentType));
+            using var connection = db.Open();
+            using var transaction = connection.BeginTransaction();
+            if (updateProfile != null) await updateProfile(transaction);
+            oldAvatarPath = await avatars.Swap(new Avatar(userId, relativePath, contentType), transaction);
+            transaction.Commit();
         }
         catch
         {

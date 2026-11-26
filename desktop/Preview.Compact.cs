@@ -21,7 +21,7 @@ public static partial class Preview
                 ThemeSettings.Apply(theme); Resize(window, width); window.Height = 780;
                 if (window.DataContext is LoginViewModel login)
                 {
-                    login.IsRegistration = registration; login.Error = null; login.ShowConnection = false;
+                    login.IsRegistration = registration; login.Error = null; login.ConnectionError = null; login.ShowConnection = false;
                 }
             });
             await Task.Delay(100);
@@ -44,12 +44,13 @@ public static partial class Preview
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    vm.Overlay = screen; vm.Error = null;
+                    OpenPreviewScreen(vm, screen); vm.Error = null;
                     vm.GroupTitle = "Поездка на выходные";
                 });
                 await Task.Delay(150);
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
+                    if (!scroll.IsEffectivelyVisible) return;
                     var content = scroll.GetVisualDescendants().OfType<ScrollContentPresenter>().First();
                     var bar = scroll.GetVisualDescendants().OfType<ScrollBar>()
                         .First(item => item.Orientation == Avalonia.Layout.Orientation.Vertical);
@@ -67,6 +68,7 @@ public static partial class Preview
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 window.Height = window.MinHeight;
+                vm.ResetWorkspace();
                 vm.Overlay = "group";
             });
             await Until(() => submit.IsEffectivelyVisible && window.ClientSize.Height <= window.MinHeight + 1,
@@ -91,6 +93,17 @@ public static partial class Preview
             });
             await Task.Delay(150);
             await Shot(appearance, $"audit-appearance-{suffix}-360");
+            var (link, copy) = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var elements = appearance.GetVisualDescendants();
+                return (elements.OfType<TextBox>().Single(box => box.Name == "ThemeLink"),
+                    elements.OfType<Button>().Single(button => Equals(button.Content, "Копировать ссылку")));
+            });
+            await Until(() => !copy.IsEnabled, "Copy is available before a theme link exists");
+            await Dispatcher.UIThread.InvokeAsync(() => link.Text = "https://example.test/messenger/themes/preview");
+            await Until(() => copy.IsEnabled, "An HTTPS theme link cannot be copied");
+            await Dispatcher.UIThread.InvokeAsync(link.Clear);
+            await Until(() => !copy.IsEnabled, "Clearing theme link did not disable copy");
             await Dispatcher.UIThread.InvokeAsync(() => appearance.GetVisualDescendants().OfType<ScrollViewer>().First().ScrollToEnd());
             await Task.Delay(150);
             await Shot(appearance, $"audit-sharing-{suffix}-360");

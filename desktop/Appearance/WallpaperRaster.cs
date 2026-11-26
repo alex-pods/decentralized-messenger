@@ -44,7 +44,13 @@ internal static class WallpaperRaster
         using (var canvas = new SKCanvas(source))
         {
             canvas.Clear(SKColor.Parse(theme.Background));
-            using var ink = new SKPaint { Color = SKColor.Parse(theme.Text).WithAlpha(theme.Dark ? (byte)22 : (byte)17), IsAntialias = true };
+            var opacity = kind switch
+            {
+                "jupiter" => 9,
+                "endless-clouds" => 10,
+                _ => theme.Dark ? 20 : 19
+            };
+            using var ink = new SKPaint { Color = SKColor.Parse(theme.Text).WithAlpha((byte)opacity), IsAntialias = true };
             foreach (var element in svg.Descendants().Where(e => e.Name.LocalName == "path"))
             {
                 using var path = SKPath.ParseSvgPathData(element.Attribute("d")!.Value);

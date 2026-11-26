@@ -8,5 +8,5 @@ public sealed record UserCardResponse(
     [property: JsonPropertyName("tag")] string Tag,
     [property: JsonPropertyName("display_name")] string DisplayName)
 {
-    public static UserCardResponse From(User user) => new(user.Id, user.Tag, user.Name);
+    public static UserCardResponse From(UserSearchResult user) => new(user.Id, user.Tag, user.Name);
 }

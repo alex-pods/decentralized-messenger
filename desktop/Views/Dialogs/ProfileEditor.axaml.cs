@@ -34,34 +34,27 @@ public partial class ProfileEditor : UserControl
 
     void ProfileChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ShellViewModel.Overlay) && _profileVm?.Overlay == "profile")
-        {
-            AccountPanel.IsVisible = true;
-            EditPanel.IsVisible = false;
-        }
-        if (e.PropertyName is nameof(ShellViewModel.Overlay) or nameof(ShellViewModel.AllowTagSearch)) RefreshSummaries();
+        if (e.PropertyName == nameof(ShellViewModel.Workspace)) TagCopied.IsVisible = false;
+        if (e.PropertyName is nameof(ShellViewModel.Workspace) or nameof(ShellViewModel.AllowTagSearch)) RefreshSummaries();
     }
 
     void RefreshSummaries()
     {
-        PrivacySummary.Text = _profileVm?.AllowTagSearch == true ? "Вас могут найти по тегу" : "Поиск по вашему тегу выключен";
+        PrivacySummary.Text = _profileVm?.AllowTagSearch == true ? "Тег виден в поиске всем" : "Тег находят только знакомые";
         var key = AppPreferences.Current.SendMode == SendMode.Enter ? "Enter" : OperatingSystem.IsMacOS() ? "⌘ + Enter" : "Ctrl + Enter";
-        MessagesSummary.Text = "Отправка: " + key + " · быстрые действия";
-        ThemeSummary.Text = Appearance.ThemeSettings.Current.Name + " · цвета и обмен темами";
+        MessagesSummary.Text = key;
+        ThemeSummary.Text = Appearance.ThemeSettings.Current.Name;
     }
 
     void OnEditProfile(object? sender, RoutedEventArgs e)
     {
-        AccountPanel.IsVisible = false;
-        EditPanel.IsVisible = true;
+        if (_profileVm != null) _profileVm.ProfileEditing = true;
         Dispatcher.UIThread.Post(() => ProfileName.Focus(), DispatcherPriority.Loaded);
     }
 
     void OnCancelEdit(object? sender, RoutedEventArgs e)
     {
         _profileVm?.ResetProfileDraft();
-        EditPanel.IsVisible = false;
-        AccountPanel.IsVisible = true;
         EditProfile.Focus();
     }
 
@@ -70,23 +63,21 @@ public partial class ProfileEditor : UserControl
         try
         {
             if (_profileVm != null && TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+            {
                 await clipboard.SetTextAsync(_profileVm.UserTag);
+                TagCopied.IsVisible = true;
+            }
         }
         catch { if (_profileVm != null) _profileVm.Error = "Не удалось скопировать тег"; }
     }
 
     void OnPreferencesClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is ShellViewModel vm && TopLevel.GetTopLevel(this) is Window owner)
-            SettingsWindow.Open(vm, owner, (sender as Button)?.Tag as string, RefreshSummaries);
+        _profileVm?.NavigateWorkspace(WorkspacePage.Settings, section: (sender as Button)?.Tag as string);
     }
 
-    async void OnAppearanceClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is ShellViewModel vm && TopLevel.GetTopLevel(this) is Window owner)
-            await new Appearance.AppearanceWindow(vm.ThemeApi, vm.CurrentUserId).ShowDialog(owner);
-        RefreshSummaries();
-    }
+    void OnAppearanceClick(object? sender, RoutedEventArgs e) =>
+        _profileVm?.NavigateWorkspace(WorkspacePage.Appearance);
 
     async void OnLogoutClick(object? sender, RoutedEventArgs e)
     {
@@ -115,7 +106,7 @@ public partial class ProfileEditor : UserControl
 
     void OnAvatarDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = e.Data.GetFiles()?.Any(file => file.Path.IsFile) == true
+        e.DragEffects = _profileVm?.ProfileEditing == true && e.Data.GetFiles()?.Any(file => file.Path.IsFile) == true
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
@@ -130,5 +121,5 @@ public partial class ProfileEditor : UserControl
     }
 
     Task UploadAvatarFromPath(string path) =>
-        (DataContext as ShellViewModel)?.UploadAvatarAsync(path) ?? Task.CompletedTask;
+        _profileVm?.StageAvatar(path) ?? Task.CompletedTask;
 }

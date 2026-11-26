@@ -1,6 +1,15 @@
 <Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:MessengerDesktop" xmlns:primitives="using:Avalonia.Controls.Primitives">
   <Styles.Resources>
+    <LinearGradientBrush x:Key="HueRailBrush" StartPoint="0%,50%" EndPoint="100%,50%">
+      <GradientStop Color="#D48686" Offset="0"/>
+      <GradientStop Color="#C1A06D" Offset=".1667"/>
+      <GradientStop Color="#89B17D" Offset=".3333"/>
+      <GradientStop Color="#76ABA9" Offset=".5"/>
+      <GradientStop Color="#8D98C7" Offset=".6667"/>
+      <GradientStop Color="#B390BA" Offset=".8333"/>
+      <GradientStop Color="#D48686" Offset="1"/>
+    </LinearGradientBrush>
     <ControlTheme x:Key="RangeSegment" TargetType="RepeatButton">
       <Setter Property="Template">
         <ControlTemplate>
@@ -106,7 +115,7 @@
                 <Thumb.Template>
                   <ControlTemplate>
                     <Border Background="Transparent">
-                      <Border Name="RangeHandle" Width="16" Height="22" CornerRadius="6" BorderThickness="2"
+                      <Border Name="RangeHandle" Width="14" Height="18" CornerRadius="5" BorderThickness="2"
                               Background="{DynamicResource AccentBrush}" BorderBrush="{DynamicResource RaisedBrush}"/>
                     </Border>
                   </ControlTemplate>
@@ -123,6 +132,12 @@
   </Style>
   <Style Selector=":is(Slider).messengerRange:disabled">
     <Setter Property="Opacity" Value=".45"/>
+  </Style>
+  <Style Selector="primitives|ColorSlider.hueGuide /template/ Border#RangeRail">
+    <Setter Property="Background" Value="{StaticResource HueRailBrush}"/>
+  </Style>
+  <Style Selector="primitives|ColorSlider.hueGuide /template/ RepeatButton#PART_DecreaseButton">
+    <Setter Property="Opacity" Value="0"/>
   </Style>
 
   <Style Selector="Expander.themeDesigner /template/ Border#ExpanderContent">
@@ -150,17 +165,17 @@
                 <primitives:ColorSpectrum Width="112" Height="112" Components="SaturationValue" Shape="Box"
                                          HsvColor="{TemplateBinding HsvColor, Mode=TwoWay}" AutomationProperties.Name="Насыщенность и яркость"/>
               </Border>
-              <Grid Grid.Column="2" RowDefinitions="*,8,Auto,3,Auto">
-                <Border CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource LineBrush}"
+              <Grid Grid.Column="2" RowDefinitions="Auto,5,Auto" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                <TextBlock Text="HEX" Classes="caption" VerticalAlignment="Center"/>
+                <Border Grid.Column="1" Width="26" Height="19" CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource LineBrush}"
                         Background="{TemplateBinding HsvColor, Converter={StaticResource ToBrushConverter}}"/>
-                <TextBlock Grid.Row="2" Text="HEX" Classes="caption"/>
-                <TextBox Grid.Row="4" Name="PART_HexTextBox" Watermark="RRGGBB" MaxLength="7" MinHeight="36" Height="36"
+                <TextBox Grid.Row="2" Grid.ColumnSpan="2" Name="PART_HexTextBox" Watermark="RRGGBB" MaxLength="7" MinHeight="36" Height="36"
                          Padding="9,6" AutomationProperties.Name="Код цвета HEX"/>
               </Grid>
             </Grid>
             <StackPanel>
               <TextBlock Text="Оттенок" Classes="caption"/>
-              <primitives:ColorSlider Classes="messengerRange" Orientation="Horizontal" ColorModel="Hsva" ColorComponent="Component1"
+              <primitives:ColorSlider Classes="messengerRange hueGuide" Orientation="Horizontal" ColorModel="Hsva" ColorComponent="Component1"
                                       IsAlphaVisible="False" HsvColor="{TemplateBinding HsvColor, Mode=TwoWay}" AutomationProperties.Name="Оттенок"/>
             </StackPanel>
           </StackPanel>
@@ -202,6 +217,8 @@
   </Style>
   <Style Selector="ScrollViewer.dialogScroll /template/ ScrollBar#PART_VerticalScrollBar,
                    ListBox.recipient /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar,
+                   ListBox.memberRows /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar,
+                   ListBox.personMatches /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar,
                    ListBox.sidebar /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar,
                    ListBox.log /template/ ScrollViewer /template/ ScrollBar#PART_VerticalScrollBar">
     <Setter Property="Theme" Value="{StaticResource DialogVerticalScrollBar}"/>

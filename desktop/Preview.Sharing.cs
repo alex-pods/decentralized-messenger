@@ -39,7 +39,7 @@ public static partial class Preview
         string? id = null;
         try
         {
-            await Click("Опубликовать копию");
+            await Click("Опубликовать на сервере");
             var link = await Dispatcher.UIThread.InvokeAsync(() => Named<TextBox>("ThemeLink").Text!);
             var published = await ThemeExchange.Download(new Uri(link)); id = published.Id;
             await Dispatcher.UIThread.InvokeAsync(() => dialog.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Tag, "Тёмная"))
@@ -47,7 +47,7 @@ public static partial class Preview
             await Click("Обновить опубликованную");
             var updated = await ThemeExchange.Download(new Uri(link));
             if (updated.Version != 2 || !updated.Theme.Dark) throw new Exception("UI update did not publish the changed theme");
-            await Click("Открыть ссылку");
+            await Click("Загрузить тему");
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (ThemeSettings.Current != updated.Theme) throw new Exception("UI link import did not apply theme preview");
@@ -62,7 +62,7 @@ public static partial class Preview
                 if (dialog.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Content, "Обновить опубликованную")).IsVisible)
                     throw new Exception("Editing the link left update bound to a different publication");
             });
-            await Click("Открыть ссылку");
+            await Click("Загрузить тему");
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (ThemeSettings.Current != updated.Theme) throw new Exception("Invalid link changed active theme");

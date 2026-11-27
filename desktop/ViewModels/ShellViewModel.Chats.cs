@@ -6,16 +6,19 @@ public partial class ShellViewModel
 {
     partial void OnSelectedChatChanged(ChatItem? value)
     {
+        ++_openGen;
+        CancelHistoryLoad();
+        IsOpeningChat = false;
+        HasMore = false;
         if (_suppress) return;
         SelectedMessage = null;
         ReplyTo = null;
         Editing = null;
         RestoreDraft(value);
         ClearPins();
+        Messages.Clear();
         if (value == null)
         {
-            Messages.Clear();
-            HasMore = false;
             return;
         }
         value.Unread = false;

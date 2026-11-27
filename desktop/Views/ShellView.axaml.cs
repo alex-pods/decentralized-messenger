@@ -111,10 +111,13 @@ public partial class ShellView : UserControl
         }
         if (e.PropertyName == nameof(ShellViewModel.SelectedChat))
         {
+            ResetHistoryViewport();
             FilterChats();
             if (_vm?.HasChat == true) _showChats = false;
             UpdateNavigation();
         }
+        if (e.PropertyName == nameof(ShellViewModel.IsOpeningChat) && _vm?.IsOpeningChat == false)
+            QueueHistoryCheck();
     }
 
     async void OnAppearanceClick(object? sender, RoutedEventArgs e)
@@ -131,7 +134,10 @@ public partial class ShellView : UserControl
             _vm.PropertyChanged -= OnShellPropertyChanged;
             _vm.ScrollToEnd -= Scroll;
             _vm.ScrollToMessage -= ScrollTo;
+            _vm.HistoryPrepending -= CaptureHistoryAnchor;
+            _vm.HistoryPrepended -= RestoreHistoryAnchor;
         }
+        ResetHistoryViewport();
         _vm = DataContext as ShellViewModel;
         if (_vm != null)
         {
@@ -140,6 +146,8 @@ public partial class ShellView : UserControl
             FilterChats();
             _vm.ScrollToEnd += Scroll;
             _vm.ScrollToMessage += ScrollTo;
+            _vm.HistoryPrepending += CaptureHistoryAnchor;
+            _vm.HistoryPrepended += RestoreHistoryAnchor;
         }
         EnsureLogHooks();
     }
@@ -154,6 +162,7 @@ public partial class ShellView : UserControl
             // ScrollViewer внутри шаблона пересоздаётся при IsVisible/HasChat —
             // bubbling с ListBox живёт стабильно.
             _log.AddHandler(ScrollViewer.ScrollChangedEvent, OnLogScrollChanged, RoutingStrategies.Bubble, handledEventsToo: true);
+            _log.AddHandler(InputElement.PointerWheelChangedEvent, OnHistoryWheel, RoutingStrategies.Tunnel, handledEventsToo: true);
             _log.TemplateApplied += OnLogTemplateApplied;
             _listHooked = true;
         }
@@ -168,23 +177,17 @@ public partial class ShellView : UserControl
         if (_log == null) return;
         var sv = _log.FindDescendantOfType<ScrollViewer>();
         if (ReferenceEquals(sv, _logScroll)) return;
-        if (_logScroll != null)
-            _logScroll.ScrollChanged -= OnLogScrollChanged;
         _logScroll = sv;
-        if (_logScroll != null)
-            _logScroll.ScrollChanged += OnLogScrollChanged;
     }
 
     void TeardownLogHooks()
     {
-        if (_logScroll != null)
-        {
-            _logScroll.ScrollChanged -= OnLogScrollChanged;
-            _logScroll = null;
-        }
+        ResetHistoryViewport();
+        _logScroll = null;
         if (_listHooked && _log != null)
         {
             _log.RemoveHandler(ScrollViewer.ScrollChangedEvent, OnLogScrollChanged);
+            _log.RemoveHandler(InputElement.PointerWheelChangedEvent, OnHistoryWheel);
             _log.TemplateApplied -= OnLogTemplateApplied;
             _listHooked = false;
         }
@@ -193,8 +196,19 @@ public partial class ShellView : UserControl
 
     void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
+        BindLogScrollViewer();
+        if (!ReferenceEquals(e.Source, _logScroll) || _restoringHistory || _scrolling) return;
+        if (e.ViewportDelta.Y != 0 && _followLatest)
+        {
+            Scroll(force: false); // Например, после появления полоски закрепов.
+            return;
+        }
+        // Изменение высоты контента само по себе не означает, что читатель ушёл от конца чата.
+        if (e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0)
+            _followLatest = IsNearBottom();
         // Offset не менялся (только extent) — тоже синхронизируем после догрузки истории.
         SyncPinFromViewport();
+        QueueHistoryCheck();
     }
 
     void SyncPinFromViewport()
@@ -225,26 +239,42 @@ public partial class ShellView : UserControl
             _vm.SyncPinToVisible(lastVisible);
     }
 
-    void Scroll()
+    void Scroll(bool force)
     {
         if (_vm == null || _vm.Messages.Count == 0) return;
-        if (this.FindControl<ListBox>("Log") is { } list)
-            list.ScrollIntoView(_vm.Messages[^1]);
+        if (!force && !_followLatest) return;
+        _scrolling = true;
+        try
+        {
+            _log?.UpdateLayout();
+            _log?.ScrollIntoView(_vm.Messages[^1]);
+            _log?.UpdateLayout();
+            BindLogScrollViewer();
+            _logScroll?.ScrollToEnd();
+            _log?.UpdateLayout();
+            _followLatest = true;
+        }
+        finally { _scrolling = false; }
         Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
+        QueueHistoryCheck();
     }
 
     void ScrollTo(MessageItem item)
     {
         if (this.FindControl<ListBox>("Log") is not { } list) return;
         if (!list.Items.Contains(item)) return;
+        _scrolling = true;
         try
         {
+            list.UpdateLayout();
             list.ScrollIntoView(item);
-            list.InvalidateMeasure();
-            list.InvalidateArrange();
+            list.UpdateLayout();
+            _followLatest = IsNearBottom();
         }
         catch { /* панель ещё не догнала новую страницу */ }
+        finally { _scrolling = false; }
         Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
+        QueueHistoryCheck();
     }
 
     void OnDragAreaPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);

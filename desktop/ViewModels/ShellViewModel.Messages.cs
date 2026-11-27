@@ -7,44 +7,64 @@ public partial class ShellViewModel
 {
     async Task OpenChat(ChatItem chat)
     {
-        var gen = ++_openGen;
+        var gen = _openGen;
+        IsOpeningChat = true;
         try
         {
             Error = null;
             var members = await _api.GetMembers(chat.Id);
             var messages = await _api.GetMessages(chat.Id, 50);
             if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
-            await Ui(() => Fill(chat, members, messages, replace: true));
+            await Ui(() =>
+            {
+                if (!SameChat(gen, chat.Id)) return;
+                Fill(chat, members, messages, replace: true);
+                RequestScroll();
+                IsOpeningChat = false;
+            });
             await LoadPins(chat, gen);
+            if (!SameChat(gen, chat.Id)) return;
             _live.Follow(chat.Id);
             if (messages.Count > 0)
             {
                 try { await _api.MarkRead(chat.Id, messages[^1].Id); }
                 catch { /* прочтение не блокирует чат */ }
             }
-            RequestScroll();
         }
         catch (Exception ex)
         {
             if (gen == _openGen) Error = Friendly(ex);
         }
+        finally { if (gen == _openGen) IsOpeningChat = false; }
     }
 
     async Task ReloadMessages()
     {
         var chat = SelectedChat;
         if (chat == null) return;
-        var gen = _openGen;
-        var members = await _api.GetMembers(chat.Id);
-        var messages = await _api.GetMessages(chat.Id, 50);
-        if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
-        await Ui(() => Fill(chat, members, messages, replace: true));
-        await LoadPins(chat, gen);
-        if (messages.Count > 0)
+        CancelHistoryLoad();
+        var gen = ++_openGen;
+        IsOpeningChat = true;
+        try
         {
-            try { await _api.MarkRead(chat.Id, messages[^1].Id); } catch { }
+            var members = await _api.GetMembers(chat.Id);
+            var messages = await _api.GetMessages(chat.Id, 50);
+            if (!SameChat(gen, chat.Id)) return;
+            await Ui(() =>
+            {
+                if (!SameChat(gen, chat.Id)) return;
+                Fill(chat, members, messages, replace: true);
+                RequestScroll();
+                IsOpeningChat = false;
+            });
+            await LoadPins(chat, gen);
+            if (!SameChat(gen, chat.Id)) return;
+            if (messages.Count > 0)
+            {
+                try { await _api.MarkRead(chat.Id, messages[^1].Id); } catch { }
+            }
         }
-        RequestScroll();
+        finally { if (gen == _openGen) IsOpeningChat = false; }
     }
 
     /// <summary>После reconnect / close 4008: догнать пропущенное через after_id (не before_id).</summary>
@@ -69,7 +89,7 @@ public partial class ShellViewModel
             {
                 try { await _api.MarkRead(chat.Id, Messages[^1].Id); } catch { }
             }
-            RequestScroll();
+            RequestScroll(force: false);
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }
@@ -99,44 +119,64 @@ public partial class ShellViewModel
         }
     }
 
-    [RelayCommand]
-    async Task LoadOlder()
+    public async Task<bool> LoadOlderAsync()
     {
         var chat = SelectedChat;
-        if (chat == null || Messages.Count == 0 || !HasMore || Busy) return;
+        if (_closed || chat == null || Messages.Count == 0 || !HasMore || IsOpeningChat || IsLoadingHistory)
+            return false;
         var gen = _openGen;
         var fetch = ++_historyFetch;
         var beforeId = Messages[0].Id;
-        Busy = true;
+        using var cancellation = new CancellationTokenSource();
+        _historyCancellation = cancellation;
+        IsLoadingHistory = true;
+        var added = false;
         try
         {
-            var page = await _api.GetMessages(chat.Id, 50, beforeId: beforeId);
-            if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return;
+            Error = null;
+            var page = await _api.GetMessages(chat.Id, 50, beforeId: beforeId, ct: cancellation.Token);
+            if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return false;
             await Ui(() =>
             {
                 if (fetch != _historyFetch || !SameChat(gen, chat.Id)) return;
-                InsertOlder(page);
-                HasMore = page.Count >= 50;
+                var existing = Messages.Select(m => m.Id).ToHashSet();
+                var older = page.Where(m => m.Id < beforeId && existing.Add(m.Id)).OrderBy(m => m.Id).ToList();
+                HasMore = page.Count >= 50 && older.Count > 0;
+                if (older.Count == 0) return;
+                // Снимок берётся после HTTP-запроса: за время ожидания пользователь мог прокрутить чат.
+                HistoryPrepending?.Invoke();
+                try { PrependMessages(older); }
+                finally { HistoryPrepended?.Invoke(); }
+                added = true;
             });
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            if (gen == _openGen) Error = Friendly(ex);
+            if (fetch == _historyFetch && SameChat(gen, chat.Id)) Error = Friendly(ex);
         }
-        finally { if (fetch == _historyFetch) Busy = false; }
+        finally
+        {
+            if (fetch == _historyFetch)
+            {
+                _historyCancellation = null;
+                IsLoadingHistory = false;
+            }
+        }
+        return added;
     }
 
-    void InsertOlder(List<MessageDto> page)
+    void CancelHistoryLoad()
     {
-        if (page.Count == 0) return;
-        var texts = Messages.ToDictionary(m => m.Id, m => m.Text);
-        foreach (var m in page) texts[m.Id] = MessageMapper.Body(m);
-        for (var i = 0; i < page.Count; i++)
-            Messages.Insert(i, MessageMapper.ToItem(page[i], _me.Id, NameOf, texts));
+        ++_historyFetch;
+        ++_pinJump;
+        _historyCancellation?.Cancel();
+        _historyCancellation = null;
+        IsLoadingHistory = false;
     }
 
     bool SameChat(int gen, long chatId) =>
-        gen == _openGen && SelectedChat?.Id == chatId;
+        !_closed && gen == _openGen && SelectedChat?.Id == chatId;
 
     [RelayCommand]
     async Task Send()
@@ -344,7 +384,8 @@ public partial class ShellViewModel
     async Task ShowPinned()
     {
         var chat = SelectedChat;
-        if (chat == null || _pins.Count == 0) return;
+        if (chat == null || _pins.Count == 0 || IsOpeningChat) return;
+        CancelHistoryLoad();
         var gen = _openGen;
         var jump = ++_pinJump;
         var index = Math.Clamp(_pinIndex, 0, _pins.Count - 1);
@@ -358,7 +399,9 @@ public partial class ShellViewModel
         }
 
         var fetch = ++_historyFetch;
-        Busy = true;
+        using var cancellation = new CancellationTokenSource();
+        _historyCancellation = cancellation;
+        IsLoadingHistory = true;
         var older = new List<MessageDto>();
         var hasMore = HasMore;
         var beforeId = Messages.Count == 0 ? (long?)null : Messages[0].Id;
@@ -369,7 +412,7 @@ public partial class ShellViewModel
                 if (!SameJump(gen, jump, chat.Id)) return;
                 if (beforeId is null || !hasMore || beforeId <= messageId)
                     break;
-                var page = await _api.GetMessages(chat.Id, 50, beforeId: beforeId.Value);
+                var page = await _api.GetMessages(chat.Id, 50, beforeId: beforeId.Value, ct: cancellation.Token);
                 if (fetch != _historyFetch || !SameJump(gen, jump, chat.Id)) return;
                 if (page.Count == 0 || page[0].Id >= beforeId)
                 {
@@ -390,6 +433,7 @@ public partial class ShellViewModel
                 RevealPinned(messageId);
             });
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex)
         {
             if (SameJump(gen, jump, chat.Id))
@@ -398,7 +442,12 @@ public partial class ShellViewModel
         finally
         {
             if (fetch == _historyFetch)
-                await Ui(() => { if (fetch == _historyFetch) Busy = false; });
+                await Ui(() =>
+                {
+                    if (fetch != _historyFetch) return;
+                    _historyCancellation = null;
+                    IsLoadingHistory = false;
+                });
         }
     }
 
@@ -652,7 +701,7 @@ public partial class ShellViewModel
             var idx = 0;
             while (idx < Messages.Count && Messages[idx].Id < item.Id) idx++;
             Messages.Insert(idx, item);
-            if (idx == Messages.Count - 1) RequestScroll();
+            if (idx == Messages.Count - 1) RequestScroll(force: message.SenderId == _me.Id);
             if (unread) _ = _api.MarkRead(chat.Id, message.Id);
         }
         else

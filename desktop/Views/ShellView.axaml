@@ -168,7 +168,7 @@
                 <TextBlock x:Name="EmptyConversation" Text="Выберите чат" Classes="secondary"
                            HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasChat}"/>
                 <ListBox x:Name="Log" Classes="log" VerticalAlignment="Bottom" ItemsSource="{Binding Timeline}"
-                         SelectedItem="{Binding SelectedMessage, Mode=OneWay}" SelectionChanged="OnTimelineSelectionChanged"
+                         SelectedItem="{Binding SelectedMessage, Mode=OneWay}" SelectionChanged="OnTimelineSelectionChanged" AutoScrollToSelectedItem="False"
                          Background="Transparent" Padding="0,10,0,8" ClipToBounds="True"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.AllowAutoHide="False" IsVisible="{Binding HasChat}">
                   <ListBox.ItemsPanel>
@@ -255,12 +255,11 @@
                     </DataTemplate>
                   </ListBox.DataTemplates>
                 </ListBox>
-                <Button HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0" Classes="small" Command="{Binding LoadOlderCommand}" IsVisible="{Binding HasOlderTimeline}">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <local:Glyph Data="{StaticResource IcChevronUp}" Width="12" Height="12" StrokeWidth="2"/>
-                    <TextBlock Text="Показать раньше"/>
-                  </StackPanel>
-                </Button>
+                <Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0"
+                        Background="{DynamicResource RaisedBrush}" CornerRadius="7" Padding="12,6"
+                        IsVisible="{Binding IsLoadingHistory}" IsHitTestVisible="False">
+                  <TextBlock Text="Загрузка истории…" Classes="caption"/>
+                </Border>
               </Panel>
             </DockPanel>
           </Border>

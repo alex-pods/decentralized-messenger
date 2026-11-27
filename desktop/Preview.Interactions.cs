@@ -182,7 +182,7 @@ public static partial class Preview
         });
         await Until(() => vm.Timeline.OfType<GroupActivityLine>().Count() == 30 && vm.HasOlderTimeline,
             "Group did not show its most recent event page after reopening");
-        await OnUiAsync(() => vm.LoadOlderCommand.ExecuteAsync(null));
+        await OnUiAsync(() => vm.LoadOlderAsync());
         await Until(() => vm.Timeline.OfType<GroupActivityLine>().Select(line => line.Event.Id).Distinct().Count() == 32 &&
             !vm.HasOlderTimeline, "Older group events did not appear in the same timeline");
         await Dispatcher.UIThread.InvokeAsync(() =>

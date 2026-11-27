@@ -185,6 +185,11 @@ public partial class ShellView
             var row = list.GetVisualDescendants().OfType<ListBoxItem>().FirstOrDefault(control => ReferenceEquals(control.Content, item));
             if (row?.TranslatePoint(default, viewport) is { } position)
                 scroll.Offset = scroll.Offset.WithY(scroll.Offset.Y + position.Y - saved.ItemTop);
+            if (ReferenceEquals(scroll, _logScroll) && _visiblePage == null)
+            {
+                _followLatest = IsNearBottom();
+                QueueHistoryCheck();
+            }
         }
         if (!list.GetVisualDescendants().OfType<ListBoxItem>().Any(row => ReferenceEquals(row.Content, item)))
             list.ScrollIntoView(item);

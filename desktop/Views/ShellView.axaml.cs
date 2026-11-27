@@ -233,10 +233,14 @@ public partial class ShellView : UserControl
         {
             FilterChats();
             var chatId = _vm?.SelectedChat?.Id;
+            if (chatId != _presentedChatId) ResetHistoryViewport();
             if (chatId != _presentedChatId) _showChats = chatId == null;
             _presentedChatId = chatId;
             UpdateNavigation();
         }
+        if ((e.PropertyName == nameof(ShellViewModel.IsOpeningChat) && _vm?.IsOpeningChat == false) ||
+            e.PropertyName == nameof(ShellViewModel.HasOlderTimeline))
+            QueueHistoryCheck();
     }
 
     void Hook()
@@ -248,7 +252,10 @@ public partial class ShellView : UserControl
             _vm.PropertyChanged -= OnShellPropertyChanged;
             _vm.ScrollToEnd -= Scroll;
             _vm.ScrollToMessage -= ScrollTo;
+            _vm.HistoryPrepending -= CaptureHistoryAnchor;
+            _vm.HistoryPrepended -= RestoreHistoryAnchor;
         }
+        ResetHistoryViewport();
         _vm = DataContext as ShellViewModel;
         if (_vm != null)
         {
@@ -258,6 +265,8 @@ public partial class ShellView : UserControl
             UpdateSidebarSearch();
             _vm.ScrollToEnd += Scroll;
             _vm.ScrollToMessage += ScrollTo;
+            _vm.HistoryPrepending += CaptureHistoryAnchor;
+            _vm.HistoryPrepended += RestoreHistoryAnchor;
             PresentWorkspace();
         }
         EnsureLogHooks();
@@ -273,6 +282,7 @@ public partial class ShellView : UserControl
             // ScrollViewer внутри шаблона пересоздаётся при IsVisible/HasChat —
             // bubbling с ListBox живёт стабильно.
             _log.AddHandler(ScrollViewer.ScrollChangedEvent, OnLogScrollChanged, RoutingStrategies.Bubble, handledEventsToo: true);
+            _log.AddHandler(InputElement.PointerWheelChangedEvent, OnHistoryWheel, RoutingStrategies.Tunnel, handledEventsToo: true);
             _log.TemplateApplied += OnLogTemplateApplied;
             _listHooked = true;
         }
@@ -284,10 +294,12 @@ public partial class ShellView : UserControl
 
     void OnTimelineSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_vm is not { } vm || sender is not ListBox list) return;
+        if (_restoringHistory || !ReferenceEquals(e.Source, sender) ||
+            _vm is not { } vm || sender is not ListBox list) return;
         vm.SelectedMessage = list.SelectedItem as MessageItem;
         if (list.SelectedItem is GroupActivityLine)
             list.SetCurrentValue(ListBox.SelectedItemProperty, null);
+        else OnLogSelectionChanged(sender, e);
     }
 
     void BindLogScrollViewer()
@@ -295,23 +307,17 @@ public partial class ShellView : UserControl
         if (_log == null) return;
         var sv = _log.FindDescendantOfType<ScrollViewer>();
         if (ReferenceEquals(sv, _logScroll)) return;
-        if (_logScroll != null)
-            _logScroll.ScrollChanged -= OnLogScrollChanged;
         _logScroll = sv;
-        if (_logScroll != null)
-            _logScroll.ScrollChanged += OnLogScrollChanged;
     }
 
     void TeardownLogHooks()
     {
-        if (_logScroll != null)
-        {
-            _logScroll.ScrollChanged -= OnLogScrollChanged;
-            _logScroll = null;
-        }
+        ResetHistoryViewport();
+        _logScroll = null;
         if (_listHooked && _log != null)
         {
             _log.RemoveHandler(ScrollViewer.ScrollChangedEvent, OnLogScrollChanged);
+            _log.RemoveHandler(InputElement.PointerWheelChangedEvent, OnHistoryWheel);
             _log.TemplateApplied -= OnLogTemplateApplied;
             _listHooked = false;
         }
@@ -320,21 +326,16 @@ public partial class ShellView : UserControl
 
     void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        if (_visiblePage == null && sender is ScrollViewer scroll && ReferenceEquals(_logScroll, scroll))
-        {
-            var gap = scroll.Extent.Height - scroll.Viewport.Height - scroll.Offset.Y;
-            var previousGap = gap - e.ExtentDelta.Y + e.ViewportDelta.Y + e.OffsetDelta.Y;
-            var resized = Math.Abs(e.ViewportDelta.Y) > .5;
-            if ((resized || e.ExtentDelta.Y > .5) && previousGap <= 16)
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (_visiblePage == null && ReferenceEquals(_logScroll, scroll) && (resized || _vm?.IsRevealingMessage != true))
-                        scroll.ScrollToEnd();
-                }, DispatcherPriority.Background);
-            }
-        }
+        BindLogScrollViewer();
+        if (_visiblePage != null || !ReferenceEquals(e.Source, _logScroll) ||
+            _restoringHistory || _scrolling) return;
+        if (e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0 && e.ViewportDelta.Y == 0)
+            _followLatest = IsNearBottom();
+        if ((e.ViewportDelta.Y != 0 || e.ExtentDelta.Y > 0) &&
+            _followLatest && _vm?.IsRevealingMessage != true)
+            Scroll(force: false);
         Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
+        QueueHistoryCheck();
     }
 
     void SyncPinFromViewport()
@@ -365,14 +366,29 @@ public partial class ShellView : UserControl
             _vm.SyncPinToVisible(lastVisible);
     }
 
-    void Scroll()
+    void Scroll(bool force)
     {
-        var chatId = _vm?.SelectedChat?.Id;
+        var vm = _vm;
+        var chatId = vm?.SelectedChat?.Id;
+        var generation = _viewportGeneration;
         Dispatcher.UIThread.Post(() =>
         {
-            if (_visiblePage != null || chatId == null || _vm?.SelectedChat?.Id != chatId || _vm.Timeline.Count == 0) return;
-            _logScroll?.ScrollToEnd();
+            if (vm == null || !ReferenceEquals(vm, _vm) || chatId == null ||
+                vm.SelectedChat?.Id != chatId || generation != _viewportGeneration ||
+                _visiblePage != null || vm.Timeline.Count == 0 || _restoringHistory ||
+                (!force && (!_followLatest || vm.IsRevealingMessage))) return;
+            _scrolling = true;
+            try
+            {
+                _log?.UpdateLayout();
+                BindLogScrollViewer();
+                _logScroll?.ScrollToEnd();
+                _log?.UpdateLayout();
+                _followLatest = true;
+            }
+            finally { _scrolling = false; }
             SyncPinFromViewport();
+            QueueHistoryCheck();
         }, DispatcherPriority.Background);
     }
 
@@ -380,14 +396,18 @@ public partial class ShellView : UserControl
     {
         if (this.FindControl<ListBox>("Log") is not { } list) return;
         if (!list.Items.Contains(item)) return;
+        _scrolling = true;
         try
         {
+            list.UpdateLayout();
             list.ScrollIntoView(item);
-            list.InvalidateMeasure();
-            list.InvalidateArrange();
+            list.UpdateLayout();
+            _followLatest = IsNearBottom();
         }
         catch { /* панель ещё не догнала новую страницу */ }
+        finally { _scrolling = false; }
         Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
+        QueueHistoryCheck();
     }
 
     void OnDragAreaPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);

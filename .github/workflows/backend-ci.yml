@@ -29,6 +29,9 @@ jobs:
       - name: Сборка проверок протокола
         run: dotnet build tests/ProtocolChecks/ProtocolChecks.csproj -c Release --nologo
 
+      - name: Проверки автоматической подгрузки истории
+        run: dotnet run --project tests/DesktopHistoryChecks/DesktopHistoryChecks.csproj -c Release
+
       - name: HTTP и WebSocket проверки backend-v2
         env:
           Db: ${{ runner.temp }}/messenger-ci.db

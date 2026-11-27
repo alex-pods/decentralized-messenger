@@ -41,11 +41,11 @@ public partial class ShellViewModel
         catch (ObjectDisposedException) when (_closed) { }
     }
 
-    async Task<GroupActivityItem[]> GetActivity(long chatId, long? beforeId = null)
+    async Task<GroupActivityItem[]> GetActivity(long chatId, long? beforeId = null, CancellationToken ct = default)
     {
         var path = $"chats/{chatId}/activity";
         if (beforeId is { } id) path += $"?before_id={id}";
-        return await _api.Send<GroupActivityItem[]>(HttpMethod.Get, path, null, default) ?? [];
+        return await _api.Send<GroupActivityItem[]>(HttpMethod.Get, path, null, ct) ?? [];
     }
 
     void AddActivity(IEnumerable<GroupActivityItem> items)
@@ -62,7 +62,10 @@ public partial class ShellViewModel
     {
         if (_timelineUpdateQueued) return;
         _timelineUpdateQueued = true;
-        Dispatcher.UIThread.Post(UpdateTimeline);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_timelineUpdateQueued) UpdateTimeline();
+        });
     }
 
     void UpdateTimeline()

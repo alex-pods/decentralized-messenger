@@ -28,11 +28,14 @@ public partial class ShellViewModel : ObservableObject
     private int _pinJump;
     private long _pinSyncQuietUntil;
     private int _historyFetch;
+    private CancellationTokenSource? _historyCancellation;
     private int _openGen;
     private bool _suppress;
     private bool _closed;
 
-    public event Action? ScrollToEnd;
+    public event Action<bool>? ScrollToEnd;
+    public event Action? HistoryPrepending;
+    public event Action? HistoryPrepended;
 
     public ObservableCollection<ChatItem> Chats { get; } = new();
     public ObservableCollection<MessageItem> Messages { get; } = new();
@@ -74,6 +77,8 @@ public partial class ShellViewModel : ObservableObject
         }
     }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasOlderTimeline))] private bool _hasMore;
+    [ObservableProperty] private bool _isLoadingHistory;
+    [ObservableProperty] private bool _isOpeningChat;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGroup))]
@@ -217,6 +222,7 @@ public partial class ShellViewModel : ObservableObject
     {
         if (_closed) return;
         _closed = true;
+        CancelHistoryLoad();
         _live.Dispose();
         _api.AntispamChanged -= OnAntispamChanged;
         _api.Dispose();
@@ -242,7 +248,16 @@ public partial class ShellViewModel : ObservableObject
 
     string NameOf(long id) => id == _me.Id ? "Вы" : _names.TryGetValue(id, out var n) ? n : "#" + id;
 
-    void RequestScroll() => Dispatcher.UIThread.Post(() => ScrollToEnd?.Invoke());
+    void RequestScroll(bool force = true)
+    {
+        var gen = _openGen;
+        var chatId = SelectedChat?.Id;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_closed && gen == _openGen && chatId == SelectedChat?.Id)
+                ScrollToEnd?.Invoke(force);
+        });
+    }
 
     static Task Ui(Action action) => Dispatcher.UIThread.InvokeAsync(action).GetTask();
 

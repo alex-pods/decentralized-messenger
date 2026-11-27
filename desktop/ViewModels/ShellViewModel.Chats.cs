@@ -7,8 +7,11 @@ public partial class ShellViewModel
     partial void OnSelectedChatChanged(ChatItem? oldValue, ChatItem? newValue)
     {
         if (oldValue?.Id == newValue?.Id) return;
-        ClearGroupActivity();
+        ++_openGen;
+        CancelHistoryLoad();
+        IsOpeningChat = false;
         HasMore = false;
+        ClearGroupActivity();
         if (HasWorkspacePage(WorkspacePage.Members)) ResetWorkspace();
         if (_suppress) return;
         Messages.Clear();

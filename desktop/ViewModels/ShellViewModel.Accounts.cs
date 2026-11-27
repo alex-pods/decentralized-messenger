@@ -14,7 +14,4 @@ public partial class ShellViewModel
 
     [RelayCommand]
     void AddAccount() => _accounts.AddAccount(this);
-
-    [RelayCommand]
-    void ShowMyProfile() => ShowProfileCommand.Execute(null);
 }

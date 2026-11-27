@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using System.ComponentModel;
 using MessengerDesktop.Settings;
 
@@ -78,6 +79,15 @@ public partial class ProfileEditor : UserControl
 
     void OnAppearanceClick(object? sender, RoutedEventArgs e) =>
         _profileVm?.NavigateWorkspace(WorkspacePage.Appearance);
+
+    void OnSwitchAccountClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control anchor && this.FindAncestorOfType<MessengerDesktop.Views.ShellView>() is { } shell)
+        {
+            shell.OpenAccountMenu(anchor);
+            e.Handled = true;
+        }
+    }
 
     async void OnLogoutClick(object? sender, RoutedEventArgs e)
     {

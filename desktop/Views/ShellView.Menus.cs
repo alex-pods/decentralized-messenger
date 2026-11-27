@@ -62,9 +62,9 @@ public partial class ShellView
         return menu;
     }
 
-    void OnAccountMenuClick(object? sender, RoutedEventArgs e)
+    internal void OpenAccountMenu(Control anchor)
     {
-        if (sender is not Control anchor || _vm is not { } vm) return;
+        if (_vm is not { } vm) return;
         var menu = CreateMenu();
         IReadOnlyList<StoredAccount> accounts;
         try { accounts = vm.SavedAccounts; }
@@ -100,20 +100,7 @@ public partial class ShellView
                 _ = LoadAccountMenuAvatar(account, image, initials, images, avatarLoads.Token);
         }
 
-        menu.Items.Add(new Separator());
-        menu.Items.Add(ActionItem("Добавить аккаунт", "IcPlus", vm.AddAccountCommand));
-        menu.Items.Add(ActionItem("Мой профиль", "IcBubble", vm.ShowMyProfileCommand));
-        menu.Items.Add(new Separator());
-        var logout = new MenuItem { Header = "Выйти из этого аккаунта", Icon = MenuIcon("IcLogout"), Classes = { "danger" } };
-        logout.Click += async (_, _) =>
-        {
-            if (await Dialogs.ConfirmAction.Show(this, "Выйти из аккаунта?",
-                    "Сохранённая сессия этого аккаунта будет удалена. Остальные аккаунты останутся подключёнными.", "Выйти"))
-                await vm.LogoutCommand.ExecuteAsync(null);
-        };
-        menu.Items.Add(logout);
         menu.Open(anchor);
-        e.Handled = true;
     }
 
     static (Grid Header, Image? Avatar, TextBlock? Initials) AccountHeader(

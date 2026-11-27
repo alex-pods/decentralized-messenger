@@ -91,9 +91,12 @@ public partial class ShellView
             var item = new MenuItem
             {
                 Header = header,
-                Command = vm.SwitchAccountCommand,
-                CommandParameter = account,
                 IsEnabled = !active
+            };
+            item.Click += async (_, _) =>
+            {
+                menu.Close();
+                await vm.SwitchAccountCommand.ExecuteAsync(account);
             };
             menu.Items.Add(item);
             if (!active && image is not null && initials is not null)

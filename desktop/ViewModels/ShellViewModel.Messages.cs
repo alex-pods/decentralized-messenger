@@ -555,6 +555,9 @@ public partial class ShellViewModel
             case "message" when e.Message != null:
                 Incoming(e.ChatId, e.Message, unread: e.Message.SenderId != _me.Id);
                 break;
+            case "attachment_added":
+                AttachmentAdded(e);
+                break;
             case "message_edited" when e.Message != null:
                 UpdateLocalPin(e.Message.ChatId, e.Message.Id, MessageMapper.Body(e.Message));
                 Incoming(e.ChatId, e.Message, unread: false);
@@ -575,6 +578,8 @@ public partial class ShellViewModel
                 RemovePin(unpinned);
                 break;
             case "message_deleted":
+                if (e.ChatId == SelectedChat?.Id && e.MessageId == _imageMessageId && Overlay == "images")
+                    CloseOverlay();
                 if (e.ChatId is { } deletedChat && e.MessageId is { } deletedId)
                     UpdateLocalPin(deletedChat, deletedId, null);
                 if (e.ForEveryone != false && e.MessageId is { } dropped)
@@ -662,6 +667,8 @@ public partial class ShellViewModel
         {
             var fresh = MessageMapper.ToItem(message, _me.Id, NameOf);
             existing.Text = fresh.Text;
+            if (message.Attachments != null || fresh.IsDeleted || fresh.IsNotStored)
+                existing.Images = fresh.Images;
             existing.Meta = fresh.Meta;
             existing.Forwarded = fresh.Forwarded;
             existing.ForwardedTip = fresh.ForwardedTip;

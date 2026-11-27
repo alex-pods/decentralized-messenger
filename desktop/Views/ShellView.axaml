@@ -235,6 +235,13 @@
                                 <TextBlock Text="{Binding VisibleMeta}" IsVisible="{Binding VisibleMeta, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"
                                            ToolTip.Tip="{Binding Meta}" Classes="caption" FontSize="11" TextWrapping="Wrap"/>
                               </local:MessageTextPanel>
+                              <ItemsControl ItemsSource="{Binding VisibleImages}" IsVisible="{Binding HasImages}"
+                                            MaxWidth="320" HorizontalAlignment="Left" ClipToBounds="True">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><local:MessageImagePanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                  <local:MessageImagePreview/>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                              </ItemsControl>
                               <ItemsControl ItemsSource="{Binding Chips}" IsVisible="{Binding HasReactions}">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate><DataTemplate>
@@ -349,6 +356,20 @@
               <Panel>
                 <views:GroupDetails IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=group}"/>
                 <views:PeopleSearch IsVisible="{Binding IsOpeningDirectChat}"/>
+                <ItemsControl ItemsSource="{Binding ImagePreviews}"
+                              IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=images}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Spacing="8" Margin="0,0,0,16">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
+                        <Image Source="{Binding Bitmap}" Stretch="Uniform" MaxHeight="360"
+                               HorizontalAlignment="Center" AutomationProperties.Name="{Binding Name}"/>
+                        <TextBlock Text="{Binding Status}" Classes="caption" TextWrapping="Wrap"
+                                   IsVisible="{Binding Status, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
               </Panel>
             </ScrollViewer>
             <views:ForwardPicker x:Name="ForwardPanel" IsVisible="{Binding Overlay, Converter={StaticResource Eq}, ConverterParameter=forward}"/>

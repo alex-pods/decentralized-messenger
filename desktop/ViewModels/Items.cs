@@ -73,8 +73,12 @@ public partial class MessageItem : TimelineItem
     public long? ReplyToId { get; init; }
     [ObservableProperty] private string _replyAuthor = "";
     [ObservableProperty] private string _reply = "";
-    [ObservableProperty] private bool _isDeleted;
-    [ObservableProperty] private bool _isNotStored;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasImages))] private bool _isDeleted;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasImages))] private bool _isNotStored;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasImages)), NotifyPropertyChangedFor(nameof(VisibleImages))]
+    private IReadOnlyList<AttachmentDto> _images = Array.Empty<AttachmentDto>();
+    public bool HasImages => !IsDeleted && !IsNotStored && Images.Count > 0;
+    public IReadOnlyList<AttachmentDto> VisibleImages => Images.Take(4).ToArray();
     [ObservableProperty] private string _forwarded = "";
     [ObservableProperty] private string _forwardedTip = "";
     public bool HasReply => ReplyToId != null;

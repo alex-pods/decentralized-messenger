@@ -13,15 +13,29 @@ public sealed class AccountManager
     public AccountManager(Navigator nav) => _nav = nav;
     public ShellViewModel? CurrentShell { get; private set; }
     public IReadOnlyList<StoredAccount> Accounts => AccountStore.Load().Accounts;
-    public AccountIdentity? ActiveAccount => AccountStore.Load().ActiveAccount;
 
     internal void Attach(ShellViewModel shell) => CurrentShell = shell;
 
     public void AddAccount(ShellViewModel shell)
     {
+        AccountData data;
+        try { data = AccountStore.Load(); }
+        catch (Exception ex)
+        {
+            shell.Error = "Не удалось проверить список аккаунтов: " + ex.Message;
+            return;
+        }
+        data.Warning = JoinWarnings(data.Warning, AccountStore.TakeLoadWarning());
+        if (HasReachedAccountLimit(data.Accounts.Count))
+        {
+            shell.Error = JoinWarnings(data.Warning,
+                $"Можно добавить не более {AccountStore.MaxAccounts} аккаунтов");
+            return;
+        }
         CancelOperation();
         CurrentShell = shell;
-        _nav.Go(new LoginViewModel(_nav, shell.ServerLabel, accounts: this, adding: true, returnShell: shell));
+        _nav.Go(new LoginViewModel(
+            _nav, shell.CurrentIdentity.Server, data.Warning, accounts: this, adding: true, returnShell: shell));
     }
 
     public void Reauthenticate(StoredAccount account, ShellViewModel? returnShell, string? error = null)
@@ -60,9 +74,11 @@ public sealed class AccountManager
                 }, restore.Token);
             }
             catch (OperationCanceledException) when (restore.IsCancellationRequested) { return; }
-            catch (Exception ex) when (IsConnectionError(ex) || ex is ApiException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+            catch (Exception ex) when (IsNetworkError(ex) ||
+                ex is ApiException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
             {
-                await ShowLogin(null, serverOverride, LoginViewModel.Friendly(ex), restore.Token);
+                var legacyServer = AccountStore.LegacyServerForLogin() ?? serverOverride;
+                await ShowLogin(null, legacyServer, LoginViewModel.Friendly(ex), restore.Token);
                 return;
             }
 
@@ -74,50 +90,60 @@ public sealed class AccountManager
                 return;
             }
 
+            var loadWarning = JoinWarnings(data.Warning, AccountStore.TakeLoadWarning());
             var candidates = OrderedAccounts(data);
             if (!string.IsNullOrWhiteSpace(serverOverride))
                 candidates = candidates.Where(account =>
                     string.Equals(account.Server, AccountStore.NormalizeServer(serverOverride), StringComparison.OrdinalIgnoreCase)).ToList();
 
-            Exception? lastConnectionError = null;
-            foreach (var account in candidates)
-            {
-                if (account.NeedsLogin) continue;
-                MessengerClient? api = null;
-                try
+            Exception? lastError = null;
+            var needsLogin = candidates.Where(account => account.NeedsLogin)
+                .Select(account => account.Identity).ToHashSet();
+            var restored = await TryRestoreCandidatesAsync(
+                candidates.Where(account => !account.NeedsLogin),
+                async (account, cancellationToken) =>
                 {
-                    restore.Token.ThrowIfCancellationRequested();
-                    api = new MessengerClient(account.Server, account.Token);
-                    var me = await api.GetMe(restore.Token);
-                    if (await ActivateRestored(account, api, me, restore.Token))
+                    MessengerClient? api = null;
+                    try
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        api = new MessengerClient(account.Server, account.Token);
+                        var me = await api.GetMe(cancellationToken);
+                        if (!await ActivateRestored(account, api, me, cancellationToken, loadWarning)) return null;
                         api = null;
-                        return;
+                        return account;
                     }
-                }
-                catch (ApiException ex) when (ex.Status == 401)
+                    finally { api?.Dispose(); }
+                },
+                (account, exception) =>
                 {
-                    if (restore.IsCancellationRequested) return;
-                    AccountStore.MarkNeedsLogin(account.Identity);
-                }
-                catch (OperationCanceledException) when (restore.IsCancellationRequested) { return; }
-                catch (Exception ex) when (IsConnectionError(ex))
-                {
-                    lastConnectionError = ex;
-                }
-                finally { api?.Dispose(); }
+                    lastError = exception;
+                    if (exception is not ApiException { Status: 401 }) return;
+                    needsLogin.Add(account.Identity);
+                    try { AccountStore.MarkNeedsLogin(account.Identity); }
+                    catch (Exception markError) { lastError = markError; }
+                },
+                restore.Token);
+            if (restored is not null)
+            {
+                if (AccountStore.TakeLoadWarning() is { } warning && CurrentShell is { } activeShell)
+                    activeShell.Error = JoinWarnings(activeShell.Error, warning);
+                return;
             }
+            loadWarning = JoinWarnings(loadWarning, AccountStore.TakeLoadWarning());
 
             if (restore.IsCancellationRequested) return;
             var reauth = candidates.FirstOrDefault(account =>
-                             account.Identity != data.ActiveAccount && AccountStore.Find(account.Identity)?.NeedsLogin == true) ??
+                             account.Identity != data.ActiveAccount && needsLogin.Contains(account.Identity)) ??
                          candidates.FirstOrDefault(account => account.Identity != data.ActiveAccount) ??
                          candidates.FirstOrDefault(account => account.NeedsLogin) ??
                          candidates.FirstOrDefault();
             if (reauth is not null)
-                await ShowLogin(reauth, serverOverride, lastConnectionError is null ? null : LoginViewModel.Friendly(lastConnectionError), restore.Token);
+                await ShowLogin(reauth, serverOverride, JoinWarnings(
+                    loadWarning, lastError is null ? null : LoginViewModel.Friendly(lastError)), restore.Token);
             else
-                await ShowLogin(null, serverOverride, lastConnectionError is null ? null : LoginViewModel.Friendly(lastConnectionError), restore.Token);
+                await ShowLogin(null, serverOverride, JoinWarnings(
+                    loadWarning, lastError is null ? null : LoginViewModel.Friendly(lastError)), restore.Token);
         }
         finally
         {
@@ -145,7 +171,7 @@ public sealed class AccountManager
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (!IsCurrent(generation)) return;
-                AccountStore.AddOrUpdate(account with
+                var saved = AccountStore.AddOrUpdate(account with
                 {
                     Tag = me.Tag,
                     DisplayName = me.DisplayName,
@@ -156,19 +182,18 @@ public sealed class AccountManager
                 api = null;
                 CurrentShell = shell;
                 _nav.Go(shell);
+                shell.Error = JoinWarnings(
+                    JoinWarnings(saved.Warning, AccountStore.TakeLoadWarning()), shell.Error);
             });
         }
         catch (ApiException ex) when (ex.Status == 401 && IsCurrent(generation))
         {
             var invalid = AccountStore.MarkNeedsLogin(account.Identity) ?? account with { NeedsLogin = true };
-            await Dispatcher.UIThread.InvokeAsync(() => Reauthenticate(invalid, requester));
+            var warning = AccountStore.TakeLoadWarning();
+            await Dispatcher.UIThread.InvokeAsync(() => Reauthenticate(invalid, requester, warning));
         }
         catch (OperationCanceledException) when (operation.IsCancellationRequested)
         {
-        }
-        catch (Exception ex) when (IsConnectionError(ex) && IsCurrent(generation))
-        {
-            await Dispatcher.UIThread.InvokeAsync(() => requester.Error = LoginViewModel.Friendly(ex));
         }
         catch (Exception ex) when (IsCurrent(generation))
         {
@@ -188,17 +213,20 @@ public sealed class AccountManager
         var server = AccountStore.NormalizeServer(api.ServerBase);
         var identity = AccountIdentity.Create(server, me.Id);
         StoredAccount? previous;
+        string? warning;
         try
         {
-            previous = AccountStore.Find(identity);
-            if (previous is null && AccountStore.Load().Accounts.Count >= AccountStore.MaxAccounts)
+            var current = AccountStore.Load();
+            previous = current.Accounts.FirstOrDefault(account => account.Identity == identity);
+            if (previous is null && current.Accounts.Count >= AccountStore.MaxAccounts)
                 throw new InvalidOperationException($"Можно добавить не более {AccountStore.MaxAccounts} аккаунтов");
-            AccountStore.AddOrUpdate(new StoredAccount(server, me.Id, me.Tag, me.DisplayName, api.Token!));
+            var saved = AccountStore.AddOrUpdate(new StoredAccount(server, me.Id, me.Tag, me.DisplayName, api.Token!));
+            warning = JoinWarnings(JoinWarnings(current.Warning, AccountStore.TakeLoadWarning()), saved.Warning);
         }
         catch (Exception ex)
         {
             try { await api.Logout(); }
-            catch (Exception logoutError) when (IsConnectionError(logoutError) || logoutError is ApiException)
+            catch (Exception logoutError) when (IsNetworkError(logoutError) || logoutError is ApiException)
             {
                 throw new IOException("Не удалось сохранить аккаунт и завершить новую сессию: " +
                     LoginViewModel.Friendly(logoutError), ex);
@@ -209,17 +237,20 @@ public sealed class AccountManager
         if (shellToReplace is not null && !shellToReplace.IsClosed)
             shellToReplace.ReleaseResources();
         CurrentShell = null;
-        string? warning = null;
-        if (previous is not null && !string.Equals(previous.Token, api.Token, StringComparison.Ordinal))
+        if (ShouldLogoutPreviousSession(previous, api.Token!))
         {
             try
             {
-                using var oldApi = new MessengerClient(previous.Server, previous.Token);
+                using var oldApi = new MessengerClient(previous!.Server, previous.Token);
                 await oldApi.Logout();
+            }
+            catch (ApiException ex) when (IsExpiredSession(ex))
+            {
             }
             catch (Exception ex)
             {
-                warning = "Вход выполнен, но предыдущую сессию не удалось завершить: " + LoginViewModel.Friendly(ex);
+                warning = JoinWarnings(warning,
+                    "Вход выполнен, но предыдущую сессию не удалось завершить: " + LoginViewModel.Friendly(ex));
             }
         }
 
@@ -229,17 +260,55 @@ public sealed class AccountManager
         if (warning is not null) shell.Error = warning;
     }
 
+    internal static bool ShouldLogoutPreviousSession(StoredAccount? previous, string newToken) =>
+        previous is { NeedsLogin: false } &&
+        !string.Equals(previous.Token, newToken, StringComparison.Ordinal);
+
+    internal static bool IsExpiredSession(ApiException exception) => exception.Status == 401;
+
+    internal static async Task<T?> TryRestoreCandidatesAsync<T>(
+        IEnumerable<StoredAccount> candidates,
+        Func<StoredAccount, CancellationToken, Task<T?>> restore,
+        Action<StoredAccount, Exception> onFailure,
+        CancellationToken cancellationToken) where T : class
+    {
+        foreach (var account in candidates)
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = await restore(account, cancellationToken);
+                if (result is not null) return result;
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+            catch (Exception ex)
+            {
+                onFailure(account, ex);
+            }
+        }
+        return null;
+    }
+
     public async Task LogoutAsync(ShellViewModel shell)
     {
         if (shell.IsClosed || shell.IsEndingAccount) return;
+        CancelOperation();
         StoredAccount? account;
-        try { account = AccountStore.Find(AccountIdentity.Create(shell.ServerLabel, shell.CurrentUserId)); }
+        try { account = AccountStore.Find(shell.CurrentIdentity); }
         catch (Exception ex)
         {
             shell.Error = "Не удалось прочитать список аккаунтов: " + ex.Message;
             return;
         }
-        if (account is null) return;
+        if (account is null)
+        {
+            if (AccountStore.TakeLoadWarning() is { } loadWarning)
+                shell.Error = loadWarning;
+            return;
+        }
 
         string? warning = null;
         try { await shell.LogoutFromServerAsync(); }
@@ -254,9 +323,11 @@ public sealed class AccountManager
         {
             shell.ReleaseResources();
             CurrentShell = null;
-            await ShowLogin(account, null, "Не удалось удалить аккаунт с устройства: " + ex.Message);
+            await ShowLogin(account, null, JoinWarnings(
+                AccountStore.TakeLoadWarning(), "Не удалось удалить аккаунт с устройства: " + ex.Message));
             return;
         }
+        warning = JoinWarnings(warning, AccountStore.TakeLoadWarning());
         shell.ReleaseResources();
         CurrentShell = null;
         if (next is not null)
@@ -275,17 +346,32 @@ public sealed class AccountManager
     internal void UpdateCurrentProfile(string server, long userId, string tag, string displayName)
     {
         var identity = AccountIdentity.Create(server, userId);
-        if (AccountStore.Find(identity) is { } saved)
-            AccountStore.AddOrUpdate(saved with { Tag = tag, DisplayName = displayName });
+        var saved = AccountStore.Find(identity);
+        var warning = AccountStore.TakeLoadWarning();
+        if (saved is not null)
+        {
+            var result = AccountStore.AddOrUpdate(saved with { Tag = tag, DisplayName = displayName });
+            warning = JoinWarnings(warning, result.Warning);
+        }
+        if (warning is not null && CurrentShell is { } currentShell)
+            currentShell.Error = JoinWarnings(currentShell.Error, warning);
     }
 
     async Task HandleSessionRevoked(ShellViewModel shell)
     {
+        var identity = shell.CurrentIdentity;
+        if (!ShouldHandleSessionRevoked(
+                ReferenceEquals(CurrentShell, shell),
+                ReferenceEquals(_nav.Window.DataContext, shell)))
+        {
+            try { AccountStore.MarkNeedsLogin(identity); }
+            catch (Exception ex) { Console.Error.WriteLine("Не удалось отметить отозванный аккаунт: " + ex.Message); }
+            return;
+        }
         if (shell.IsClosed || shell.IsEndingAccount) return;
         CancelOperation();
-        var identity = AccountIdentity.Create(shell.ServerLabel, shell.CurrentUserId);
         var fallback = new StoredAccount(
-            shell.ServerLabel, shell.CurrentUserId, shell.UserTag.TrimStart('@'), shell.AccountName, "", true);
+            identity.Server, identity.UserId, shell.UserTag.TrimStart('@'), shell.AccountName, "", true);
         StoredAccount account;
         List<StoredAccount> alternatives;
         try
@@ -300,15 +386,35 @@ public sealed class AccountManager
             await ShowLogin(fallback, null, "Сессия завершена. Не удалось обновить список аккаунтов: " + ex.Message);
             return;
         }
+        var storeWarning = AccountStore.TakeLoadWarning();
         shell.ReleaseResources();
         CurrentShell = null;
 
         var next = alternatives.FirstOrDefault(item => !item.NeedsLogin) ?? alternatives.FirstOrDefault();
         if (next is not null)
-            await SwitchAfterClosing(next, null);
+            await SwitchAfterClosing(next, JoinWarnings(storeWarning, SessionRevokedMessage(shell.UserTag)));
         else
-            await ShowLogin(account, null, "Сессия завершена. Войдите снова.");
+            await ShowLogin(account, null, JoinWarnings(storeWarning, "Сессия завершена. Войдите снова."));
     }
+
+    internal static string SessionRevokedMessage(string tag) =>
+        $"Сессия @{tag.TrimStart('@')} завершена. Выполнен вход в другой аккаунт.";
+
+    internal static bool ShouldHandleSessionRevoked(bool isCurrentShell, bool isCurrentDataContext) =>
+        isCurrentShell && isCurrentDataContext;
+
+    internal static bool HasReachedAccountLimit(int accountCount) =>
+        accountCount >= AccountStore.MaxAccounts;
+
+    internal static StoredAccount? SelectNextAccount(
+        IEnumerable<StoredAccount> accounts, HashSet<AccountIdentity> attempted)
+    {
+        var remaining = accounts.Where(account => !attempted.Contains(account.Identity)).ToList();
+        return remaining.FirstOrDefault(account => !account.NeedsLogin) ?? remaining.FirstOrDefault();
+    }
+
+    internal static void CancelOperationWithoutDisposing(CancellationTokenSource? operation) =>
+        operation?.Cancel();
 
     async Task SwitchAfterClosing(StoredAccount account, string? error, HashSet<AccountIdentity>? attempted = null)
     {
@@ -319,7 +425,13 @@ public sealed class AccountManager
         {
             api = new MessengerClient(account.Server, account.Token);
             var me = await api.GetMe();
-            AccountStore.AddOrUpdate(account with { Tag = me.Tag, DisplayName = me.DisplayName, NeedsLogin = false });
+            var saved = AccountStore.AddOrUpdate(account with
+            {
+                Tag = me.Tag,
+                DisplayName = me.DisplayName,
+                NeedsLogin = false
+            });
+            error = JoinWarnings(error, JoinWarnings(saved.Warning, AccountStore.TakeLoadWarning()));
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 var shell = new ShellViewModel(_nav, api, me, this);
@@ -332,35 +444,45 @@ public sealed class AccountManager
         catch (ApiException ex) when (ex.Status == 401)
         {
             var invalid = AccountStore.MarkNeedsLogin(account.Identity) ?? account with { NeedsLogin = true };
-            var next = AccountStore.Load().Accounts.FirstOrDefault(item => !attempted.Contains(item.Identity));
+            var next = SelectNextAccount(AccountStore.Load().Accounts, attempted);
             if (next is not null)
                 await SwitchAfterClosing(next, error, attempted);
             else
-                await ShowLogin(invalid, null, error);
-        }
-        catch (Exception ex) when (IsConnectionError(ex))
-        {
-            await ShowLogin(account, null, error ?? LoginViewModel.Friendly(ex));
+                await ShowLogin(invalid, null, JoinWarnings(error, "Не удалось выполнить вход в другой аккаунт."));
         }
         catch (Exception ex)
         {
-            await ShowLogin(account, null, error ?? LoginViewModel.Friendly(ex));
+            await ShowLogin(account, null, JoinWarnings(error, LoginViewModel.Friendly(ex)));
         }
         finally { api?.Dispose(); }
     }
 
-    async Task<bool> ActivateRestored(StoredAccount account, MessengerClient api, ProfileDto me, CancellationToken ct)
+    async Task<bool> ActivateRestored(
+        StoredAccount account, MessengerClient api, ProfileDto me, CancellationToken ct, string? warning)
     {
         return await Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (ct.IsCancellationRequested) return false;
-            AccountStore.AddOrUpdate(account with { Tag = me.Tag, DisplayName = me.DisplayName, NeedsLogin = false });
+            var saved = AccountStore.AddOrUpdate(account with
+            {
+                Tag = me.Tag,
+                DisplayName = me.DisplayName,
+                NeedsLogin = false
+            });
+            var activationWarning = JoinWarnings(warning,
+                JoinWarnings(saved.Warning, AccountStore.TakeLoadWarning()));
             var shell = new ShellViewModel(_nav, api, me, this);
             CurrentShell = shell;
             _nav.Go(shell);
+            if (activationWarning is not null) shell.Error = activationWarning;
             return true;
         });
     }
+
+    internal static string? JoinWarnings(string? first, string? second) =>
+        string.IsNullOrWhiteSpace(first) ? second :
+        string.Equals(first, second, StringComparison.Ordinal) ? first :
+        string.IsNullOrWhiteSpace(second) ? first : first + Environment.NewLine + second;
 
     async Task ShowLogin(StoredAccount? account, string? server, string? error, CancellationToken cancellationToken = default)
     {
@@ -408,8 +530,7 @@ public sealed class AccountManager
         lock (_operationGate)
         {
             ++_generation;
-            _operation?.Cancel();
-            _operation?.Dispose();
+            CancelOperationWithoutDisposing(_operation);
             _operation = null;
             if (CurrentShell is { } shell) shell.AccountOperationBusy = false;
         }
@@ -430,6 +551,6 @@ public sealed class AccountManager
         return data.Accounts.OrderByDescending(account => account.Identity == active).ToList();
     }
 
-    static bool IsConnectionError(Exception ex) =>
-        ex is HttpRequestException or TaskCanceledException or IOException;
+    internal static bool IsNetworkError(Exception ex) =>
+        ex is HttpRequestException or TaskCanceledException;
 }

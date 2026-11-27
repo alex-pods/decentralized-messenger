@@ -8,7 +8,7 @@ public partial class ShellViewModel
 
     [RelayCommand]
     Task SwitchAccount(StoredAccount account) =>
-        account.Identity == AccountIdentity.Create(ServerLabel, CurrentUserId)
+        account.Identity == CurrentIdentity
             ? Task.CompletedTask
             : _accounts.SwitchToAsync(account, this);
 

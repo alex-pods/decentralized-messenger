@@ -73,6 +73,8 @@ public partial class ShellView
             vm.Error = "Не удалось прочитать список аккаунтов: " + ex.Message;
             return;
         }
+        if (AccountStore.TakeLoadWarning() is { } warning)
+            vm.Error = AccountManager.JoinWarnings(vm.Error, warning);
         var showServers = accounts.Select(account => AccountStore.NormalizeServer(account.Server))
             .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
         var images = new List<Bitmap>();
@@ -86,7 +88,7 @@ public partial class ShellView
 
         foreach (var account in accounts)
         {
-            var active = account.Identity == AccountIdentity.Create(vm.ServerLabel, vm.CurrentUserId);
+            var active = account.Identity == vm.CurrentIdentity;
             var (header, image, initials) = AccountHeader(account, active, showServers, vm);
             var item = new MenuItem
             {
@@ -96,15 +98,19 @@ public partial class ShellView
             item.Click += async (_, _) =>
             {
                 menu.Close();
-                await vm.SwitchAccountCommand.ExecuteAsync(account);
+                try { await vm.SwitchAccountCommand.ExecuteAsync(account); }
+                catch (Exception ex) { vm.Error = LoginViewModel.Friendly(ex); }
             };
             menu.Items.Add(item);
-            if (!active && image is not null && initials is not null)
+            if (ShouldLoadAccountAvatar(account, active) && image is not null && initials is not null)
                 _ = LoadAccountMenuAvatar(account, image, initials, images, avatarLoads.Token);
         }
 
         menu.Open(anchor);
     }
+
+    internal static bool ShouldLoadAccountAvatar(StoredAccount account, bool active) =>
+        !active && !account.NeedsLogin;
 
     static (Grid Header, Image? Avatar, TextBlock? Initials) AccountHeader(
         StoredAccount account, bool active, bool showServers, ShellViewModel vm)

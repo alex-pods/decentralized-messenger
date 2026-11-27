@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using MessengerDesktop.Views;
 
 namespace MessengerDesktop;
@@ -36,8 +37,26 @@ public partial class App : Application
                     Environment.Exit(1);
                 }, TaskContinuationOptions.OnlyOnFaulted);
             else
-                _ = nav.Accounts.RestoreAsync(Program.ServerOverride);
+                _ = RestoreAccountsSafely(nav, Program.ServerOverride);
         }
         base.OnFrameworkInitializationCompleted();
+    }
+
+    static async Task RestoreAccountsSafely(Navigator nav, string? serverOverride)
+    {
+        try { await nav.Accounts!.RestoreAsync(serverOverride); }
+        catch (Exception ex)
+        {
+            var error = "Не удалось восстановить аккаунты: " + LoginViewModel.Friendly(ex);
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    nav.Go(new LoginViewModel(nav, serverOverride, error, accounts: nav.Accounts)));
+            }
+            catch (Exception navigationError)
+            {
+                Console.Error.WriteLine($"Не удалось открыть форму входа после ошибки восстановления: {navigationError}");
+            }
+        }
     }
 }

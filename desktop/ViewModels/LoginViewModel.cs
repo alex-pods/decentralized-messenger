@@ -101,6 +101,22 @@ public partial class LoginViewModel : ObservableObject
             Error = "Пароль — минимум 8 символов";
             return;
         }
+        if (register && IsAdding)
+        {
+            try
+            {
+                if (AccountManager.HasReachedAccountLimit(_accounts.Accounts.Count))
+                {
+                    Error = $"Можно добавить не более {AccountStore.MaxAccounts} аккаунтов";
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Error = "Не удалось проверить список аккаунтов: " + ex.Message;
+                return;
+            }
+        }
 
         Busy = true;
         Error = null;

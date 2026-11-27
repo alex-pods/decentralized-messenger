@@ -139,6 +139,7 @@ public partial class ShellViewModel : ObservableObject
     public bool IsClosed => _closed;
     internal bool IsEndingAccount => _endingAccount;
     public long CurrentUserId => _me.Id;
+    internal AccountIdentity CurrentIdentity => AccountIdentity.Create(_api.ServerBase, _me.Id);
     internal MessengerClient ThemeApi => _api;
     public string ChatTitle => SelectedChat?.Title ?? "";
     public bool OverlayOpen => Overlay.Length > 0;
@@ -161,7 +162,6 @@ public partial class ShellViewModel : ObservableObject
     public bool SelectedIsPinned => SelectedMessage != null && _pins.Any(p => p.MessageId == SelectedMessage.Id);
     public string PinActionLabel => SelectedIsPinned ? "Открепить у всех" : "Закрепить для всех";
     public string UserTag => "@" + _me.Tag;
-    public string ServerLabel => _api.ServerBase;
     PinListItem? ShownPin => _stripPins.Count == 0 ? null : _stripPins[Math.Clamp(_pinIndex, 0, _stripPins.Count - 1)];
     public bool HasPins => ShownPin != null;
     public string PinText => ShownPin is { } pin ? MessageMapper.Trim(pin.Text, 120) : "";

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MessengerDesktop;
 
@@ -17,20 +18,29 @@ public sealed record StoredAccount(
     bool NeedsLogin = false)
 {
     public AccountIdentity Identity => AccountIdentity.Create(Server, UserId);
+
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append($"Server = {Server}, UserId = {UserId}, Tag = {Tag}, DisplayName = {DisplayName}, NeedsLogin = {NeedsLogin}");
+        return true;
+    }
 }
 
 public sealed class AccountData
 {
     public List<StoredAccount> Accounts { get; set; } = new();
     public AccountIdentity? ActiveAccount { get; set; }
+    [JsonIgnore] public string? Warning { get; set; }
 }
 
 public static class AccountStore
 {
     public const int MaxAccounts = 5;
 
+    // TODO: перейти на системное хранилище секретов (DPAPI, Keychain или libsecret).
     static readonly object Gate = new();
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    static string? _pendingLoadWarning;
 
     internal static string FilePath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -44,11 +54,30 @@ public static class AccountStore
     public static AccountData Load()
     {
         lock (Gate)
+            return LoadLocked();
+    }
+
+    public static string? TakeLoadWarning()
+    {
+        lock (Gate)
         {
-            if (!File.Exists(FilePath)) return new();
-            var data = JsonSerializer.Deserialize<AccountData>(File.ReadAllText(FilePath), Json)
-                ?? throw new InvalidDataException("Файл аккаунтов пуст или повреждён");
-            return Normalize(data);
+            var warning = _pendingLoadWarning;
+            _pendingLoadWarning = null;
+            return warning;
+        }
+    }
+
+    internal static string? LegacyServerForLogin()
+    {
+        if (!File.Exists(LegacyFilePath)) return null;
+        try
+        {
+            var saved = JsonSerializer.Deserialize<LegacySession>(File.ReadAllText(LegacyFilePath));
+            return string.IsNullOrWhiteSpace(saved?.Server) ? null : saved.Server;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
+        {
+            return null;
         }
     }
 
@@ -75,7 +104,8 @@ public static class AccountStore
         {
             if (File.Exists(FilePath)) return false;
             SaveLocked(new AccountData { Accounts = [account], ActiveAccount = account.Identity });
-            File.Delete(LegacyFilePath);
+            var warning = DeleteLegacyFileIfPresent();
+            if (warning is not null) throw new IOException(warning);
         }
         return true;
     }
@@ -83,7 +113,7 @@ public static class AccountStore
     public static StoredAccount? Find(AccountIdentity identity) =>
         Load().Accounts.FirstOrDefault(account => account.Identity == identity);
 
-    public static void AddOrUpdate(StoredAccount account, bool makeActive = true)
+    public static AccountData AddOrUpdate(StoredAccount account, bool makeActive = true)
     {
         lock (Gate)
         {
@@ -99,18 +129,8 @@ public static class AccountStore
             else data.Accounts[index] = normalized;
             if (makeActive) data.ActiveAccount = normalized.Identity;
             SaveLocked(data);
-        }
-    }
-
-    public static void SetActive(AccountIdentity identity)
-    {
-        lock (Gate)
-        {
-            var data = LoadLocked();
-            if (!data.Accounts.Any(account => account.Identity == identity))
-                throw new InvalidOperationException("Аккаунт не найден");
-            data.ActiveAccount = identity;
-            SaveLocked(data);
+            data.Warning ??= DeleteLegacyFileIfPresent();
+            return data;
         }
     }
 
@@ -137,9 +157,16 @@ public static class AccountStore
             var wasActive = data.ActiveAccount == identity;
             data.Accounts.RemoveAt(index);
             if (wasActive)
-                data.ActiveAccount = data.Accounts.Count == 0 ? null : data.Accounts[index % data.Accounts.Count].Identity;
+            {
+                var count = data.Accounts.Count;
+                var start = count == 0 ? 0 : index % count;
+                var ordered = data.Accounts.Skip(start).Concat(data.Accounts.Take(start)).ToList();
+                var selectedNext = ordered.FirstOrDefault(account => !account.NeedsLogin) ?? ordered.FirstOrDefault();
+                data.ActiveAccount = selectedNext?.Identity;
+            }
             else if (data.ActiveAccount is { } active && !data.Accounts.Any(account => account.Identity == active))
-                data.ActiveAccount = data.Accounts.FirstOrDefault()?.Identity;
+                data.ActiveAccount = (data.Accounts.FirstOrDefault(account => !account.NeedsLogin) ??
+                    data.Accounts.FirstOrDefault())?.Identity;
             SaveLocked(data);
             return wasActive && data.ActiveAccount is { } next
                 ? data.Accounts.FirstOrDefault(account => account.Identity == next)
@@ -159,29 +186,70 @@ public static class AccountStore
     static AccountData LoadLocked()
     {
         if (!File.Exists(FilePath)) return new();
-        return Normalize(JsonSerializer.Deserialize<AccountData>(File.ReadAllText(FilePath), Json)
-            ?? throw new InvalidDataException("Файл аккаунтов пуст или повреждён"));
+        try
+        {
+            return Normalize(JsonSerializer.Deserialize<AccountData>(File.ReadAllText(FilePath), Json)
+                ?? throw new InvalidDataException("Файл аккаунтов пуст или повреждён"));
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException)
+        {
+            var corruptPath = QuarantineCorruptFile();
+            var warning = $"Список аккаунтов повреждён. Копия сохранена в {Path.GetFileName(corruptPath)}.";
+            _pendingLoadWarning ??= warning;
+            return new AccountData
+            {
+                Warning = warning
+            };
+        }
     }
 
     static AccountData Normalize(AccountData data)
     {
         var accounts = new List<StoredAccount>();
+        var warnings = new List<string>();
         foreach (var account in data.Accounts ?? [])
         {
-            if (account is null) continue;
-            if (account.UserId <= 0 || string.IsNullOrWhiteSpace(account.Server) ||
-                string.IsNullOrWhiteSpace(account.Token)) continue;
+            if (account is null)
+            {
+                warnings.Add("В списке были пропущены пустые записи.");
+                continue;
+            }
+            if (account.UserId <= 0 || string.IsNullOrWhiteSpace(account.Server))
+            {
+                warnings.Add("В списке были пропущены записи с некорректной идентичностью.");
+                continue;
+            }
             var normalized = account with { Server = NormalizeServer(account.Server) };
+            if (string.IsNullOrWhiteSpace(normalized.Token))
+            {
+                normalized = normalized with { NeedsLogin = true };
+                warnings.Add($"Для аккаунта @{normalized.Tag} требуется повторный вход (токен отсутствует).");
+            }
             var duplicate = accounts.FindIndex(item => item.Identity == normalized.Identity);
-            if (duplicate >= 0) accounts[duplicate] = normalized;
-            else if (accounts.Count < MaxAccounts) accounts.Add(normalized);
+            if (duplicate >= 0)
+            {
+                accounts[duplicate] = normalized;
+                warnings.Add("Повторяющиеся записи аккаунтов объединены.");
+            }
+            else
+            {
+                accounts.Add(normalized);
+                if (accounts.Count == MaxAccounts + 1)
+                    warnings.Add($"В файле больше {MaxAccounts} аккаунтов; лишние записи сохранены.");
+            }
         }
         var active = data.ActiveAccount is { } key && !string.IsNullOrWhiteSpace(key.Server)
             ? AccountIdentity.Create(key.Server, key.UserId)
             : null;
         if (active is not null && !accounts.Any(account => account.Identity == active))
             active = accounts.FirstOrDefault()?.Identity;
-        return new AccountData { Accounts = accounts, ActiveAccount = active ?? accounts.FirstOrDefault()?.Identity };
+        return new AccountData
+        {
+            Accounts = accounts,
+            ActiveAccount = active ?? accounts.FirstOrDefault()?.Identity,
+            Warning = string.Join(Environment.NewLine, new[] { data.Warning, string.Join(Environment.NewLine, warnings) }
+                .Where(message => !string.IsNullOrWhiteSpace(message)))
+        };
     }
 
     static void SaveLocked(AccountData data)
@@ -202,6 +270,35 @@ public static class AccountStore
         File.Move(temporary, path, overwrite: true);
         if (!OperatingSystem.IsWindows())
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+
+    static string QuarantineCorruptFile()
+    {
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(FilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff");
+        var corruptPath = FilePath + ".corrupt-" + timestamp;
+        while (File.Exists(corruptPath))
+            corruptPath = FilePath + ".corrupt-" + timestamp + "-" + Guid.NewGuid().ToString("N");
+        File.Move(FilePath, corruptPath);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(corruptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        return corruptPath;
+    }
+
+    static string? DeleteLegacyFileIfPresent()
+    {
+        if (string.Equals(FilePath, LegacyFilePath, StringComparison.OrdinalIgnoreCase) || !File.Exists(LegacyFilePath))
+            return null;
+        try
+        {
+            File.Delete(LegacyFilePath);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return "Не удалось удалить старый файл сессии: " + ex.Message;
+        }
     }
 
     sealed class LegacySession

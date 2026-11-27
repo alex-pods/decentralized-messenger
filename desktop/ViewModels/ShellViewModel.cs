@@ -15,8 +15,10 @@ namespace MessengerDesktop;
 public partial class ShellViewModel : ObservableObject
 {
     private readonly Navigator _nav;
+    private readonly AccountManager _accounts;
     private readonly MessengerClient _api;
     private readonly LiveConnection _live;
+    private readonly Action _sessionRevokedHandler;
     private readonly Dictionary<long, string> _names = new();
     private readonly object _avatarLoadsGate = new();
     private readonly Dictionary<long, Task<byte[]?>> _avatarLoads = new();
@@ -31,6 +33,7 @@ public partial class ShellViewModel : ObservableObject
     private int _openGen;
     private bool _suppress;
     private bool _closed;
+    private bool _endingAccount;
 
     public event Action? ScrollToEnd;
 
@@ -132,6 +135,9 @@ public partial class ShellViewModel : ObservableObject
     public bool HasDraftLengthHint => Draft.Trim().Length > 3800;
     public bool CanSendDraft => HasChat && !Busy && !AntispamRequired && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
     public bool HasAvatar => Avatar is not null;
+    [ObservableProperty] private bool _accountOperationBusy;
+    public bool IsClosed => _closed;
+    internal bool IsEndingAccount => _endingAccount;
     public long CurrentUserId => _me.Id;
     internal MessengerClient ThemeApi => _api;
     public string ChatTitle => SelectedChat?.Title ?? "";
@@ -169,10 +175,13 @@ public partial class ShellViewModel : ObservableObject
         : ReplyTo?.SenderName;
     public string? ComposeDetail => ReplyTo is { } original && Editing == null ? MessageMapper.Trim(original.Text, 100) : null;
 
-    public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me)
+    public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me, AccountManager? accounts = null)
     {
         Messages.CollectionChanged += (_, _) => ScheduleTimelineUpdate();
         _nav = nav;
+        _accounts = accounts ?? (nav.Accounts ??= new AccountManager(nav));
+        nav.Accounts ??= _accounts;
+        _accounts.Attach(this);
         _api = api;
         _api.AntispamChanged += OnAntispamChanged;
         AntispamRequired = _api.AntispamBlocked;
@@ -187,7 +196,8 @@ public partial class ShellViewModel : ObservableObject
         _live = new LiveConnection(api);
         _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));
         _live.State += s => Dispatcher.UIThread.Post(() => Status = s);
-        _live.SessionRevoked += () => Dispatcher.UIThread.Post(() => ForceLogout("Сессия завершена. Войдите снова."));
+        _sessionRevokedHandler = () => _accounts.SessionRevoked(this);
+        _live.SessionRevoked += _sessionRevokedHandler;
         _live.Reconnected += () => Dispatcher.UIThread.Post(() =>
         {
             _ = CatchUpAfterReconnect();
@@ -209,14 +219,20 @@ public partial class ShellViewModel : ObservableObject
     [RelayCommand]
     async Task Logout()
     {
-        try { await _api.Logout(); } catch { /* локальную сессию забываем в любом случае */ }
-        ForceLogout(null);
+        await _accounts.LogoutAsync(this);
     }
 
-    void ForceLogout(string? error)
+    internal async Task LogoutFromServerAsync()
+    {
+        _endingAccount = true;
+        await _api.Logout();
+    }
+
+    internal void ReleaseResources()
     {
         if (_closed) return;
         _closed = true;
+        _live.SessionRevoked -= _sessionRevokedHandler;
         _live.Dispose();
         _api.AntispamChanged -= OnAntispamChanged;
         _api.Dispose();
@@ -224,10 +240,12 @@ public partial class ShellViewModel : ObservableObject
         DisposeItems(SearchResults, GroupDraft);
         DisposeItems(GroupDraft, SearchResults);
         DisposeItems(Members);
+        Timeline.Clear();
+        _activity.Clear();
+        DisposeItems(Messages);
+        PinList.Clear();
         Avatar = null;
         SetDraftAvatar(null);
-        SessionStore.Clear();
-        _nav.Go(new LoginViewModel(_nav, _api.ServerBase, error));
     }
 
     void ResetSearch()

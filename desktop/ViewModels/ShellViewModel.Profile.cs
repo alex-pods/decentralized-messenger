@@ -84,6 +84,7 @@ public partial class ShellViewModel
             _me.Bio = bio;
             _names[_me.Id] = name;
             Header = $"{name}  @{_me.Tag}";
+            _accounts.UpdateCurrentProfile(_api.ServerBase, _me.Id, _me.Tag, name);
             if (photo is { } saved)
             {
                 InvalidateAvatar(_me.Id);

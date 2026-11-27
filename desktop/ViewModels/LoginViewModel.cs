@@ -8,7 +8,8 @@ public partial class LoginViewModel : ObservableObject
 {
     static readonly Regex LoginRe = new(@"^[A-Za-z0-9_.\-]{3,16}$", RegexOptions.CultureInvariant);
 
-    private readonly Navigator _nav;
+    private readonly AccountManager _accounts;
+    private readonly ShellViewModel? _returnShell;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ServerAddress))]
     private string _server = "http://127.0.0.1:5080/messenger";
@@ -21,12 +22,27 @@ public partial class LoginViewModel : ObservableObject
     private bool _busy;
     [ObservableProperty] private bool _showConnection;
 
-    public LoginViewModel(Navigator nav, string? server = null, string? error = null)
+    public LoginViewModel(
+        Navigator nav,
+        string? server = null,
+        string? error = null,
+        AccountManager? accounts = null,
+        bool adding = false,
+        ShellViewModel? returnShell = null,
+        string? login = null)
     {
-        _nav = nav;
+        _accounts = accounts ?? (nav.Accounts ??= new AccountManager(nav));
+        _returnShell = returnShell;
         if (!string.IsNullOrWhiteSpace(server)) Server = server;
+        if (!string.IsNullOrWhiteSpace(login)) Login = login;
+        IsAdding = adding;
         Error = error;
     }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AuthTitle))]
+    [NotifyPropertyChangedFor(nameof(CanCancel))]
+    private bool _isAdding;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AuthTitle))]
@@ -35,7 +51,10 @@ public partial class LoginViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ModeAction))]
     private bool _isRegistration;
 
-    public string AuthTitle => IsRegistration ? "Новый аккаунт" : "Вход";
+    public string AuthTitle => IsRegistration
+        ? IsAdding ? "Регистрация аккаунта" : "Новый аккаунт"
+        : IsAdding ? "Добавить аккаунт" : "Вход";
+    public bool CanCancel => IsAdding || _returnShell is not null;
     public string ServerAddress => Uri.TryCreate(Server.Trim(), UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host)
         ? uri.Authority + (uri.AbsolutePath == "/" ? "" : uri.AbsolutePath.TrimEnd('/'))
         : "Укажите адрес сервера";
@@ -54,6 +73,8 @@ public partial class LoginViewModel : ObservableObject
 
     [RelayCommand]
     void ToggleConnection() => ShowConnection = !ShowConnection;
+    [RelayCommand]
+    void Cancel() => _accounts.CancelLogin(_returnShell, Server);
 
     async Task Auth(bool register)
     {
@@ -90,8 +111,7 @@ public partial class LoginViewModel : ObservableObject
                 await api.Register(login, password);
             await api.Login(login, password);
             var me = await api.GetMe();
-            SessionStore.Save(api.ServerBase, api.Token!);
-            _nav.Go(new ShellViewModel(_nav, api, me));
+            await _accounts.CompleteLoginAsync(api, me, _returnShell);
         }
         catch (Exception ex)
         {

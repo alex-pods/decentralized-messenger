@@ -21,7 +21,7 @@
           </StackPanel>
           <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="4">
             <Grid ColumnDefinitions="*,Auto" Margin="4,2">
-            <Button Classes="account" Command="{Binding ShowProfileCommand}" HorizontalContentAlignment="Stretch" ToolTip.Tip="Мой профиль">
+            <Button Classes="account" Click="OnAccountMenuClick" HorizontalContentAlignment="Stretch" ToolTip.Tip="Аккаунты и профиль">
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <Border Classes="avatar" Width="36" Height="36" Background="{Binding CurrentUserId, Converter={StaticResource AvatarBrush}}">
                   <Panel>
@@ -33,7 +33,8 @@
                   <TextBlock Text="{Binding AccountName}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
                   <TextBlock Text="{Binding Status}" Classes="caption"/>
                 </StackPanel>
-
+                <local:Glyph Grid.Column="2" Data="{StaticResource IcChevronDown}" Width="14" Height="14"
+                             Foreground="{DynamicResource LabelBrush}" VerticalAlignment="Center"/>
               </Grid>
             </Button>
             <Button x:Name="OpenSettings" Grid.Column="1" Classes="icon" Click="OnSettingsClick" Margin="12,0,4,0" VerticalAlignment="Center" ToolTip.Tip="Настройки" AutomationProperties.Name="Настройки"><local:Glyph Data="{StaticResource IcSettings}"/></Button>
@@ -355,6 +356,13 @@
           </Panel>
         </DockPanel>
       </Border>
+    </Border>
+    <Border Classes="toast" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0"
+            IsVisible="{Binding AccountOperationBusy}" IsHitTestVisible="False">
+      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <ProgressBar Width="72" Height="3" IsIndeterminate="True"/>
+        <TextBlock Text="Переключаем аккаунт…" VerticalAlignment="Center"/>
+      </StackPanel>
     </Border>
     <Border Classes="toast" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" MaxWidth="520">
       <Border.IsVisible><MultiBinding Converter="{x:Static BoolConverters.And}"><Binding Path="Error" Converter="{x:Static conv:StringConverters.IsNotNullOrEmpty}"/><Binding Path="!OverlayOpen"/></MultiBinding></Border.IsVisible>

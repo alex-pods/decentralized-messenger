@@ -62,11 +62,11 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
                        CASE WHEN c.type = 'direct'
                             THEN CASE WHEN c.user_a_id = @viewerId THEN c.user_b_id ELSE c.user_a_id END
                        END AS other_user_id,
-                       CAST((SELECT MAX(m.id) FROM messages m
+                       (SELECT m.id FROM messages m
                         WHERE m.chat_id = c.id
                           AND NOT EXISTS (SELECT 1 FROM message_hidden h
                                           WHERE h.message_id = m.id AND h.user_id = @viewerId)
-                       ) AS INTEGER) AS last_message_id
+                        ORDER BY m.sequence DESC LIMIT 1) AS last_message_id
                 FROM chats c
                 JOIN users_chats uc ON uc.chat_id = c.id AND uc.user_id = @viewerId
                 WHERE c.id = @chatId
@@ -93,11 +93,11 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
                        CASE WHEN c.type = 'direct'
                             THEN CASE WHEN c.user_a_id = @userId THEN c.user_b_id ELSE c.user_a_id END
                        END AS other_user_id,
-                       CAST((SELECT MAX(m.id) FROM messages m
+                       (SELECT m.id FROM messages m
                         WHERE m.chat_id = c.id
                           AND NOT EXISTS (SELECT 1 FROM message_hidden h
                                           WHERE h.message_id = m.id AND h.user_id = @userId)
-                       ) AS INTEGER) AS last_message_id
+                        ORDER BY m.sequence DESC LIMIT 1) AS last_message_id
                 FROM chats c
                 JOIN users_chats uc ON uc.chat_id = c.id AND uc.user_id = @userId
                 WHERE uc.hidden_at IS NULL
@@ -108,7 +108,8 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
                    ou.name AS other_user_name
             FROM base b
             LEFT JOIN users ou ON ou.id = b.other_user_id
-            ORDER BY COALESCE(b.last_message_id, 0) DESC, b.id DESC
+            LEFT JOIN messages last ON last.id = b.last_message_id
+            ORDER BY COALESCE(julianday(last.sent_at), 0) DESC, julianday(b.created_at) DESC, b.id DESC
             """,
             new { userId }, cancellationToken: ct));
         return rows.Select(MapSummary).ToList();
@@ -315,24 +316,32 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
     public async Task<MarkReadResult> MarkReadAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
     {
         using var c = db.Open();
-        var updated = await c.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
+        var updated = await c.QuerySingleOrDefaultAsync<ReadCursor>(new CommandDefinition(
             """
             UPDATE users_chats
             SET last_read_message_id = @messageId,
+                last_read_sequence = (SELECT sequence FROM messages WHERE id = @messageId AND chat_id = @chatId),
                 last_read_at = CURRENT_TIMESTAMP
-            WHERE chat_id = @chatId AND user_id = @userId AND last_read_message_id < @messageId
-            RETURNING last_read_message_id
+            WHERE chat_id = @chatId AND user_id = @userId
+              AND last_read_sequence < (SELECT sequence FROM messages WHERE id = @messageId AND chat_id = @chatId)
+            RETURNING last_read_message_id, last_read_sequence
             """,
             new { chatId, userId, messageId }, cancellationToken: ct));
-        if (updated.HasValue)
-            return new MarkReadResult(updated.Value, true);
+        if (updated != null)
+            return new MarkReadResult(updated.LastReadMessageId, true, updated.LastReadSequence);
 
-        var current = await c.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
-            "SELECT last_read_message_id FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
+        var current = await c.QuerySingleOrDefaultAsync<ReadCursor>(new CommandDefinition(
+            "SELECT last_read_message_id, last_read_sequence FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
             new { chatId, userId }, cancellationToken: ct));
         if (current is null)
             throw new InvalidOperationException("User is not a member of this chat");
-        return new MarkReadResult(current.Value, false);
+        return new MarkReadResult(current.LastReadMessageId, false, current.LastReadSequence);
+    }
+
+    private sealed class ReadCursor
+    {
+        public long LastReadMessageId { get; set; }
+        public long LastReadSequence { get; set; }
     }
 
     public async Task ShowAsync(long chatId, long userId, CancellationToken ct = default)

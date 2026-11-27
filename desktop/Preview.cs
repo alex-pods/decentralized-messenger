@@ -17,6 +17,8 @@ public static partial class Preview
     public static string OutDir { get; set; } = ".";
     public static bool MvpOnly { get; set; }
     public static bool ManualOnly { get; set; }
+    public static bool ImagesOnly { get; set; }
+    public static bool SequencesOnly { get; set; }
 
     static void Resize(Window window, double width)
     {
@@ -29,7 +31,9 @@ public static partial class Preview
         Resize(window, 1180);
         if (AntispamOnly) { await AuditAntispam(window, nav); return; }
         if (SharingOnly) { await AuditSharing(window); return; }
+        if (SequencesOnly) { await AuditSequences(window, nav); return; }
         var (api, me) = await Seed(Server!);
+        if (ImagesOnly) { await AuditImages(window, nav, api, me); return; }
         if (ManualOnly)
         {
             window.Title = "Мессенджер — локальный аудит";

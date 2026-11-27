@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True, help="New directory for PNG screenshots")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--mvp-only", action="store_true", help="Only account/settings/pins/composer checks")
+    mode.add_argument("--images-only", action="store_true", help="Only message image sheet checks")
     mode.add_argument("--manual", action="store_true", help="Open a seeded, isolated desktop until the window closes")
     args = parser.parse_args()
     output = args.out.resolve()
@@ -61,7 +62,9 @@ def main():
                     subprocess.run(["dotnet", str(desktop), "--preview-manual", address + "/messenger", str(output)],
                                    cwd=temp, stdout=log, stderr=log, check=True)
                 else:
-                    for flags in (["--check", address + "/messenger"], ["--preview-mvp" if args.mvp_only else "--preview", address + "/messenger", str(output)]):
+                    preview_mode = "--preview-images" if args.images_only else "--preview-mvp" if args.mvp_only else "--preview"
+                    checks = [] if args.images_only else [["--check", address + "/messenger"]]
+                    for flags in [*checks, [preview_mode, address + "/messenger", str(output)]]:
                         subprocess.run(["dotnet", str(desktop), *flags], cwd=temp, stdout=log, stderr=log, check=True, timeout=240)
             finally:
                 server.terminate()

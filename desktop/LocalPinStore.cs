@@ -7,7 +7,8 @@ namespace MessengerDesktop;
 /// <summary>Личные закрепы: отдельный файл для пары сервер/пользователь. Сеть не используется.</summary>
 public static class LocalPinStore
 {
-    public sealed record Entry(long ChatId, long MessageId, string Text, long? SenderId = null, DateTimeOffset? SentAt = null);
+    public sealed record Entry(long ChatId, long MessageId, string Text, long? SenderId = null,
+        DateTimeOffset? SentAt = null, long? Sequence = null);
     internal static string DirectoryPath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "messenger-desktop", "pins");
 

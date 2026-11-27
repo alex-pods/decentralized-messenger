@@ -102,8 +102,8 @@ public static class SelfCheck
         var mid2 = await a.SendMessage(chatId, "второе", clientRef: Guid.NewGuid().ToString("N"));
         var mid3 = await a.SendMessage(chatId, "третье", clientRef: Guid.NewGuid().ToString("N"));
         var after = await b.GetMessages(chatId, limit: 50, afterId: messageId);
-        if (after.Count < 2 || after[0].Id <= messageId)
-            throw new Exception("after_id должен вернуть сообщения новее курсора по возрастанию");
+        if (after.Count < 2 || after[0].Sequence <= history.Single(m => m.Id == messageId).Sequence)
+            throw new Exception("after_id должен вернуть сообщения новее курсора по sequence");
         if (after.All(m => m.Id != mid2) || after.All(m => m.Id != mid3))
             throw new Exception("after_id не догнал новые сообщения");
         Console.WriteLine("after_id");

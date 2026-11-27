@@ -15,6 +15,7 @@ public sealed record WsEventResponse(
     [property: JsonPropertyName("chat")] object? Chat = null,
     [property: JsonPropertyName("user")] UserCardResponse? User = null,
     [property: JsonPropertyName("role")] string? Role = null,
-    [property: JsonPropertyName("attachment")] AttachmentResponse? Attachment = null
+    [property: JsonPropertyName("attachment")] AttachmentResponse? Attachment = null,
+    [property: JsonPropertyName("last_read_sequence")] long? LastReadSequence = null
 );
 

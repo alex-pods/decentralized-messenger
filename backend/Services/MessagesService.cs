@@ -40,7 +40,9 @@ public sealed class MessagesService(
         await RequireAccessAsync(chatId, viewerId, ct);
         if (query.Limit is < 1 or > 100 ||
             query.BeforeId is < 1 ||
-            query.AfterId is < 1)
+            query.AfterId is < 1 || query.BeforeSequence is < 1 || query.AfterSequence is < 0 ||
+            ((query.BeforeId != null || query.AfterId != null) &&
+             (query.BeforeSequence != null || query.AfterSequence != null)))
         {
             throw new ValidationException("Invalid history limit or cursor");
         }

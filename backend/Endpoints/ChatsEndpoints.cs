@@ -144,11 +144,13 @@ public static class ChatsEndpoints
         [FromQuery(Name = "limit")] int? limit,
         [FromQuery(Name = "before_id")] long? beforeId,
         [FromQuery(Name = "after_id")] long? afterId,
+        [FromQuery(Name = "before_sequence")] long? beforeSequence,
+        [FromQuery(Name = "after_sequence")] long? afterSequence,
         IMessagesService messages, IReactionsService reactions, IAttachmentsRepository attachments,
         CancellationToken ct)
     {
         var viewerId = http.User.GetUserId();
-        var query = new HistoryQuery(limit ?? 50, beforeId, afterId);
+        var query = new HistoryQuery(limit ?? 50, beforeId, afterId, beforeSequence, afterSequence);
         var rows = await messages.GetHistoryAsync(chatId, viewerId, query, ct);
 
         var result = new List<MessageResponse>(rows.Count);

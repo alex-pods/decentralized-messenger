@@ -40,6 +40,7 @@ public static class MessageResponseFactory
             rows.Select(r => new ReactionResponse(r.Emoji, r.UserIds)).ToList(),
             msg.Forward is { } forward
                 ? new ForwardedFromResponse(forward.AuthorId, forward.AuthorName, forward.OriginalSentAt)
-                : null);
+                : null,
+            msg.Sequence);
     }
 }

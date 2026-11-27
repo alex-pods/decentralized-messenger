@@ -129,12 +129,14 @@ public partial class ShellView : UserControl
         OverlaySheet.Margin = new Thickness(inset, upperInset, inset, inset);
         OverlaySheet.Padding = new Thickness(compactSheet ? 16 : 20);
         OverlaySheet.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-        OverlaySheet.VerticalAlignment = forwarding ? Avalonia.Layout.VerticalAlignment.Top : Avalonia.Layout.VerticalAlignment.Center;
+        OverlaySheet.VerticalAlignment = _vm?.Overlay == "images" ? Avalonia.Layout.VerticalAlignment.Bottom :
+            forwarding ? Avalonia.Layout.VerticalAlignment.Top : Avalonia.Layout.VerticalAlignment.Center;
         OverlaySheet.MaxWidth = _vm?.Overlay switch
         {
             "direct" => 384,
             "group" => 428,
             "forward" => 442,
+            "images" => 560,
             _ => 420
         };
         OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - OverlaySheet.Margin.Top - OverlaySheet.Margin.Bottom, 100, 680);

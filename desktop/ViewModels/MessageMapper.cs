@@ -56,6 +56,9 @@ public static class MessageMapper
             AvatarUserId = c.Type == "direct" ? c.OtherUser?.Id : null,
             Kind = c.Type == "group" ? "Группа" : "Личный чат",
             LastMessageId = c.LastMessage?.Id ?? 0,
+            LastMessageSequence = c.LastMessage?.Sequence ?? 0,
+            LastMessageSentAt = DateTimeOffset.TryParse(c.LastMessage?.SentAt, out var lastSent) ? lastSent : null,
+            CreatedAt = DateTimeOffset.TryParse(c.CreatedAt, out var created) ? created : DateTimeOffset.MinValue,
             Time = c.LastMessage is null ? "" : FormatTime(c.LastMessage.SentAt)
         };
         if (c.LastMessage is { } last)
@@ -72,6 +75,7 @@ public static class MessageMapper
         var item = new MessageItem
         {
             Id = m.Id,
+            Sequence = m.Sequence,
             SentAt = DateTimeOffset.TryParse(m.SentAt, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.AssumeUniversal, out var sentAt) ? sentAt : null,
             SenderId = m.SenderId,
@@ -86,6 +90,8 @@ public static class MessageMapper
             IsDeleted = m.ContentState == "deleted",
             IsNotStored = m.ContentState == "not_stored"
         };
+        item.Images = m.ContentState is "deleted" or "not_stored" ? [] :
+            m.Attachments?.Where(a => a.IsImage).DistinctBy(a => a.Id).ToArray() ?? [];
         item.SetReactions(ReactionMap(m.Reactions));
         return item;
     }

@@ -182,7 +182,8 @@ public static partial class Preview
                     {
                         var labelCenter = watermark.TranslatePoint(new Point(0, watermark.Bounds.Height / 2), shell)!.Value.Y;
                         var buttonCenter = send.TranslatePoint(new Point(0, send.Bounds.Height / 2), shell)!.Value.Y;
-                        Expect(Math.Abs(labelCenter - buttonCenter) <= 2, $"Composer is vertically misaligned: {labelCenter} vs {buttonCenter}");
+                        // Fractional display scales can represent an exact 2px gap as 2.0000000000001.
+                        Expect(Math.Abs(labelCenter - buttonCenter) <= 2 + 1e-6, $"Composer is vertically misaligned: {labelCenter} vs {buttonCenter}");
                     }
                     Expect(send.IsEnabled == vm.CanSendDraft, "Send button disagrees with draft validity");
                 });

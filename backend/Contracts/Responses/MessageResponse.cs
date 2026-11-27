@@ -16,4 +16,5 @@ public sealed record MessageResponse(
     [property: JsonPropertyName("deleted_at")] DateTimeOffset? DeletedAt,
     [property: JsonPropertyName("attachments")] IReadOnlyList<AttachmentResponse>? Attachments,
     [property: JsonPropertyName("reactions")] IReadOnlyList<ReactionResponse>? Reactions,
-    [property: JsonPropertyName("forwarded_from")] ForwardedFromResponse? ForwardedFrom = null);
+    [property: JsonPropertyName("forwarded_from")] ForwardedFromResponse? ForwardedFrom = null,
+    [property: JsonPropertyName("sequence")] long Sequence = 0);

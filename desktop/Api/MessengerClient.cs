@@ -119,6 +119,29 @@ public sealed partial class MessengerClient : IDisposable
     public async Task<List<ChatDto>> GetChats(CancellationToken ct = default) =>
         await Send<List<ChatDto>>(HttpMethod.Get, "chats", null, ct) ?? new();
 
+    public async Task<byte[]> GetAttachment(long attachmentId, CancellationToken ct = default)
+    {
+        const int maxBytes = 10 * 1024 * 1024;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(_http.Timeout);
+        ct = timeout.Token;
+        using var res = await _http.GetAsync($"attachments/{attachmentId}", HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!res.IsSuccessStatusCode)
+            throw ParseError(await res.Content.ReadAsStringAsync(ct), res.StatusCode);
+        if (res.Content.Headers.ContentLength > maxBytes)
+            throw new InvalidDataException("Изображение больше 10 МБ");
+        await using var stream = await res.Content.ReadAsStreamAsync(ct);
+        using var bytes = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+        {
+            if (bytes.Length + read > maxBytes) throw new InvalidDataException("Изображение больше 10 МБ");
+            bytes.Write(buffer, 0, read);
+        }
+        return bytes.ToArray();
+    }
+
     public async Task<long> CreateDirect(long otherUserId, CancellationToken ct = default)
     {
         var dto = await Send<ChatIdDto>(HttpMethod.Post, "chats", new Dictionary<string, object?>
@@ -172,14 +195,17 @@ public sealed partial class MessengerClient : IDisposable
         }, ct);
 
     /// <summary>
-    /// История: before_id — страница назад; after_id — догон после reconnect (id строго больше курсора, по возрастанию).
+    /// История упорядочена по sequence. ID-курсоры оставлены для старых вызовов API.
     /// </summary>
     public async Task<List<MessageDto>> GetMessages(
-        long chatId, int limit = 50, long? beforeId = null, long? afterId = null, CancellationToken ct = default)
+        long chatId, int limit = 50, long? beforeId = null, long? afterId = null, CancellationToken ct = default,
+        long? beforeSequence = null, long? afterSequence = null)
     {
         var path = $"chats/{chatId}/messages?limit={limit}";
         if (beforeId is { } before) path += "&before_id=" + before;
         if (afterId is { } after) path += "&after_id=" + after;
+        if (beforeSequence is { } beforeSeq) path += "&before_sequence=" + beforeSeq;
+        if (afterSequence is { } afterSeq) path += "&after_sequence=" + afterSeq;
         return await Send<List<MessageDto>>(HttpMethod.Get, path, null, ct) ?? new();
     }
 

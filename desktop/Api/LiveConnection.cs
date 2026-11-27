@@ -8,7 +8,7 @@ public sealed class SessionRevokedException : Exception;
 
 /// <summary>
 /// WebSocket /ws: ping и follow(chat_id).
-/// Close 4001/4002 — сессия отозвана/истекла; 4008 — slow consumer (переподключение + догон after_id).
+/// Close 4001/4002 — сессия отозвана/истекла; 4008 — slow consumer (переподключение + догон по sequence).
 /// </summary>
 public sealed class LiveConnection : IDisposable
 {
@@ -26,7 +26,7 @@ public sealed class LiveConnection : IDisposable
     public event Action<WsEventDto>? Event;
     public event Action<string>? State;
     public event Action? SessionRevoked;
-    /// <summary>Сокет снова онлайн и follow восстановлены — клиент должен догнать историю через after_id.</summary>
+    /// <summary>Сокет снова онлайн и follow восстановлены — клиент догоняет историю через after_sequence.</summary>
     public event Action? Reconnected;
 
     public LiveConnection(MessengerClient api) => _api = api;

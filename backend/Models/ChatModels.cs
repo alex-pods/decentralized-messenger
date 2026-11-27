@@ -44,7 +44,8 @@ public sealed record MemberRow(
 
 public sealed record MarkReadResult(
     long LastReadMessageId,
-    bool Changed);
+    bool Changed,
+    long LastReadSequence);
 
 public sealed record LeaveGroupResult(
     LeaveResult Result,

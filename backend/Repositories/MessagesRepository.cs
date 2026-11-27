@@ -40,7 +40,7 @@ public interface IMessagesRepository
 public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesRepository
 {
     private const string RowSelect = """
-        SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id,
+        SELECT m.id, m.sequence, m.chat_id, m.sender_id, m.reply_to_id,
             m.text, m.content_state,
             m.sent_at, m.delivered_at, m.edited_at, m.deleted_at,
             m.client_ref_payload, v.read_at,
@@ -81,28 +81,30 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
                   WHERE h.message_id = m.id AND h.user_id = @viewerId)
             """;
 
-        var reverse = query.AfterId is null;
-        if (query.AfterId is { } afterId)
-        {
-            sql += " AND m.id > @afterId";
-            if (query.BeforeId is not null) sql += " AND m.id < @beforeId";
-            sql += " ORDER BY m.id ASC LIMIT @limit";
-        }
-        else
-        {
-            if (query.BeforeId is not null) sql += " AND m.id < @beforeId";
-            sql += " ORDER BY m.id DESC LIMIT @limit";
-        }
-
         using var connection = db.Open();
+        async Task<long?> ResolveCursor(long? id, long? sequence)
+        {
+            if (id is null) return sequence;
+            // Legacy ID cursors identify a row; they are never compared numerically.
+            return await connection.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
+                "SELECT sequence FROM messages WHERE id = @id AND chat_id = @chatId",
+                new { id, chatId }, cancellationToken: cancellationToken))
+                ?? throw new Messenger.Api.Common.Errors.ValidationException("History cursor does not belong to this chat");
+        }
+        var beforeSequence = await ResolveCursor(query.BeforeId, query.BeforeSequence);
+        var afterSequence = await ResolveCursor(query.AfterId, query.AfterSequence);
+        var reverse = afterSequence is null;
+        if (afterSequence != null) sql += " AND m.sequence > @afterSequence";
+        if (beforeSequence != null) sql += " AND m.sequence < @beforeSequence";
+        sql += reverse ? " ORDER BY m.sequence DESC LIMIT @limit" : " ORDER BY m.sequence ASC LIMIT @limit";
         var rows = await connection.QueryAsync<MessageRowRaw>(new CommandDefinition(
             sql,
             new
             {
                 chatId,
                 viewerId,
-                beforeId = query.BeforeId,
-                afterId = query.AfterId,
+                beforeSequence,
+                afterSequence,
                 limit
             },
             cancellationToken: cancellationToken));
@@ -424,7 +426,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         using var connection = db.Open();
         var rows = await connection.QueryAsync<PinRowRaw>(new CommandDefinition(
             """
-            SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id,
+            SELECT m.id, m.sequence, m.chat_id, m.sender_id, m.reply_to_id,
                 m.text, m.content_state,
                 m.sent_at, m.delivered_at, m.edited_at, m.deleted_at,
                 m.client_ref_payload, v.read_at,
@@ -436,7 +438,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
               AND NOT EXISTS (
                   SELECT 1 FROM message_hidden h
                   WHERE h.message_id = m.id AND h.user_id = @viewerId)
-            ORDER BY m.id DESC
+            ORDER BY m.sequence DESC
             """,
             new { chatId, viewerId },
             cancellationToken: ct));
@@ -522,7 +524,8 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         SqliteTime.ParseOrNull(row.EditedAt),
         SqliteTime.ParseOrNull(row.ReadAt),
         SqliteTime.ParseOrNull(row.DeletedAt),
-        MapForward(row));
+        MapForward(row),
+        row.Sequence);
 
     private static ForwardInfo? MapForward(MessageRowRaw row) =>
         row.ForwardAuthorName is { } name
@@ -550,6 +553,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     private class MessageRowRaw
     {
         public long Id { get; set; }
+        public long Sequence { get; set; }
         public long ChatId { get; set; }
         public long SenderId { get; set; }
         public long? ReplyToId { get; set; }

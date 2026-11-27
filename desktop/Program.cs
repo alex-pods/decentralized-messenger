@@ -43,6 +43,16 @@ internal static class Program
             (Preview.Server, Preview.OutDir) = (args[1], args[2]);
             Preview.MvpOnly = true;
         }
+        if (args.Length > 2 && args[0] == "--preview-images")
+        {
+            (Preview.Server, Preview.OutDir) = (args[1], args[2]);
+            Preview.ImagesOnly = true;
+        }
+        if (args.Length > 2 && args[0] == "--preview-sequences")
+        {
+            (Preview.Server, Preview.OutDir) = (args[1], args[2]);
+            Preview.SequencesOnly = true;
+        }
         if (args.Length > 2 && args[0] == "--preview-sharing")
         {
             (Preview.Server, Preview.OutDir) = (args[1], args[2]);

@@ -119,8 +119,11 @@ public partial class ShellViewModel : ObservableObject
 
     [ObservableProperty] private MessageItem? _forwardSource;
 
-    partial void OnOverlayChanged(string value) =>
+    partial void OnOverlayChanged(string value)
+    {
+        if (value != "images") ClearImagePreviews();
         ForwardSource = value == "forward" && CanForward ? SelectedMessage : null;
+    }
 
     [ObservableProperty] private bool _showMoreReactions;
     public IReadOnlyList<string> QuickReactions => ReactionCatalog.Main;
@@ -143,6 +146,7 @@ public partial class ShellViewModel : ObservableObject
         "direct" => "Новый личный чат",
         "group" => "Новая группа",
         "forward" => "Переслать сообщение",
+        "images" => "Картинки в сообщении",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;
@@ -217,6 +221,7 @@ public partial class ShellViewModel : ObservableObject
     {
         if (_closed) return;
         _closed = true;
+        ClearImagePreviews();
         _live.Dispose();
         _api.AntispamChanged -= OnAntispamChanged;
         _api.Dispose();

@@ -22,7 +22,7 @@ public static class PinStripCheck
             Expect(2, PinStrip.IndexForScroll(0, pins), "выше всех закрепов — верхний в полоске");
             Expect(0, PinStrip.IndexForScroll(3, [8]), "один закреп всегда 0");
             Expect(2, PinStrip.IndexForScroll(0, [-1, -1, -1]), "закрепы не в окне — последний в полоске");
-            Expect(1, PinStrip.InsertIndex([30, 20, 10], 25), "вставка по id DESC");
+            Expect(1, PinStrip.InsertIndex([30, 20, 10], 25), "вставка по sequence DESC");
             Expect(0, PinStrip.InsertIndex([30, 20, 10], 40), "новый самый нижний — в начало");
             Expect(3, PinStrip.InsertIndex([30, 20, 10], 5), "самый верхний — в конец");
 

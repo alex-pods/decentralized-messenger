@@ -15,6 +15,9 @@ public partial class ChatItem : ObservableObject, IDisposable
     public long? AvatarUserId { get; init; }
     public long AvatarColorKey => AvatarUserId ?? Id;
     public long LastMessageId { get; set; }
+    public long LastMessageSequence { get; set; }
+    public DateTimeOffset? LastMessageSentAt { get; set; }
+    public DateTimeOffset CreatedAt { get; init; }
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {
@@ -62,6 +65,7 @@ public abstract partial class TimelineItem : ObservableObject
 
 public partial class MessageItem : TimelineItem
 {
+    public long Sequence { get; init; }
     [ObservableProperty] private bool _startsRun = true;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(VisibleMeta))] private bool _endsMinute = true;
     public long Id { get; init; }
@@ -73,8 +77,12 @@ public partial class MessageItem : TimelineItem
     public long? ReplyToId { get; init; }
     [ObservableProperty] private string _replyAuthor = "";
     [ObservableProperty] private string _reply = "";
-    [ObservableProperty] private bool _isDeleted;
-    [ObservableProperty] private bool _isNotStored;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasImages))] private bool _isDeleted;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasImages))] private bool _isNotStored;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasImages)), NotifyPropertyChangedFor(nameof(VisibleImages))]
+    private IReadOnlyList<AttachmentDto> _images = Array.Empty<AttachmentDto>();
+    public bool HasImages => !IsDeleted && !IsNotStored && Images.Count > 0;
+    public IReadOnlyList<AttachmentDto> VisibleImages => Images.Take(4).ToArray();
     [ObservableProperty] private string _forwarded = "";
     [ObservableProperty] private string _forwardedTip = "";
     public bool HasReply => ReplyToId != null;
@@ -164,6 +172,7 @@ public partial class MemberRow : ObservableObject, IDisposable
 
 public sealed class PinItem
 {
+    public long Sequence { get; init; }
     public long MessageId { get; init; }
     public long? SenderId { get; init; }
     public DateTimeOffset? SentAt { get; init; }

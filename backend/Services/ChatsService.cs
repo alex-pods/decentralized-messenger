@@ -300,7 +300,8 @@ public sealed class ChatsService(
                     "read",
                     ChatId: chatId,
                     UserId: viewerId,
-                    LastReadMessageId: result.LastReadMessageId));
+                    LastReadMessageId: result.LastReadMessageId,
+                    LastReadSequence: result.LastReadSequence));
         }
 
         return result.LastReadMessageId;

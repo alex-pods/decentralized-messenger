@@ -21,7 +21,8 @@ public sealed record MessageRow(
     DateTimeOffset? EditedAt,
     DateTimeOffset? ReadAt,
     DateTimeOffset? DeletedAt,
-    ForwardInfo? Forward = null
+    ForwardInfo? Forward = null,
+    long Sequence = 0
 );
 
 public sealed record ForwardInfo(long? AuthorId, string AuthorName, DateTimeOffset OriginalSentAt);
@@ -38,7 +39,8 @@ public sealed record AddMessageResult(MessageRow Message, bool Created, bool Con
 
 public sealed record DeleteMessageResult(MessageRow Message, bool Changed, IReadOnlyList<string> AttachmentPaths);
 
-public sealed record HistoryQuery(int Limit, long? BeforeId, long? AfterId);
+public sealed record HistoryQuery(int Limit, long? BeforeId = null, long? AfterId = null,
+    long? BeforeSequence = null, long? AfterSequence = null);
 
 public sealed record PinRow(
     long MessageId,

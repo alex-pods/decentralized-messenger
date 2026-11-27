@@ -69,10 +69,7 @@ public partial class ShellViewModel
     {
         _timelineUpdateQueued = false;
         UpdateReplyPreviews();
-        var sorted = Messages.Cast<TimelineItem>().Concat(_activity.Values.OrderBy(line => line.Event.Id))
-            .OrderBy(item => item.SentAt)
-            .ThenBy(item => item is GroupActivityLine ? 0 : 1)
-            .ToArray();
+        var sorted = MergeTimeline(Messages, _activity.Values);
         GroupTimeline(sorted);
 
         // Keep existing item containers and the scroll position across live inserts and older pages.
@@ -82,6 +79,21 @@ public partial class ShellViewModel
         for (var i = 0; i < sorted.Length; i++)
             if (i == Timeline.Count || !ReferenceEquals(sorted[i], Timeline[i]))
                 Timeline.Insert(i, sorted[i]);
+    }
+
+    internal static TimelineItem[] MergeTimeline(IEnumerable<MessageItem> messages, IEnumerable<GroupActivityLine> activity)
+    {
+        var ordered = messages.OrderBy(m => m.Sequence).ToArray();
+        var result = new List<TimelineItem>();
+        var index = 0;
+        foreach (var entry in activity.OrderBy(a => a.SentAt).ThenBy(a => a.Event.Id))
+        {
+            while (index < ordered.Length && ordered[index].SentAt < entry.SentAt)
+                result.Add(ordered[index++]);
+            result.Add(entry);
+        }
+        result.AddRange(ordered.Skip(index));
+        return result.ToArray();
     }
 }
 

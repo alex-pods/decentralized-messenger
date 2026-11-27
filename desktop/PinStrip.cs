@@ -1,7 +1,7 @@
 namespace MessengerDesktop;
 
 /// <summary>
-/// Порядок закрепов как в Telegram: сначала самое нижнее в чате (больший id).
+/// Порядок закрепов как в Telegram: сначала самое нижнее в чате (больший sequence).
 /// При прокрутке вверх закреп уходит за нижний край кадра — тогда в полоске следующий выше.
 /// </summary>
 public static class PinStrip
@@ -26,12 +26,12 @@ public static class PinStrip
         return pinMsgIndices.Count - 1;
     }
 
-    public static int InsertIndex(IReadOnlyList<long> pinIdsDesc, long messageId)
+    public static int InsertIndex(IReadOnlyList<long> sequencesDesc, long sequence)
     {
-        for (var i = 0; i < pinIdsDesc.Count; i++)
+        for (var i = 0; i < sequencesDesc.Count; i++)
         {
-            if (pinIdsDesc[i] < messageId) return i;
+            if (sequencesDesc[i] < sequence) return i;
         }
-        return pinIdsDesc.Count;
+        return sequencesDesc.Count;
     }
 }

@@ -42,7 +42,15 @@ void Until(Func<bool> condition, string label)
         Thread.Sleep(5);
     }
     Pump();
-    if (!condition()) throw new Exception($"Timeout: {label}; UI error: {vm.Error}");
+    if (!condition())
+    throw new Exception(
+        $"Timeout: {label}; " +
+        $"chat={vm.SelectedChat?.Id}; " +
+        $"messages={vm.Messages.Count}; " +
+        $"opening={vm.IsOpeningChat}; " +
+        $"loading={vm.IsLoadingHistory}; " +
+        $"hasMore={vm.HasMore}; " +
+        $"UI error: {vm.Error}");
 }
 
 void Settle()

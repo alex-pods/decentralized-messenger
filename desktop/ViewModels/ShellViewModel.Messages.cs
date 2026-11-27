@@ -18,10 +18,17 @@ public partial class ShellViewModel
             await Ui(() =>
             {
                 if (!SameChat(gen, chat.Id)) return;
+
                 Fill(chat, members, messages, replace: true);
+                UpdateTimeline();
                 RequestScroll();
-                IsOpeningChat = false;
             });
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (SameChat(gen, chat.Id))
+                    IsOpeningChat = false;
+            }, DispatcherPriority.Background);
             await LoadPins(chat, gen);
             if (!SameChat(gen, chat.Id)) return;
             _live.Follow(chat.Id);
@@ -53,10 +60,17 @@ public partial class ShellViewModel
             await Ui(() =>
             {
                 if (!SameChat(gen, chat.Id)) return;
+
                 Fill(chat, members, messages, replace: true);
+                UpdateTimeline();
                 RequestScroll();
-                IsOpeningChat = false;
             });
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (SameChat(gen, chat.Id))
+                    IsOpeningChat = false;
+            }, DispatcherPriority.Background);
             await LoadPins(chat, gen);
             if (!SameChat(gen, chat.Id)) return;
             if (messages.Count > 0)

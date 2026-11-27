@@ -47,6 +47,9 @@
           <Button Classes="primary" Content="{Binding AuthAction}" HorizontalAlignment="Stretch" Margin="0,16,0,0"
                   Command="{Binding SubmitCommand}" MinHeight="42"
                   IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
+          <Button Classes="secondaryAction" Content="Отмена" HorizontalAlignment="Stretch" Margin="0,8,0,0"
+                  Command="{Binding CancelCommand}" IsVisible="{Binding CanCancel}"
+                  IsEnabled="{Binding Busy, Converter={StaticResource Not}}"/>
 
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,14,0,0" Spacing="6">
             <TextBlock Text="{Binding ModePrompt}" Classes="secondary" FontSize="14" VerticalAlignment="Center"/>

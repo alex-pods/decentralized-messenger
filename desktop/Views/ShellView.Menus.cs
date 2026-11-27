@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 
 namespace MessengerDesktop.Views;
 
@@ -58,6 +60,141 @@ public partial class ShellView
         menu.Background = (IBrush)Application.Current!.FindResource("RaisedBrush")!;
         menu.Foreground = (IBrush)Application.Current!.FindResource("InkBrush")!;
         return menu;
+    }
+
+    internal void OpenAccountMenu(Control anchor)
+    {
+        if (_vm is not { } vm) return;
+        var menu = CreateMenu();
+        IReadOnlyList<StoredAccount> accounts;
+        try { accounts = vm.SavedAccounts; }
+        catch (Exception ex)
+        {
+            vm.Error = "Не удалось прочитать список аккаунтов: " + ex.Message;
+            return;
+        }
+        if (AccountStore.TakeLoadWarning() is { } warning)
+            vm.Error = AccountManager.JoinWarnings(vm.Error, warning);
+        var showServers = accounts.Select(account => AccountStore.NormalizeServer(account.Server))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+        var images = new List<Bitmap>();
+        var avatarLoads = new CancellationTokenSource();
+        menu.Closed += (_, _) =>
+        {
+            avatarLoads.Cancel();
+            avatarLoads.Dispose();
+            foreach (var image in images) image.Dispose();
+        };
+
+        foreach (var account in accounts)
+        {
+            var active = account.Identity == vm.CurrentIdentity;
+            var (header, image, initials) = AccountHeader(account, active, showServers, vm);
+            var item = new MenuItem
+            {
+                Header = header,
+                IsEnabled = !active
+            };
+            item.Click += async (_, _) =>
+            {
+                menu.Close();
+                try { await vm.SwitchAccountCommand.ExecuteAsync(account); }
+                catch (Exception ex) { vm.Error = LoginViewModel.Friendly(ex); }
+            };
+            menu.Items.Add(item);
+            if (ShouldLoadAccountAvatar(account, active) && image is not null && initials is not null)
+                _ = LoadAccountMenuAvatar(account, image, initials, images, avatarLoads.Token);
+        }
+
+        menu.Open(anchor);
+    }
+
+    internal static bool ShouldLoadAccountAvatar(StoredAccount account, bool active) =>
+        !active && !account.NeedsLogin;
+
+    static (Grid Header, Image? Avatar, TextBlock? Initials) AccountHeader(
+        StoredAccount account, bool active, bool showServers, ShellViewModel vm)
+    {
+        var displayName = account.DisplayName ?? "";
+        var tag = account.Tag ?? "";
+        var avatarText = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(displayName) ? new string(tag.Take(1).ToArray()).ToUpperInvariant() : new string(displayName.Trim().Take(1).ToArray()).ToUpperInvariant(),
+            Classes = { "avatarText" },
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+        var avatar = new Border
+        {
+            Width = 34,
+            Height = 34,
+            CornerRadius = new CornerRadius(17),
+            ClipToBounds = true,
+            Background = (IBrush)Application.Current!.FindResource("RaisedBrush")!
+        };
+        var image = new Image { Stretch = Avalonia.Media.Stretch.UniformToFill, IsVisible = active && vm.HasAvatar };
+        if (active) image.Source = vm.Avatar;
+        avatar.Child = new Panel { Children = { image, avatarText } };
+        avatarText.IsVisible = !image.IsVisible;
+
+        var lines = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        lines.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(displayName) ? "@" + tag : displayName,
+            FontWeight = FontWeight.Medium,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
+        lines.Children.Add(new TextBlock { Text = "@" + tag, Classes = { "caption" } });
+        if (showServers)
+            lines.Children.Add(new TextBlock { Text = account.Server, Classes = { "caption" }, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (account.NeedsLogin)
+            lines.Children.Add(new TextBlock { Text = "Требуется вход", Foreground = (IBrush)Application.Current!.FindResource("DangerBrush")! });
+
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinWidth = 250 };
+        header.Children.Add(avatar);
+        var detail = new Border { Child = lines, Margin = new Thickness(10, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        Grid.SetColumn(detail, 1);
+        header.Children.Add(detail);
+        if (active)
+        {
+            var marker = new TextBlock
+            {
+                Text = "✓",
+                Foreground = (IBrush)Application.Current!.FindResource("AccentBrush")!,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+            };
+            Grid.SetColumn(marker, 2);
+            header.Children.Add(marker);
+        }
+        return (header, image, avatarText);
+    }
+
+    static async Task LoadAccountMenuAvatar(
+        StoredAccount account, Image image, TextBlock initials, List<Bitmap> owned, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var api = new MessengerClient(account.Server, account.Token);
+            var bytes = await api.GetAvatar(account.UserId, cancellationToken);
+            if (bytes is null) return;
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                if (!image.IsAttachedToVisualTree()) return;
+                using var stream = new MemoryStream(bytes);
+                var bitmap = Bitmap.DecodeToWidth(stream, 80);
+                owned.Add(bitmap);
+                image.Source = bitmap;
+                image.IsVisible = true;
+                initials.IsVisible = false;
+            });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ApiException or TaskCanceledException or IOException)
+        {
+        }
     }
 
     void OnNewConversation(object? sender, RoutedEventArgs e)

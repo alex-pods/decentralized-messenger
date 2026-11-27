@@ -18,6 +18,7 @@ public partial class App : Application
             {
                 Appearance.ThemeSettings.FilePath = Path.Combine(Preview.OutDir, "test-appearance.json");
                 Settings.AppPreferences.FilePath = Path.Combine(Preview.OutDir, "test-settings.json");
+                AccountStore.FilePath = Path.Combine(Preview.OutDir, "test-accounts.json");
                 LocalPinStore.DirectoryPath = Path.Combine(Preview.OutDir, "test-pins");
                 Appearance.WallpaperSettings.DirectoryPath = Path.Combine(Preview.OutDir, "test-wallpapers");
             }
@@ -26,8 +27,9 @@ public partial class App : Application
             Appearance.WallpaperSettings.Restore();
             var window = new MainWindow();
             var nav = new Navigator(window);
+            nav.Accounts = new AccountManager(nav);
             desktop.MainWindow = window;
-            window.DataContext = new LoginViewModel(nav, Program.ServerOverride);
+            window.DataContext = new LoginViewModel(nav, Program.ServerOverride, accounts: nav.Accounts);
             if (Preview.Server != null)
                 _ = Preview.Run(window, nav).ContinueWith(t =>
                 {
@@ -35,32 +37,26 @@ public partial class App : Application
                     Environment.Exit(1);
                 }, TaskContinuationOptions.OnlyOnFaulted);
             else
-                _ = RestoreSession(nav, window);
+                _ = RestoreAccountsSafely(nav, Program.ServerOverride);
         }
         base.OnFrameworkInitializationCompleted();
     }
 
-    static async Task RestoreSession(Navigator nav, Avalonia.Controls.Window window)
+    static async Task RestoreAccountsSafely(Navigator nav, string? serverOverride)
     {
-        var saved = SessionStore.Load();
-        if (saved == null) return;
-        if (Program.ServerOverride != null && !string.Equals(Program.ServerOverride, saved.Server.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return;
-        var api = new MessengerClient(saved.Server, saved.Token);
-        try
+        try { await nav.Accounts!.RestoreAsync(serverOverride); }
+        catch (Exception ex)
         {
-            var me = await api.GetMe();
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            var error = "Не удалось восстановить аккаунты: " + LoginViewModel.Friendly(ex);
+            try
             {
-                if (window.DataContext is LoginViewModel)
-                    nav.Go(new ShellViewModel(nav, api, me));
-                else
-                    api.Dispose();
-            });
-        }
-        catch
-        {
-            api.Dispose();
-            SessionStore.Clear();
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                    nav.Go(new LoginViewModel(nav, serverOverride, error, accounts: nav.Accounts)));
+            }
+            catch (Exception navigationError)
+            {
+                Console.Error.WriteLine($"Не удалось открыть форму входа после ошибки восстановления: {navigationError}");
+            }
         }
     }
 }

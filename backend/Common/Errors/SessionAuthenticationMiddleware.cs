@@ -17,6 +17,8 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
         {
             await next(context); return;
         }
+        if (context.GetEndpoint()?.Metadata.GetMetadata<Messenger.Api.Antispam.AntispamEndpoints.PublicCapabilities>() != null)
+        { await next(context); return; }
         var requestPath = context.Request.Path.Value?.TrimEnd('/');
 
         if (HttpMethods.IsGet(context.Request.Method) &&

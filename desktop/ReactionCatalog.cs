@@ -1,8 +1,14 @@
 namespace MessengerDesktop;
 
-/// <summary>Какие реакции предлагаем в интерфейсе. Чтобы добавить новую: допиши её сюда и нарисуй в ReactionIcon.</summary>
+/// <summary>Supported reactions. Each entry has a bundled Twemoji asset and an accessible label.</summary>
 public static class ReactionCatalog
 {
+    public static string Label(string emoji) => emoji.Replace("\uFE0F", "") switch
+    {
+        "👍" => "Нравится", "👎" => "Не нравится", "❤" => "Сердце", "😂" => "Смех",
+        "😮" => "Удивление", "😢" => "Грусть", "😡" => "Злость", "😍" => "Восторг",
+        "🔥" => "Огонь", "🎉" => "Праздник", "😎" => "Круто", "👀" => "Смотрю", _ => emoji
+    };
     /// <summary>Основные: всегда видны в панели.</summary>
     public static readonly IReadOnlyList<string> Main = new[]
     {

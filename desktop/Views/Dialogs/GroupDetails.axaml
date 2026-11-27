@@ -1,8 +1,18 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.GroupDetails" x:Name="Root">
-  <StackPanel Spacing="6" Margin="0,0,0,12">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MessengerDesktop" xmlns:dialogs="using:MessengerDesktop.Views.Dialogs"
+             x:Class="MessengerDesktop.Views.Dialogs.GroupDetails" x:Name="Root">
+  <StackPanel Spacing="6">
     <TextBlock Classes="field" Text="Название"/>
-    <TextBox Text="{Binding GroupTitle}" Watermark="Название группы" MaxLength="64" AutomationProperties.Name="Название группы"/>
-    <ItemsControl ItemsSource="{Binding GroupDraft}" Margin="0,8,0,0">
+    <TextBox Text="{Binding GroupTitle, UpdateSourceTrigger=PropertyChanged}" Watermark="Название группы" MaxLength="64" AutomationProperties.Name="Название группы"/>
+    <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+      <TextBlock Text="{Binding GroupDraft.Count, StringFormat='Участники ({0})'}" FontWeight="Medium"/>
+      <TextBlock Grid.Column="1" Text="Можно добавить позже" Classes="caption" VerticalAlignment="Center"/>
+    </Grid>
+    <dialogs:PeopleSearch/>
+    <ScrollViewer x:Name="GroupDraftViewport" MaxHeight="116" Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto"
+                  AllowAutoHide="False" ClipToBounds="True">
+    <ItemsControl ItemsSource="{Binding GroupDraft}">
       <ItemsControl.ItemsPanel>
         <ItemsPanelTemplate>
           <WrapPanel/>
@@ -10,16 +20,19 @@
       </ItemsControl.ItemsPanel>
       <ItemsControl.ItemTemplate>
         <DataTemplate>
-          <Border Classes="chip" Margin="0,0,6,6">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock Text="{Binding DisplayName}" MaxWidth="180" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-              <Button Classes="icon small" ToolTip.Tip="Убрать из выбранных" AutomationProperties.Name="Убрать из выбранных" Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}">
-                <local:Glyph Data="{StaticResource IcClose}" Width="10" Height="10"/>
-              </Button>
-            </StackPanel>
+          <Border Classes="chip" MaxWidth="278" Margin="0,0,4,4">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel MaxWidth="222" VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="{Binding NameLabel}" ToolTip.Tip="{Binding NameLabel}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding TagLabel}" Classes="caption" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+              <local:DismissButton Grid.Column="1" Classes="compact" ToolTip.Tip="Убрать из выбранных" AutomationProperties.Name="Убрать из выбранных"
+                                   Command="{Binding DataContext.RemoveDraftCommand, ElementName=Root}" CommandParameter="{Binding}"/>
+            </Grid>
           </Border>
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+    </ScrollViewer>
   </StackPanel>
 </UserControl>

@@ -58,7 +58,9 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string _searchHint = "";
     private int _searchGeneration;
     [ObservableProperty] private string _searchQuery = "";
-    [ObservableProperty] private string _groupTitle = "";
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CreateGroupCommand))]
+    private string _groupTitle = "";
     [ObservableProperty] private string _displayName = "";
     [ObservableProperty] private string _bio = "";
     [ObservableProperty] private bool _allowTagSearch = true;
@@ -74,7 +76,7 @@ public partial class ShellViewModel : ObservableObject
             OnPropertyChanged(nameof(HasAvatar));
         }
     }
-    [ObservableProperty] private bool _hasMore;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasOlderTimeline))] private bool _hasMore;
     [ObservableProperty] private bool _isLoadingHistory;
     [ObservableProperty] private bool _isOpeningChat;
 
@@ -83,6 +85,7 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasChat))]
     [NotifyPropertyChangedFor(nameof(CanSendDraft))]
     [NotifyPropertyChangedFor(nameof(ChatTitle))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceTitle))]
     [NotifyPropertyChangedFor(nameof(CanManagePins))]
     [NotifyPropertyChangedFor(nameof(CanPin))]
     private ChatItem? _selectedChat;
@@ -92,6 +95,8 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanForward))]
     [NotifyPropertyChangedFor(nameof(CanDeleteEveryone))]
     [NotifyPropertyChangedFor(nameof(CanPin))]
+    [NotifyPropertyChangedFor(nameof(CanPinLocally))]
+    [NotifyPropertyChangedFor(nameof(LocalPinActionLabel))]
     [NotifyPropertyChangedFor(nameof(SelectedIsPinned))]
     [NotifyPropertyChangedFor(nameof(PinActionLabel))]
     [NotifyPropertyChangedFor(nameof(HasMessageActions))]
@@ -100,19 +105,27 @@ public partial class ShellViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ComposeHint))]
+    [NotifyPropertyChangedFor(nameof(ComposeDetail))]
     [NotifyPropertyChangedFor(nameof(HasComposeHint))]
     private MessageItem? _replyTo;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ComposeHint))]
+    [NotifyPropertyChangedFor(nameof(ComposeDetail))]
     [NotifyPropertyChangedFor(nameof(HasComposeHint))]
     private MessageItem? _editing;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OverlayTitle))]
     [NotifyPropertyChangedFor(nameof(OverlayOpen))]
-    [NotifyPropertyChangedFor(nameof(ShowPeopleSearch))]
+    [NotifyPropertyChangedFor(nameof(IsOpeningDirectChat))]
+    [NotifyPropertyChangedFor(nameof(HasDedicatedOverlayLayout))]
     private string _overlay = "";
+
+    [ObservableProperty] private MessageItem? _forwardSource;
+
+    partial void OnOverlayChanged(string value) =>
+        ForwardSource = value == "forward" && CanForward ? SelectedMessage : null;
 
     [ObservableProperty] private bool _showMoreReactions;
     public IReadOnlyList<string> QuickReactions => ReactionCatalog.Main;
@@ -122,20 +135,19 @@ public partial class ShellViewModel : ObservableObject
     public bool HasChat => SelectedChat != null;
     public string DraftLengthHint => HasDraftLengthHint ? $"{Draft.Trim().Length} / 4096 символов" : "";
     public bool HasDraftLengthHint => Draft.Trim().Length > 3800;
-    public bool CanSendDraft => HasChat && !Busy && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
+    public bool CanSendDraft => HasChat && !Busy && !AntispamRequired && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
     public bool HasAvatar => Avatar is not null;
     public long CurrentUserId => _me.Id;
     internal MessengerClient ThemeApi => _api;
-    public string ChatTitle => SelectedChat?.Title ?? "Выберите чат";
+    public string ChatTitle => SelectedChat?.Title ?? "";
     public bool OverlayOpen => Overlay.Length > 0;
-    public bool ShowPeopleSearch => Overlay is "direct" or "group" or "members";
+    public bool IsOpeningDirectChat => Overlay == "direct";
+    public bool HasDedicatedOverlayLayout => Overlay == "forward";
     public string OverlayTitle => Overlay switch
     {
         "direct" => "Новый личный чат",
         "group" => "Новая группа",
-        "members" => "Участники",
-        "profile" => "Профиль",
-        "forward" => "Переслать в…",
+        "forward" => "Переслать сообщение",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;
@@ -146,23 +158,30 @@ public partial class ShellViewModel : ObservableObject
     public bool CanManagePins => HasChat && (!IsGroup || _myRole is "owner" or "admin");
     public bool CanPin => CanManagePins && SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public bool SelectedIsPinned => SelectedMessage != null && _pins.Any(p => p.MessageId == SelectedMessage.Id);
-    public string PinActionLabel => SelectedIsPinned ? "Открепить" : "Закрепить";
-    public bool HasPins => _pins.Count > 0;
-    public string PinText => _pins.Count == 0 ? "" : _pins[Math.Clamp(_pinIndex, 0, _pins.Count - 1)].Text;
-    public string PinCounter => _pins.Count <= 1 ? "" : $"{Math.Clamp(_pinIndex, 0, _pins.Count - 1) + 1}/{_pins.Count}";
+    public string PinActionLabel => SelectedIsPinned ? "Открепить у всех" : "Закрепить для всех";
+    public string UserTag => "@" + _me.Tag;
+    public string ServerLabel => _api.ServerBase;
+    PinListItem? ShownPin => _stripPins.Count == 0 ? null : _stripPins[Math.Clamp(_pinIndex, 0, _stripPins.Count - 1)];
+    public bool HasPins => ShownPin != null;
+    public string PinText => ShownPin is { } pin ? MessageMapper.Trim(pin.Text, 120) : "";
+    public string PinScope => ShownPin?.Local == true ? "Закреплено для себя" : "Закреплено для всех";
     public string SelectionHint => SelectedMessage is null ? "" : "Выбрано сообщение";
 
     public event Action<MessageItem>? ScrollToMessage;
     public bool HasComposeHint => ComposeHint != null;
     public string? ComposeHint => Editing != null
         ? "Редактирование сообщения"
-        : ReplyTo != null ? "Ответ: " + MessageMapper.Trim(ReplyTo.Text, 60) : null;
+        : ReplyTo?.SenderName;
+    public string? ComposeDetail => ReplyTo is { } original && Editing == null ? MessageMapper.Trim(original.Text, 100) : null;
 
     public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me)
     {
-        Messages.CollectionChanged += (_, _) => UpdateMessageGroups();
+        Messages.CollectionChanged += (_, _) => ScheduleTimelineUpdate();
         _nav = nav;
         _api = api;
+        _api.AntispamChanged += OnAntispamChanged;
+        AntispamRequired = _api.AntispamBlocked;
+        _ = _api.DiscoverAntispam();
         _me = me;
         _names[me.Id] = me.DisplayName;
         Header = $"{me.DisplayName}  @{me.Tag}";
@@ -174,19 +193,17 @@ public partial class ShellViewModel : ObservableObject
         _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));
         _live.State += s => Dispatcher.UIThread.Post(() => Status = s);
         _live.SessionRevoked += () => Dispatcher.UIThread.Post(() => ForceLogout("Сессия завершена. Войдите снова."));
-        _live.Reconnected += () => Dispatcher.UIThread.Post(() => _ = CatchUpAfterReconnect());
+        _live.Reconnected += () => Dispatcher.UIThread.Post(() =>
+        {
+            _ = CatchUpAfterReconnect();
+            _ = LoadGroupActivity(SelectedChat);
+        });
         _ = _live.RunAsync();
         _ = ReloadChats();
     }
 
     [RelayCommand] void CloseOverlay()
     {
-        if (Overlay == "profile")
-        {
-            DisplayName = _me.DisplayName;
-            Bio = _me.Bio ?? "";
-            AllowTagSearch = _me.AllowTagSearch;
-        }
         ++_searchGeneration;
         Searching = false;
         Overlay = "";
@@ -207,12 +224,14 @@ public partial class ShellViewModel : ObservableObject
         _closed = true;
         CancelHistoryLoad();
         _live.Dispose();
+        _api.AntispamChanged -= OnAntispamChanged;
         _api.Dispose();
         DisposeItems(Chats);
         DisposeItems(SearchResults, GroupDraft);
         DisposeItems(GroupDraft, SearchResults);
         DisposeItems(Members);
         Avatar = null;
+        SetDraftAvatar(null);
         SessionStore.Clear();
         _nav.Go(new LoginViewModel(_nav, _api.ServerBase, error));
     }
@@ -299,7 +318,7 @@ public partial class ShellViewModel : ObservableObject
     {
         if (bytes is null) return null;
         using var stream = new MemoryStream(bytes);
-        return new Bitmap(stream);
+        return Bitmap.DecodeToWidth(stream, 160);
     }
 
     static void DisposeItems<T>(ObservableCollection<T> items, params IEnumerable<T>[] survivors)

@@ -14,7 +14,16 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            if (Preview.Server != null)
+            {
+                Appearance.ThemeSettings.FilePath = Path.Combine(Preview.OutDir, "test-appearance.json");
+                Settings.AppPreferences.FilePath = Path.Combine(Preview.OutDir, "test-settings.json");
+                LocalPinStore.DirectoryPath = Path.Combine(Preview.OutDir, "test-pins");
+                Appearance.WallpaperSettings.DirectoryPath = Path.Combine(Preview.OutDir, "test-wallpapers");
+            }
             Appearance.ThemeSettings.Restore();
+            Settings.AppPreferences.Load();
+            Appearance.WallpaperSettings.Restore();
             var window = new MainWindow();
             var nav = new Navigator(window);
             desktop.MainWindow = window;

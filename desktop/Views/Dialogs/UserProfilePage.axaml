@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MessengerDesktop" x:Class="MessengerDesktop.Views.Dialogs.UserProfilePage">
+  <ScrollViewer Classes="dialogScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                AllowAutoHide="False" ClipToBounds="True" SizeChanged="OnProfileSizeChanged">
+    <StackPanel x:Name="ProfileContent" Spacing="14" HorizontalAlignment="Left">
+      <ProgressBar x:Name="Loading" IsIndeterminate="True" Height="2"/>
+      <StackPanel HorizontalAlignment="Stretch" Spacing="7" Margin="0,12,0,4">
+        <Border x:Name="PhotoFrame" Width="82" Height="82" CornerRadius="41" HorizontalAlignment="Center"
+                Background="{Binding Converter={StaticResource AvatarBrush}}" ClipToBounds="True">
+          <Panel>
+            <Image x:Name="Photo" Stretch="UniformToFill"/>
+            <TextBlock x:Name="Initial" Classes="avatarText" FontSize="30"/>
+          </Panel>
+        </Border>
+        <TextBlock x:Name="ContactName" FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"
+                   Margin="0,4,0,0"/>
+        <TextBlock x:Name="Activity" Classes="caption" TextWrapping="Wrap" TextAlignment="Center"/>
+        <Button x:Name="WriteMessage" Classes="primary" HorizontalAlignment="Center" MinHeight="38" Padding="16,0"
+                Margin="0,7,0,0" IsEnabled="False" AutomationProperties.Name="Написать">
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <local:Glyph Data="{StaticResource IcBubble}" Width="16" Height="16"/>
+            <TextBlock Text="Написать" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Button>
+      </StackPanel>
+      <StackPanel x:Name="ProfileDetails" Spacing="0" IsVisible="False">
+        <Border Height="1" Background="{DynamicResource LineBrush}"/>
+        <Button x:Name="CopyUsername" Classes="profileRow" Cursor="Hand" Padding="6,8"
+                ToolTip.Tip="Скопировать тег" AutomationProperties.Name="Скопировать тег">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="3">
+              <TextBlock x:Name="Username" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap"/>
+              <TextBlock x:Name="UsernameLabel" Text="Имя пользователя" Classes="caption" TextWrapping="Wrap"/>
+            </StackPanel>
+            <local:Glyph Grid.Column="1" Data="{StaticResource IcCopy}" Width="15" Height="15"/>
+          </Grid>
+        </Button>
+        <StackPanel x:Name="About" IsVisible="False">
+          <Border Height="1" Background="{DynamicResource LineBrush}"/>
+          <StackPanel Spacing="5" Margin="6,10,6,0">
+            <TextBlock Text="О себе" Classes="caption"/>
+            <TextBlock x:Name="Biography" TextWrapping="Wrap"/>
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+      <StackPanel Spacing="8">
+        <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" IsVisible="False"/>
+        <Button x:Name="Retry" Content="Попробовать снова" IsVisible="False"/>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

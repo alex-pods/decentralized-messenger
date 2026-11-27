@@ -17,7 +17,7 @@ public partial class ShellView
     int _viewportGeneration;
     HistoryAnchor? _historyAnchor;
 
-    sealed record HistoryAnchor(MessageItem Message, double Y, long ChatId);
+    sealed record HistoryAnchor(TimelineItem Item, double Y, long ChatId);
 
     void ResetHistoryViewport()
     {
@@ -63,10 +63,10 @@ public partial class ShellView
     {
         var vm = _vm;
         var scroll = _logScroll;
-        if (_loadingOlder || _restoringHistory || _scrolling || !IsEffectivelyVisible ||
+        if (_loadingOlder || _restoringHistory || _scrolling || _visiblePage != null || !IsEffectivelyVisible ||
             _log?.IsEffectivelyVisible != true || scroll == null || scroll.Viewport.Height <= 0 ||
             scroll.Offset.Y > HistoryThreshold || vm == null || vm.IsOpeningChat ||
-            vm.IsLoadingHistory || !vm.HasMore || vm.Messages.Count == 0)
+            vm.IsLoadingHistory || !vm.HasOlderTimeline || vm.Timeline.Count == 0)
             return;
 
         var generation = _viewportGeneration;
@@ -85,19 +85,20 @@ public partial class ShellView
 
     static Control MessageAnchor(Control container) =>
         container.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Classes.Contains("bubble"))
+        ?? container.GetVisualDescendants().OfType<Border>().LastOrDefault(b => b.Classes.Contains("historyLabel"))
         ?? container;
 
     void CaptureHistoryAnchor()
     {
         _restoringHistory = true;
         _historyAnchor = null;
-        if (_log == null || _logScroll == null || _vm?.SelectedChat is not { } chat) return;
+        if (_visiblePage != null || _log == null || _logScroll == null || _vm?.SelectedChat is not { } chat) return;
 
         // Привязываемся к пузырю сообщения: у первой строки после вставки может
         // исчезнуть разделитель даты или имя отправителя, изменив её высоту.
         foreach (var container in _log.GetRealizedContainers())
         {
-            if (container.DataContext is not MessageItem message) continue;
+            if (container is not ListBoxItem { Content: TimelineItem message }) continue;
             var anchor = MessageAnchor(container);
             var point = anchor.TranslatePoint(default, _logScroll);
             if (point == null || point.Value.Y + anchor.Bounds.Height <= 0 ||
@@ -114,7 +115,8 @@ public partial class ShellView
             if (_historyAnchor is not { } anchor || _vm?.SelectedChat?.Id != anchor.ChatId ||
                 _log == null || _logScroll == null) return;
             _log.UpdateLayout();
-            if (_log.ContainerFromItem(anchor.Message) is not { } container) return;
+            var item = _log.Items.FirstOrDefault(candidate => Equals(ItemKey(candidate), ItemKey(anchor.Item)));
+            if (item == null || _log.ContainerFromItem(item) is not { } container) return;
             var point = MessageAnchor(container).TranslatePoint(default, _logScroll);
             if (point == null) return;
             _logScroll.Offset = new Vector(_logScroll.Offset.X, _logScroll.Offset.Y + point.Value.Y - anchor.Y);

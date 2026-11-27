@@ -29,14 +29,17 @@ public static class MessageMapper
     public static string Trim(string text, int n)
     {
         text = OneLine(text);
-        return text.Length <= n ? text : text[..n] + "…";
+        if (text.Length <= n) return text;
+        var elements = System.Globalization.StringInfo.GetTextElementEnumerator(text);
+        var end = 0;
+        while (elements.MoveNext() && elements.ElementIndex <= n) end = elements.ElementIndex;
+        return text[..end] + "…";
     }
 
-    /// <summary>Превью в списке чатов — одна строка, без переносов (иначе сайдбар раздувается «фантомами»).</summary>
-    public static string Preview(MessageDto m, long myId, Func<long, string> nameOf)
+    internal static string? PreviewAuthor(long senderId, long myId, Func<long, string> nameOf)
     {
-        var who = m.SenderId == myId ? "Вы" : nameOf(m.SenderId);
-        return Trim(who == $"#{m.SenderId}" ? Body(m) : $"{who}: {Body(m)}", 120);
+        var who = senderId == myId ? "Вы" : nameOf(senderId);
+        return who == $"#{senderId}" ? null : who;
     }
 
     public static ChatItem MapChat(ChatDto c, long myId, Func<long, string> nameOf)
@@ -44,24 +47,24 @@ public static class MessageMapper
         var title = c.Type == "group"
             ? (string.IsNullOrWhiteSpace(c.Title) ? "Группа" : c.Title!)
             : (c.OtherUser?.DisplayName ?? c.OtherUser?.Tag ?? "Личный чат");
-        return new ChatItem
+        var chat = new ChatItem
         {
             Id = c.Id,
             Type = c.Type,
             Title = title,
+            Tag = c.OtherUser?.Tag,
             AvatarUserId = c.Type == "direct" ? c.OtherUser?.Id : null,
             Kind = c.Type == "group" ? "Группа" : "Личный чат",
-            Preview = c.LastMessage is null ? "Нет сообщений" : Preview(c.LastMessage, myId, nameOf),
+            LastMessageId = c.LastMessage?.Id ?? 0,
             Time = c.LastMessage is null ? "" : FormatTime(c.LastMessage.SentAt)
         };
+        if (c.LastMessage is { } last)
+            chat.SetPreview(PreviewAuthor(last.SenderId, myId, nameOf), Body(last));
+        return chat;
     }
 
-    public static MessageItem ToItem(
-        MessageDto m, long myId, Func<long, string> nameOf, IReadOnlyDictionary<long, string> texts)
+    public static MessageItem ToItem(MessageDto m, long myId, Func<long, string> nameOf)
     {
-        var reply = "";
-        if (m.ReplyToId is { } rid)
-            reply = texts.TryGetValue(rid, out var t) ? "↩ " + Trim(t, 80) : "↩ ответ";
         var meta = FormatTime(m.SentAt);
         if (m.EditedAt != null) meta += " · изменено";
         if (m.SenderId == myId && m.ReadAt != null) meta += " · прочитано";
@@ -69,14 +72,15 @@ public static class MessageMapper
         var item = new MessageItem
         {
             Id = m.Id,
-            SentAt = DateTimeOffset.TryParse(m.SentAt, out var sentAt) ? sentAt : null,
+            SentAt = DateTimeOffset.TryParse(m.SentAt, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var sentAt) ? sentAt : null,
             SenderId = m.SenderId,
             SenderName = m.SenderId == myId ? "Вы" : nameOf(m.SenderId),
             Mine = m.SenderId == myId,
             MyId = myId,
             Text = Body(m),
             Meta = meta,
-            Reply = reply,
+            ReplyToId = m.ReplyToId,
             Forwarded = m.ForwardedFrom is { } f ? "↪ Переслано от " + f.AuthorName : "",
             ForwardedTip = m.ForwardedFrom is { } g ? "Отправлено " + FormatDateTime(g.OriginalSentAt) : "",
             IsDeleted = m.ContentState == "deleted",

@@ -8,10 +8,13 @@ public partial class ChatItem : ObservableObject, IDisposable
     public long Id { get; init; }
     public string Type { get; init; } = "";
     public string Title { get; init; } = "";
+    public string? Tag { get; init; }
+    public string SearchSubtitle => Tag is null ? Kind : "@" + Tag;
     public string Kind { get; init; } = "";
     public bool IsGroup => Type == "group";
     public long? AvatarUserId { get; init; }
     public long AvatarColorKey => AvatarUserId ?? Id;
+    public long LastMessageId { get; set; }
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {
@@ -25,20 +28,29 @@ public partial class ChatItem : ObservableObject, IDisposable
             OnPropertyChanged(nameof(ShowInitial));
         }
     }
-    [ObservableProperty] private string _preview = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PreviewLabel))] private string _preview = "Нет сообщений";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasPreviewAuthor)), NotifyPropertyChangedFor(nameof(PreviewLabel))]
+    private string _previewAuthor = "";
     [ObservableProperty] private string _time = "";
     [ObservableProperty] private bool _unread;
     public bool HasAvatar => Avatar is not null;
-    public bool ShowInitial => !IsGroup && !HasAvatar;
+    public bool ShowInitial => !HasAvatar;
+    public bool HasPreviewAuthor => PreviewAuthor.Length > 0;
+    public string PreviewLabel => HasPreviewAuthor ? $"{PreviewAuthor}: {Preview}" : Preview;
+
+    internal void SetPreview(string? author, string? text)
+    {
+        PreviewAuthor = text != null && (IsGroup || author == "Вы") ? MessageMapper.Trim(author ?? "", 32) : "";
+        Preview = text == null ? "Нет сообщений" : MessageMapper.Trim(text, 120);
+    }
 
     public void Dispose() => Avatar = null;
 }
 
-public partial class MessageItem : ObservableObject
+public abstract partial class TimelineItem : ObservableObject
 {
     public DateTimeOffset? SentAt { get; init; }
     [ObservableProperty] private bool _startsDay;
-    [ObservableProperty] private bool _startsRun = true;
     public string DayLabel => SentAt?.LocalDateTime.Date switch
     {
         null => "",
@@ -46,23 +58,38 @@ public partial class MessageItem : ObservableObject
         var date when date == DateTime.Today.AddDays(-1) => "Вчера",
         var date => date.Value.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"))
     };
+}
 
+public partial class MessageItem : TimelineItem
+{
+    [ObservableProperty] private bool _startsRun = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(VisibleMeta))] private bool _endsMinute = true;
     public long Id { get; init; }
     public long SenderId { get; init; }
     public string SenderName { get; init; } = "";
     public bool Mine { get; init; }
     [ObservableProperty] private string _text = "";
-    [ObservableProperty] private string _meta = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(VisibleMeta))] private string _meta = "";
+    public long? ReplyToId { get; init; }
+    [ObservableProperty] private string _replyAuthor = "";
     [ObservableProperty] private string _reply = "";
     [ObservableProperty] private bool _isDeleted;
     [ObservableProperty] private bool _isNotStored;
     [ObservableProperty] private string _forwarded = "";
     [ObservableProperty] private string _forwardedTip = "";
-    public bool HasReply => Reply.Length > 0;
+    public bool HasReply => ReplyToId != null;
+    public string VisibleMeta
+    {
+        get
+        {
+            if (EndsMinute) return Meta;
+            var separator = Meta.IndexOf(" · ", StringComparison.Ordinal);
+            return separator >= 0 ? Meta[(separator + 3)..] : "";
+        }
+    }
     public bool IsForwarded => Forwarded.Length > 0;
     public bool ShowSender => !Mine;
 
-    partial void OnReplyChanged(string value) => OnPropertyChanged(nameof(HasReply));
     partial void OnForwardedChanged(string value) => OnPropertyChanged(nameof(IsForwarded));
 
     public long MyId { get; init; }
@@ -111,7 +138,7 @@ public partial class MemberRow : ObservableObject, IDisposable
     public long Id { get; init; }
     public string Title { get; init; } = "";
     public string TagLabel { get; init; } = "";
-    public string Detail => $"{TagLabel} · {RoleLabel}";
+    public string Detail => RoleLabel.Length == 0 ? TagLabel : $"{TagLabel} · {RoleLabel}";
     private Bitmap? _avatar;
     public Bitmap? Avatar
     {
@@ -138,6 +165,8 @@ public partial class MemberRow : ObservableObject, IDisposable
 public sealed class PinItem
 {
     public long MessageId { get; init; }
+    public long? SenderId { get; init; }
+    public DateTimeOffset? SentAt { get; init; }
     public string Text { get; set; } = "";
 }
 

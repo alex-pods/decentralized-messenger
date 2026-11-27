@@ -1,0 +1,5 @@
+Hero Patterns by Steve Schoger. Licensed under Creative Commons Attribution 4.0 International.
+https://heropatterns.com/
+https://creativecommons.org/licenses/by/4.0/
+Source: https://github.com/sschoger/hero-patterns/tree/6a2ed74a6910a8b1095d15dd31f7f3f0188517ad/svg
+Patterns: topography, endless-clouds, jupiter. Original geometry; runtime color, scale and optional blur are adaptations.

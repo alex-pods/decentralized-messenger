@@ -1,11 +1,14 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Presenters;
+
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using MessengerDesktop.Settings;
 
 namespace MessengerDesktop.Views;
 
@@ -25,19 +28,55 @@ public partial class ShellView : UserControl
         ChatList.SelectionChanged += (_, _) =>
         {
             if (_filtering || ChatList.SelectedItem is not ChatItem chat) return;
-            if (_vm != null) _vm.SelectedChat = chat;
-            _showChats = false;
-            UpdateNavigation();
+            OpenFromSearch(chat);
         };
+        ChatList.AddHandler(InputElement.TappedEvent, OnChatTapped, RoutingStrategies.Bubble, handledEventsToo: true);
         AttachedToVisualTree += (_, _) => EnsureLogHooks();
         DetachedFromVisualTree += (_, _) => TeardownLogHooks();
+        DetachedFromVisualTree += (_, _) => CancelSidebarSearch();
         this.FindControl<ListBox>("Log")?.AddHandler(InputElement.PointerPressedEvent, OnLogPressed, RoutingStrategies.Tunnel);
+        ComposerInput.AddHandler(InputElement.KeyDownEvent, OnComposerKeyDown, RoutingStrategies.Tunnel);
+        AttachedToVisualTree += (_, _) => { AppPreferences.Changed += UpdateSendHint; UpdateSendHint(); };
+        DetachedFromVisualTree += (_, _) => AppPreferences.Changed -= UpdateSendHint;
+    }
+
+    void UpdateSendHint() => ToolTip.SetTip(SendButton,
+        AppPreferences.Current.SendMode == SendMode.Enter ? "Отправить · Enter" : "Отправить · Ctrl+Enter / ⌘Enter");
+
+    void OnComposerKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || _vm == null) return;
+        if (ComposerInput.GetVisualDescendants().OfType<TextPresenter>().Any(p => !string.IsNullOrEmpty(p.PreeditText))) return;
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        // Enter-режим: Enter и Ctrl+Enter отправляют, Shift+Enter — перенос строки.
+        // Ctrl+Enter-режим: отправляет только Ctrl/⌘+Enter, обычный Enter — перенос строки.
+        var send = AppPreferences.Current.SendMode == SendMode.Enter ? !shift && !alt : ctrl && !shift && !alt;
+        if (!send) return;
+        e.Handled = true;
+        if (_vm.CanSendDraft && _vm.SendCommand.CanExecute(null)) _vm.SendCommand.Execute(null);
+    }
+
+    void OnSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        _vm?.NavigateWorkspace(WorkspacePage.Settings);
+    }
+
+    void OnOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_vm?.OverlayOpen != true || e.Source != sender ||
+            !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        _vm.CloseOverlayCommand.Execute(null);
+        e.Handled = true;
     }
 
     void OnShellKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.K && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _vm?.OverlayOpen == false)
         {
+            _vm.ResetWorkspace();
+            _vm.ClosePinListCommand.Execute(null);
             _showChats = true;
             UpdateNavigation();
             ChatSearch.Focus();
@@ -46,6 +85,8 @@ public partial class ShellView : UserControl
         if (e.Key == Key.Escape && _vm != null)
         {
             if (_vm.OverlayOpen) _vm.CloseOverlayCommand.Execute(null);
+            else if (_vm.ShowingPinnedMessages) _vm.ClosePinListCommand.Execute(null);
+            else if (_vm.Workspace != null) _vm.BackWorkspace();
             else if (_vm.HasComposeHint) _vm.CancelComposeCommand.Execute(null);
             else _vm.SelectedMessage = null;
             e.Handled = true;
@@ -53,6 +94,8 @@ public partial class ShellView : UserControl
     }
 
     bool _showChats = true;
+    long? _presentedChatId;
+    const double ChatSidebarWidth = 300;
 
     void OnShowChats(object? sender, RoutedEventArgs e)
     {
@@ -63,18 +106,91 @@ public partial class ShellView : UserControl
     void UpdateNavigation()
     {
         bool narrow = Bounds.Width < 780;
-        OverlaySheet.MaxHeight = Math.Max(220, Bounds.Height - 40);
-        ShellGrid.ColumnDefinitions = new ColumnDefinitions(narrow ? "*" : "344,*");
+        UpdateOverlayLayout();
+        var sidebarWidth = narrow ? 0 : ChatSidebarWidth;
+        UpdateWorkspaceFrame(narrow, sidebarWidth);
+        ShellGrid.ColumnDefinitions = narrow
+            ? new ColumnDefinitions("*")
+            : new ColumnDefinitions { new(sidebarWidth, GridUnitType.Pixel), new(1, GridUnitType.Star) };
         Grid.SetColumn(ChatSidebar, 0);
         Grid.SetColumn(ScreenBay, narrow ? 0 : 1);
-        ChatSidebar.IsVisible = !narrow || _showChats;
-        ScreenBay.IsVisible = !narrow || !_showChats;
+        var showList = _showChats && _visiblePage == null;
+        ChatSidebar.IsVisible = !narrow || showList;
+        ScreenBay.IsVisible = !narrow || !showList;
         BackToChats.IsVisible = narrow;
+    }
+
+    void UpdateOverlayLayout()
+    {
+        var compactSheet = Bounds.Width < 480;
+        var forwarding = _vm?.Overlay == "forward";
+        var inset = compactSheet ? 12 : 20;
+        var upperInset = forwarding && Bounds.Height >= 520 ? Math.Clamp(Bounds.Height * .16, 20, 144) : inset;
+        OverlaySheet.Margin = new Thickness(inset, upperInset, inset, inset);
+        OverlaySheet.Padding = new Thickness(compactSheet ? 16 : 20);
+        OverlaySheet.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        OverlaySheet.VerticalAlignment = forwarding ? Avalonia.Layout.VerticalAlignment.Top : Avalonia.Layout.VerticalAlignment.Center;
+        OverlaySheet.MaxWidth = _vm?.Overlay switch
+        {
+            "direct" => 384,
+            "group" => 428,
+            "forward" => 442,
+            _ => 420
+        };
+        OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - OverlaySheet.Margin.Top - OverlaySheet.Margin.Bottom, 100, 680);
     }
 
     bool _filtering;
 
-    void OnChatFilterChanged(object? sender, TextChangedEventArgs e) => FilterChats();
+    void OnChatFilterChanged(object? sender, TextChangedEventArgs e) => UpdateSidebarSearch();
+
+    void OnClearChatSearch(object? sender, RoutedEventArgs e)
+    {
+        ChatSearch.Clear();
+        ChatSearch.Focus();
+    }
+
+    void OnChatSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && !string.IsNullOrEmpty(ChatSearch.Text))
+            ChatSearch.Clear();
+        else if (!string.IsNullOrEmpty(_sidebarQuery) && e.Key is Key.Down or Key.Enter)
+        {
+            if (HasSearchPreedit()) return;
+            if (e.Key == Key.Enter) SubmitSidebarSearch();
+            else SearchResultButtons().FirstOrDefault()?.Focus();
+        }
+        else if (e.Key == Key.Down && ChatList.Items.Count > 0)
+        {
+            ChatList.ScrollIntoView(0);
+            if (ChatList.ContainerFromIndex(0) is not { } row) return;
+            row.Focus();
+        }
+        else if (e.Key == Key.Enter && ChatList.Items.FirstOrDefault() is ChatItem first)
+            OpenFromSearch(first);
+        else return;
+        e.Handled = true;
+    }
+
+    void OpenFromSearch(ChatItem chat)
+    {
+        if (_vm is { } vm)
+        {
+            vm.ResetWorkspace();
+            vm.ClosePinListCommand.Execute(null);
+            vm.SelectedChat = chat;
+        }
+        _showChats = false;
+        UpdateNavigation();
+    }
+
+    void OnChatTapped(object? sender, TappedEventArgs e)
+    {
+        if ((_visiblePage == null && (Bounds.Width >= 780 || !_showChats)) || e.Source is not Visual source) return;
+        var row = source as ListBoxItem ?? source.FindAncestorOfType<ListBoxItem>();
+        if (row?.DataContext is ChatItem chat && ReferenceEquals(chat, _vm?.SelectedChat))
+            OpenFromSearch(chat);
+    }
 
     void FilterChats()
     {
@@ -82,12 +198,9 @@ public partial class ShellView : UserControl
         _filtering = true;
         try
         {
-            var query = ChatSearch.Text?.Trim() ?? "";
-            var visible = _vm.Chats.Where(chat => chat.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
-            ChatList.ItemsSource = visible;
-            ChatList.SelectedItem = visible.Contains(_vm.SelectedChat) ? _vm.SelectedChat : null;
-            ChatEmpty.IsVisible = visible.Length == 0;
-            ChatEmpty.Text = query.Length == 0 ? "Здесь появятся ваши разговоры" : "Чаты не найдены";
+            if (!ChatList.Items.SequenceEqual(_vm.Chats)) ChatList.ItemsSource = _vm.Chats.ToArray();
+            ChatList.SelectedItem = _vm.Chats.Contains(_vm.SelectedChat!) ? _vm.SelectedChat : null;
+            UpdateSidebarResults();
         }
         finally { _filtering = false; }
     }
@@ -96,38 +209,43 @@ public partial class ShellView : UserControl
 
     void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(ShellViewModel.Overlay)) UpdateOverlayLayout();
+        if (e.PropertyName is nameof(ShellViewModel.ShowingPinnedMessages) or nameof(ShellViewModel.Workspace))
+            PresentWorkspace();
         if (e.PropertyName == nameof(ShellViewModel.OverlayOpen))
         {
             Dispatcher.UIThread.Post(() =>
             {
                 if (_vm?.OverlayOpen == true)
                 {
-                    var target = OverlaySheet.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(c => c.IsEffectivelyVisible && c.IsEffectivelyEnabled);
+                    var target = _vm.Overlay is "direct" or "group" or "forward"
+                        ? OverlaySheet.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(c => c.IsEffectivelyVisible && c.IsEffectivelyEnabled)
+                        : null;
                     if (target != null) target.Focus();
                     else OverlaySheet.GetVisualDescendants().OfType<Button>().FirstOrDefault(c => c.IsEffectivelyVisible)?.Focus();
+                    OverlayScroll.ScrollToHome();
                 }
+                else if (WorkspaceBack.IsEffectivelyVisible) WorkspaceBack.Focus();
                 else ComposerInput.Focus();
             }, DispatcherPriority.Loaded);
         }
         if (e.PropertyName == nameof(ShellViewModel.SelectedChat))
         {
-            ResetHistoryViewport();
             FilterChats();
-            if (_vm?.HasChat == true) _showChats = false;
+            var chatId = _vm?.SelectedChat?.Id;
+            if (chatId != _presentedChatId) ResetHistoryViewport();
+            if (chatId != _presentedChatId) _showChats = chatId == null;
+            _presentedChatId = chatId;
             UpdateNavigation();
         }
-        if (e.PropertyName == nameof(ShellViewModel.IsOpeningChat) && _vm?.IsOpeningChat == false)
+        if ((e.PropertyName == nameof(ShellViewModel.IsOpeningChat) && _vm?.IsOpeningChat == false) ||
+            e.PropertyName == nameof(ShellViewModel.HasOlderTimeline))
             QueueHistoryCheck();
-    }
-
-    async void OnAppearanceClick(object? sender, RoutedEventArgs e)
-    {
-        if (TopLevel.GetTopLevel(this) is Window owner)
-            await new Appearance.AppearanceWindow(_vm?.ThemeApi, _vm?.CurrentUserId).ShowDialog(owner);
     }
 
     void Hook()
     {
+        CancelSidebarSearch();
         if (_vm != null)
         {
             _vm.Chats.CollectionChanged -= OnChatsChanged;
@@ -144,10 +262,12 @@ public partial class ShellView : UserControl
             _vm.Chats.CollectionChanged += OnChatsChanged;
             _vm.PropertyChanged += OnShellPropertyChanged;
             FilterChats();
+            UpdateSidebarSearch();
             _vm.ScrollToEnd += Scroll;
             _vm.ScrollToMessage += ScrollTo;
             _vm.HistoryPrepending += CaptureHistoryAnchor;
             _vm.HistoryPrepended += RestoreHistoryAnchor;
+            PresentWorkspace();
         }
         EnsureLogHooks();
     }
@@ -171,6 +291,16 @@ public partial class ShellView : UserControl
     }
 
     void OnLogTemplateApplied(object? sender, TemplateAppliedEventArgs e) => BindLogScrollViewer();
+
+    void OnTimelineSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_restoringHistory || !ReferenceEquals(e.Source, sender) ||
+            _vm is not { } vm || sender is not ListBox list) return;
+        vm.SelectedMessage = list.SelectedItem as MessageItem;
+        if (list.SelectedItem is GroupActivityLine)
+            list.SetCurrentValue(ListBox.SelectedItemProperty, null);
+        else OnLogSelectionChanged(sender, e);
+    }
 
     void BindLogScrollViewer()
     {
@@ -197,42 +327,39 @@ public partial class ShellView : UserControl
     void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         BindLogScrollViewer();
-        if (!ReferenceEquals(e.Source, _logScroll) || _restoringHistory || _scrolling) return;
-        if (e.ViewportDelta.Y != 0 && _followLatest)
-        {
-            Scroll(force: false); // Например, после появления полоски закрепов.
-            return;
-        }
-        // Изменение высоты контента само по себе не означает, что читатель ушёл от конца чата.
-        if (e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0)
+        if (_visiblePage != null || !ReferenceEquals(e.Source, _logScroll) ||
+            _restoringHistory || _scrolling) return;
+        if (e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0 && e.ViewportDelta.Y == 0)
             _followLatest = IsNearBottom();
-        // Offset не менялся (только extent) — тоже синхронизируем после догрузки истории.
-        SyncPinFromViewport();
+        if ((e.ViewportDelta.Y != 0 || e.ExtentDelta.Y > 0) &&
+            _followLatest && _vm?.IsRevealingMessage != true)
+            Scroll(force: false);
+        Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
         QueueHistoryCheck();
     }
 
     void SyncPinFromViewport()
     {
-        if (_vm == null || !_vm.HasPins || _vm.Messages.Count == 0) return;
+        if (_visiblePage != null || _vm == null || !_vm.HasPins || _vm.Messages.Count == 0) return;
         var list = _log ?? this.FindControl<ListBox>("Log");
         if (list == null) return;
 
         MessageItem? lastVisible = null;
         var bestBottom = double.MinValue;
-        var viewH = list.Bounds.Height;
-        foreach (var container in list.GetRealizedContainers())
+        var viewport = _logScroll?.FindDescendantOfType<ScrollContentPresenter>();
+        if (viewport == null) return;
+        var viewH = viewport.Bounds.Height;
+        foreach (var c in list.GetVisualDescendants().OfType<ListBoxItem>())
         {
-            if (container is not Control c) continue;
-            var topLeft = c.TranslatePoint(new Point(0, 0), list);
+            var topLeft = c.TranslatePoint(new Point(0, 0), viewport);
             if (topLeft == null) continue;
             var y = topLeft.Value.Y;
             var bottom = y + c.Bounds.Height;
             if (bottom <= 0 || y >= viewH) continue;
             if (bottom <= bestBottom) continue;
-            var idx = list.IndexFromContainer(container);
-            if (idx < 0 || idx >= _vm.Messages.Count) continue;
+            if (c.Content is not MessageItem message) continue;
             bestBottom = bottom;
-            lastVisible = _vm.Messages[idx];
+            lastVisible = message;
         }
 
         if (lastVisible != null)
@@ -241,22 +368,28 @@ public partial class ShellView : UserControl
 
     void Scroll(bool force)
     {
-        if (_vm == null || _vm.Messages.Count == 0) return;
-        if (!force && !_followLatest) return;
-        _scrolling = true;
-        try
+        var vm = _vm;
+        var chatId = vm?.SelectedChat?.Id;
+        var generation = _viewportGeneration;
+        Dispatcher.UIThread.Post(() =>
         {
-            _log?.UpdateLayout();
-            _log?.ScrollIntoView(_vm.Messages[^1]);
-            _log?.UpdateLayout();
-            BindLogScrollViewer();
-            _logScroll?.ScrollToEnd();
-            _log?.UpdateLayout();
-            _followLatest = true;
-        }
-        finally { _scrolling = false; }
-        Dispatcher.UIThread.Post(SyncPinFromViewport, DispatcherPriority.Background);
-        QueueHistoryCheck();
+            if (vm == null || !ReferenceEquals(vm, _vm) || chatId == null ||
+                vm.SelectedChat?.Id != chatId || generation != _viewportGeneration ||
+                _visiblePage != null || vm.Timeline.Count == 0 || _restoringHistory ||
+                (!force && (!_followLatest || vm.IsRevealingMessage))) return;
+            _scrolling = true;
+            try
+            {
+                _log?.UpdateLayout();
+                BindLogScrollViewer();
+                _logScroll?.ScrollToEnd();
+                _log?.UpdateLayout();
+                _followLatest = true;
+            }
+            finally { _scrolling = false; }
+            SyncPinFromViewport();
+            QueueHistoryCheck();
+        }, DispatcherPriority.Background);
     }
 
     void ScrollTo(MessageItem item)
@@ -279,9 +412,8 @@ public partial class ShellView : UserControl
 
     void OnDragAreaPressed(object? sender, PointerPressedEventArgs e) => MainWindow.DragFrom(this, e);
 
-    void OnChipPressed(object? sender, PointerPressedEventArgs e)
+    void OnChipClick(object? sender, RoutedEventArgs e)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (sender is Control { DataContext: ReactionChip chip } && DataContext is ShellViewModel vm)
             vm.ToggleChipCommand.Execute(chip);
         e.Handled = true;   // ListBox не увидит нажатие и не выберет сообщение
@@ -291,20 +423,31 @@ public partial class ShellView : UserControl
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.Source is not Control src) return;
-        if (src.FindAncestorOfType<ScrollBar>() != null) return;
+        if (src is ScrollBar || src.FindAncestorOfType<ScrollBar>() != null) return;
 
-        bool isBubble = false;
+        Border? bubble = null;
+        var onChip = false;
         for (Control? v = src; v != null; v = v.GetVisualParent() as Control)
         {
-            if (v is Border b && b.Classes.Contains("bubble")) 
-            { 
-                isBubble = true; 
-                break; 
+            if (v is Button) return; // Do not swallow message-menu or reaction button clicks in the tunnel.
+            if (v is Border b && b.Classes.Contains("reaction")) onChip = true;
+            if (v is Border bb && bb.Classes.Contains("bubble"))
+            {
+                bubble = bb;
+                break;
             }
             if (v is ListBoxItem) break; // дошли до строки, пузырь не найден
         }
 
-        if (isBubble) return;
+        if (bubble != null)
+        {
+            // Двойной клик по самому сообщению (не по чипу реакции).
+            if (e.ClickCount == 2 && !onChip && bubble.DataContext is MessageItem message
+                && _vm is { OverlayOpen: false } && _vm.ActivateMessage(message))
+                Dispatcher.UIThread.Post(() => ComposerInput.Focus(), DispatcherPriority.Input);
+            return;
+        }
+
 
         if (DataContext is ShellViewModel vm)
             vm.SelectedMessage = null;

@@ -4,32 +4,33 @@ namespace MessengerDesktop;
 
 public partial class ShellViewModel
 {
-    partial void OnSelectedChatChanged(ChatItem? value)
+    partial void OnSelectedChatChanged(ChatItem? oldValue, ChatItem? newValue)
     {
+        if (oldValue?.Id == newValue?.Id) return;
         ++_openGen;
         CancelHistoryLoad();
         IsOpeningChat = false;
         HasMore = false;
+        ClearGroupActivity();
+        if (HasWorkspacePage(WorkspacePage.Members)) ResetWorkspace();
         if (_suppress) return;
+        Messages.Clear();
         SelectedMessage = null;
         ReplyTo = null;
         Editing = null;
-        RestoreDraft(value);
+        RestoreDraft(newValue);
+        ClosePinList();
         ClearPins();
-        Messages.Clear();
-        if (value == null)
-        {
+        if (newValue == null)
             return;
-        }
-        value.Unread = false;
-        _ = OpenChat(value);
+        newValue.Unread = false;
+        _ = OpenChat(newValue);
+        _ = LoadGroupActivity(newValue);
     }
 
     [RelayCommand]
     async Task ReloadChats()
     {
-        var selected = SelectedChat?.Id;
-        var unread = Chats.Where(c => c.Unread).Select(c => c.Id).ToHashSet();
         List<ChatDto> list;
         try
         {
@@ -45,6 +46,8 @@ public partial class ShellViewModel
         {
             await Ui(() =>
             {
+                var selected = SelectedChat?.Id;
+                var unread = Chats.Where(c => c.Unread).Select(c => c.Id).ToHashSet();
                 _suppress = true;
                 DisposeItems(Chats);
                 foreach (var c in list)
@@ -93,22 +96,41 @@ public partial class ShellViewModel
         Overlay = "group";
     }
 
-    [RelayCommand]
-    async Task Search()
+    partial void OnSearchQueryChanged(string value)
     {
-        var q = SearchQuery.Trim().TrimStart('@');
-        if (q.Length == 0) { SearchHint = "Введите полный тег пользователя"; return; }
+        if (Overlay is "direct" or "group" || Workspace?.Page == WorkspacePage.Members)
+            _ = SearchPeople(debounce: true);
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    Task Search() => SearchPeople(debounce: false);
+
+    async Task SearchPeople(bool debounce)
+    {
+        var q = ChatSearchFilter.DirectoryTag(SearchQuery);
         var generation = ++_searchGeneration;
         var overlay = Overlay;
-        Searching = true;
-        SearchHint = "Ищем…";
+        var fromMembers = Workspace?.Page == WorkspacePage.Members;
+        Searching = false;
+        DisposeItems(SearchResults, GroupDraft);
+        SearchHint = "";
+        if (q == null)
+        {
+            if (!string.IsNullOrWhiteSpace(SearchQuery)) SearchHint = "Введите от 3 до 16 символов тега.";
+            return;
+        }
         Error = null;
         try
         {
-            var users = await _api.Search(q);
-            if (generation != _searchGeneration || overlay != Overlay) return;
-            DisposeItems(SearchResults, GroupDraft);
-            foreach (var u in users)
+            if (debounce) await Task.Delay(280);
+            if (generation != _searchGeneration || overlay != Overlay || fromMembers && Workspace?.Page != WorkspacePage.Members) return;
+            Searching = true;
+            SearchHint = "Ищем…";
+            var users = await _api.Search(q, prefix: true);
+            if (generation != _searchGeneration || overlay != Overlay || fromMembers && Workspace?.Page != WorkspacePage.Members) return;
+            foreach (var u in users.Where(user => user.Id != _me.Id &&
+                GroupDraft.All(selected => selected.Id != user.Id) &&
+                (!fromMembers || Members.All(member => member.Id != user.Id))))
             {
                 SearchResults.Add(u);
                 _ = LoadAvatar(u.Id, image =>
@@ -116,9 +138,9 @@ public partial class ShellViewModel
                     if (SearchResults.Contains(u) || GroupDraft.Contains(u)) u.Avatar = CreateAvatar(image);
                 });
             }
-            SearchHint = users.Count == 0 ? "Никого не нашли. Проверьте полный тег." : "Выберите человека в списке";
+            SearchHint = SearchResults.Count == 0 ? "Нет доступных пользователей с таким тегом" : "";
         }
-        catch (Exception ex) { if (generation == _searchGeneration && overlay == Overlay) { Error = Friendly(ex); SearchHint = ""; } }
+        catch (Exception ex) { if (generation == _searchGeneration && overlay == Overlay) SearchHint = Friendly(ex); }
         finally { if (generation == _searchGeneration) Searching = false; }
     }
 
@@ -131,29 +153,47 @@ public partial class ShellViewModel
             Error = null;
             if (Overlay == "direct")
             {
-                var id = await _api.CreateDirect(user.Id);
+                var chat = await FindOrCreateDirect(user.Id);
                 Overlay = "";
-                await ReloadChats();
-                await Ui(() => SelectedChat = Chats.FirstOrDefault(c => c.Id == id));
+                SelectedChat = chat;
             }
             else if (Overlay == "group")
             {
                 if (GroupDraft.All(u => u.Id != user.Id))
                     GroupDraft.Add(user);
+                ResetSearch();
             }
-            else if (Overlay == "members" && SelectedChat != null)
+            else if (Workspace?.Page == WorkspacePage.Members && SelectedChat != null)
             {
                 await _api.AddMember(SelectedChat.Id, user.Id);
+                ResetSearch();
                 await LoadMembersPanel();
             }
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }
 
+    internal async Task<ChatItem> FindOrCreateDirect(long userId)
+    {
+        if (Chats.FirstOrDefault(chat => chat.AvatarUserId == userId) is { } existing) return existing;
+        var id = await _api.CreateDirect(userId);
+        await ReloadChats();
+        return Chats.FirstOrDefault(chat => chat.Id == id)
+            ?? throw new InvalidOperationException("Чат создан, но не удалось загрузить список чатов");
+    }
+
+    internal async Task<List<UserCardDto>> FindPeopleByTag(string tag, CancellationToken cancellation)
+    {
+        var users = await _api.Search(tag, cancellation, prefix: true);
+        return users.Where(user => user.Id != _me.Id).ToList();
+    }
+
     [RelayCommand]
     void RemoveDraft(UserCardDto user) => DisposeRemoved(GroupDraft, user, SearchResults);
 
-    [RelayCommand]
+    bool CanCreateGroup() => !string.IsNullOrWhiteSpace(GroupTitle);
+
+    [RelayCommand(CanExecute = nameof(CanCreateGroup))]
     async Task CreateGroup()
     {
         var title = GroupTitle.Trim();

@@ -6,10 +6,17 @@ using Messenger.Api.Infrastructure;
 using Messenger.Api.Repositories;
 using Messenger.Api.Services;
 using Messenger.Api.Realtime;
+using Messenger.Api.Antispam;
 
 SqlMapper.AddTypeHandler(new SecretTypeHandler(new SecretCipher()));
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton(AntispamOptions.Read(builder.Configuration));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<AntispamRepository>();
+builder.Services.AddSingleton<AntispamService>();
+builder.Services.AddSingleton<AntispamMediaCatalog>();
+builder.Services.AddHostedService(services => services.GetRequiredService<AntispamMediaCatalog>());
 var allowedOrigins =
     (builder.Configuration["MESSENGER_ALLOWED_ORIGINS"] ?? "")
     .Split(
@@ -128,5 +135,6 @@ app.MapAttachmentsEndpoints();
 app.MapChatsEndpoints();
 app.MapAuthEndpoints();
 app.MapThemesEndpoints();
+app.MapAntispamEndpoints();
 
 app.Run();

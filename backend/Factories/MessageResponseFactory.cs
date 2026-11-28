@@ -8,7 +8,7 @@ public static class MessageResponseFactory
 {
     public static async Task<MessageResponse> CreateAsync(
         MessageRow msg,
-        long viewerId,
+        string viewerId,
         IReactionsService reactions,
         IAttachmentsRepository attachments,
         CancellationToken ct)

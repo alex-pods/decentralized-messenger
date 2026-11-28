@@ -8,7 +8,7 @@ public partial class ShellViewModel
         var byId = Messages.ToDictionary(message => message.Id);
         foreach (var quote in quotes)
         {
-            var original = byId.GetValueOrDefault(quote.ReplyToId!.Value);
+            var original = byId.GetValueOrDefault(quote.ReplyToId!);
             quote.ReplyAuthor = original == null ? "Ответ на сообщение"
                 : original.SenderName == $"#{original.SenderId}" ? "Участник" : original.SenderName;
             quote.Reply = original == null ? "Перейти к сообщению" : MessageMapper.Trim(original.Text, 50);

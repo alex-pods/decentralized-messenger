@@ -5,16 +5,16 @@ namespace MessengerDesktop;
 
 public partial class ChatItem : ObservableObject, IDisposable
 {
-    public long Id { get; init; }
+    public string Id { get; init; } = "";
     public string Type { get; init; } = "";
     public string Title { get; init; } = "";
     public string? Tag { get; init; }
     public string SearchSubtitle => Tag is null ? Kind : "@" + Tag;
     public string Kind { get; init; } = "";
     public bool IsGroup => Type == "group";
-    public long? AvatarUserId { get; init; }
-    public long AvatarColorKey => AvatarUserId ?? Id;
-    public long LastMessageId { get; set; }
+    public string? AvatarUserId { get; init; }
+    public string AvatarColorKey => AvatarUserId ?? Id;
+    public string? LastMessageId { get; set; }
     public long LastMessageSequence { get; set; }
     public DateTimeOffset? LastMessageSentAt { get; set; }
     public DateTimeOffset CreatedAt { get; init; }
@@ -68,13 +68,14 @@ public partial class MessageItem : TimelineItem
     public long Sequence { get; init; }
     [ObservableProperty] private bool _startsRun = true;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(VisibleMeta))] private bool _endsMinute = true;
-    public long Id { get; init; }
-    public long SenderId { get; init; }
+    public string Id { get; init; } = "";
+    public string SenderId { get; init; } = "";
     public string SenderName { get; init; } = "";
     public bool Mine { get; init; }
+    public bool IsRelayed { get; init; }
     [ObservableProperty] private string _text = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(VisibleMeta))] private string _meta = "";
-    public long? ReplyToId { get; init; }
+    public string? ReplyToId { get; init; }
     [ObservableProperty] private string _replyAuthor = "";
     [ObservableProperty] private string _reply = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasImages))] private bool _isDeleted;
@@ -100,25 +101,25 @@ public partial class MessageItem : TimelineItem
 
     partial void OnForwardedChanged(string value) => OnPropertyChanged(nameof(IsForwarded));
 
-    public long MyId { get; init; }
-    public Dictionary<string, HashSet<long>> ReactionUsers { get; private set; } = new();
+    public string MyId { get; init; } = "";
+    public Dictionary<string, HashSet<string>> ReactionUsers { get; private set; } = new();
     public HashSet<string> MyReactions { get; private set; } = new();
     [ObservableProperty] private IReadOnlyList<ReactionChip> _chips = Array.Empty<ReactionChip>();
     public bool HasReactions => Chips.Count > 0;
     partial void OnChipsChanged(IReadOnlyList<ReactionChip> value) => OnPropertyChanged(nameof(HasReactions));
 
-    public void SetReactions(Dictionary<string, HashSet<long>> map)
+    public void SetReactions(Dictionary<string, HashSet<string>> map)
     {
         ReactionUsers = map;
         RefreshReactions();
     }
 
-    public void ApplyReaction(string emoji, long userId, bool add)
+    public void ApplyReaction(string emoji, string userId, bool add)
     {
         if (!ReactionUsers.TryGetValue(emoji, out var users))
         {
             if (!add) return;
-            ReactionUsers[emoji] = users = new HashSet<long>();
+            ReactionUsers[emoji] = users = new HashSet<string>();
         }
         if (add) users.Add(userId); else users.Remove(userId);
         if (users.Count == 0) ReactionUsers.Remove(emoji);
@@ -143,7 +144,7 @@ public partial class MessageItem : TimelineItem
 
 public partial class MemberRow : ObservableObject, IDisposable
 {
-    public long Id { get; init; }
+    public string Id { get; init; } = "";
     public string Title { get; init; } = "";
     public string TagLabel { get; init; } = "";
     public string Detail => RoleLabel.Length == 0 ? TagLabel : $"{TagLabel} · {RoleLabel}";
@@ -173,8 +174,8 @@ public partial class MemberRow : ObservableObject, IDisposable
 public sealed class PinItem
 {
     public long Sequence { get; init; }
-    public long MessageId { get; init; }
-    public long? SenderId { get; init; }
+    public string MessageId { get; init; } = "";
+    public string? SenderId { get; init; }
     public DateTimeOffset? SentAt { get; init; }
     public string Text { get; set; } = "";
 }

@@ -18,19 +18,19 @@ public static class ChatsEndpoints
         g.MapGet("", ListChatsAsync);
         g.MapPost("", CreateDirectAsync);
         g.MapPost("/group", CreateGroupAsync);
-        g.MapGet("/{chatId:long}", GetChatAsync);
-        g.MapDelete("/{chatId:long}", HideChatAsync);
-        g.MapGet("/{chatId:long}/members", GetMembersAsync);
-        g.MapGet("/{chatId:long}/activity", async (HttpContext http, long chatId, long? before_id, IChatsRepository chats, CancellationToken ct) =>
+        g.MapGet("/{chatId}", GetChatAsync);
+        g.MapDelete("/{chatId}", HideChatAsync);
+        g.MapGet("/{chatId}/members", GetMembersAsync);
+        g.MapGet("/{chatId}/activity", async (HttpContext http, string chatId, long? before_id, IChatsRepository chats, CancellationToken ct) =>
             Results.Ok(await chats.GetGroupActivityAsync(chatId, http.User.GetUserId(), before_id, ct)));
-        g.MapPost("/{chatId:long}/members", AddMemberAsync);
-        g.MapDelete("/{chatId:long}/members/{userId:long}", RemoveMemberAsync);
-        g.MapPatch("/{chatId:long}/members/{userId:long}", SetRoleAsync);
-        g.MapPost("/{chatId:long}/leave", LeaveAsync);
-        g.MapPost("/{chatId:long}/owner", TransferOwnerAsync);
-        g.MapGet("/{chatId:long}/messages", GetHistoryAsync);
-        g.MapPost("/{chatId:long}/messages", SendMessageAsync);
-        g.MapPost("/{chatId:long}/read", MarkReadAsync);
+        g.MapPost("/{chatId}/members", AddMemberAsync);
+        g.MapDelete("/{chatId}/members/{userId}", RemoveMemberAsync);
+        g.MapPatch("/{chatId}/members/{userId}", SetRoleAsync);
+        g.MapPost("/{chatId}/leave", LeaveAsync);
+        g.MapPost("/{chatId}/owner", TransferOwnerAsync);
+        g.MapGet("/{chatId}/messages", GetHistoryAsync);
+        g.MapPost("/{chatId}/messages", SendMessageAsync);
+        g.MapPost("/{chatId}/read", MarkReadAsync);
     }
 
     private static async Task<IResult> ListChatsAsync(
@@ -51,7 +51,7 @@ public static class ChatsEndpoints
     private static async Task<IResult> CreateDirectAsync(
         HttpContext http, IChatsService chats, CreateDirectRequest request, CancellationToken ct)
     {
-        var result = await chats.OpenDirectChatAsync(http.User.GetUserId(), request.AnotherUserId, ct);
+        var result = await chats.OpenDirectChatAsync(http.User.GetUserId(), request, ct);
         var response = new ChatIdResponse(result.Chat.Id);
         return result.Created
             ? Results.Created($"/chats/{result.Chat.Id}", response)
@@ -66,7 +66,7 @@ public static class ChatsEndpoints
     }
 
     private static async Task<IResult> GetChatAsync(
-        HttpContext http, long chatId, IChatsService chats,
+        HttpContext http, string chatId, IChatsService chats,
         IMessagesService messages, IReactionsService reactions, IAttachmentsRepository attachments,
         CancellationToken ct)
     {
@@ -76,35 +76,35 @@ public static class ChatsEndpoints
     }
 
     private static async Task<IResult> HideChatAsync(
-        HttpContext http, long chatId, IChatsService chats, CancellationToken ct)
+        HttpContext http, string chatId, IChatsService chats, CancellationToken ct)
     {
         await chats.HideChatAsync(chatId, http.User.GetUserId(), ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> GetMembersAsync(
-        HttpContext http, long chatId, IChatsService chats, CancellationToken ct)
+        HttpContext http, string chatId, IChatsService chats, CancellationToken ct)
     {
         var members = await chats.GetMembersAsync(chatId, http.User.GetUserId(), ct);
         return Results.Ok(members.Select(ToMemberResponse).ToList());
     }
 
     private static async Task<IResult> AddMemberAsync(
-        HttpContext http, long chatId, IChatsService chats, AddMemberRequest request, CancellationToken ct)
+        HttpContext http, string chatId, IChatsService chats, AddMemberRequest request, CancellationToken ct)
     {
         await chats.AddMemberAsync(chatId, http.User.GetUserId(), request.UserId, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> RemoveMemberAsync(
-        HttpContext http, long chatId, long userId, IChatsService chats, CancellationToken ct)
+        HttpContext http, string chatId, string userId, IChatsService chats, CancellationToken ct)
     {
         await chats.RemoveMemberAsync(chatId, http.User.GetUserId(), userId, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> SetRoleAsync(
-        HttpContext http, long chatId, long userId, IChatsService chats,
+        HttpContext http, string chatId, string userId, IChatsService chats,
         SetRoleRequest request, CancellationToken ct)
     {
         var role = request.Role switch
@@ -118,7 +118,7 @@ public static class ChatsEndpoints
     }
 
     private static async Task<IResult> LeaveAsync(
-        HttpContext http, long chatId, IChatsService chats, CancellationToken ct)
+        HttpContext http, string chatId, IChatsService chats, CancellationToken ct)
     {
         var result = await chats.LeaveAsync(chatId, http.User.GetUserId(), ct);
 
@@ -132,7 +132,7 @@ public static class ChatsEndpoints
     }
 
     private static async Task<IResult> TransferOwnerAsync(
-        HttpContext http, long chatId, IChatsService chats,
+        HttpContext http, string chatId, IChatsService chats,
         TransferOwnerRequest request, CancellationToken ct)
     {
         await chats.TransferOwnerAsync(chatId, http.User.GetUserId(), request.UserId, ct);
@@ -140,10 +140,10 @@ public static class ChatsEndpoints
     }
 
     private static async Task<IResult> GetHistoryAsync(
-        HttpContext http, long chatId,
+        HttpContext http, string chatId,
         [FromQuery(Name = "limit")] int? limit,
-        [FromQuery(Name = "before_id")] long? beforeId,
-        [FromQuery(Name = "after_id")] long? afterId,
+        [FromQuery(Name = "before_id")] string? beforeId,
+        [FromQuery(Name = "after_id")] string? afterId,
         [FromQuery(Name = "before_sequence")] long? beforeSequence,
         [FromQuery(Name = "after_sequence")] long? afterSequence,
         IMessagesService messages, IReactionsService reactions, IAttachmentsRepository attachments,
@@ -162,7 +162,7 @@ public static class ChatsEndpoints
 
     private static async Task<IResult> SendMessageAsync(
         HttpContext http,
-        long chatId,
+        string chatId,
         IMessagesService messages,
         SendMessageRequest request,
         CancellationToken ct)
@@ -178,19 +178,19 @@ public static class ChatsEndpoints
     }
 
     private static async Task<IResult> MarkReadAsync(
-        HttpContext http, long chatId, IChatsService chats, MarkChatReadRequest request, CancellationToken ct)
+        HttpContext http, string chatId, IChatsService chats, MarkChatReadRequest request, CancellationToken ct)
     {
         await chats.MarkReadAsync(chatId, http.User.GetUserId(), request.MessageId, ct);
         return Results.NoContent();
     }
 
     private static async Task<object> ToChatResponseAsync(
-        ChatSummary summary, long viewerId,
+        ChatSummary summary, string viewerId,
         IMessagesService messages, IReactionsService reactions, IAttachmentsRepository attachments,
         CancellationToken ct)
     {
         MessageResponse? lastMessage = null;
-        if (summary.LastMessageId is long msgId)
+        if (summary.LastMessageId is string msgId)
         {
             var row = await messages.GetMessageAsync(msgId, viewerId, ct);
             if (row is not null)
@@ -202,7 +202,7 @@ public static class ChatsEndpoints
 
     private static Task<MessageResponse> ToMessageResponseAsync(
     MessageRow msg,
-    long viewerId,
+    string viewerId,
     IReactionsService reactions,
     IAttachmentsRepository attachments,
     CancellationToken ct)
@@ -220,11 +220,10 @@ public static class ChatsEndpoints
         _ => throw new ArgumentOutOfRangeException(nameof(role)),
     };
 
-    private static long GetUserId(this ClaimsPrincipal user)
+    private static string GetUserId(this ClaimsPrincipal user)
     {
         var sub = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
-        return long.TryParse(sub, out var id)
-            ? id
-            : throw new UnauthorizedAccessException("Missing user id claim");
+        return sub
+            ?? throw new UnauthorizedAccessException("Missing user id claim");
     }
 }

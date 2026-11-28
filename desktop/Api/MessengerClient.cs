@@ -1,5 +1,5 @@
+using Messenger.Identifiers;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -19,12 +19,20 @@ public sealed partial class MessengerClient : IDisposable
     public string ServerBase { get; }
     public string? Token { get; private set; }
 
-    public MessengerClient(string serverBase, string? token = null, HttpMessageHandler? handler = null)
+    public MessengerClient(string serverBase, string? token = null, HttpMessageHandler? handler = null,
+        string? expectedFingerprint = null)
     {
-        ServerBase = serverBase.Trim().TrimEnd('/');
-        _http = new HttpClient(handler ?? new HttpClientHandler())
+        ServerBase = NormalizeServerAddress(serverBase);
+        _expectedFingerprint = expectedFingerprint;
+        var address = new Uri(ServerBase + "/");
+        _http = new HttpClient(handler ?? new HttpClientHandler
         {
-            BaseAddress = new Uri(ServerBase + "/"),
+            AllowAutoRedirect = false,
+            UseCookies = false,
+            UseProxy = address.Scheme == Uri.UriSchemeHttps
+        })
+        {
+            BaseAddress = address,
             Timeout = TimeSpan.FromSeconds(30),
             // На этом nginx HTTP/2 иногда рвёт TLS посередине ответа.
             DefaultRequestVersion = HttpVersion.Version11,
@@ -34,19 +42,14 @@ public sealed partial class MessengerClient : IDisposable
             SetToken(token);
     }
 
-    public void SetToken(string token)
-    {
-        Token = token;
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-    }
+    public void SetToken(string token) => Token = token;
 
     public Uri WebSocketUri()
     {
         var http = new Uri(ServerBase + "/ws");
         return new UriBuilder(http)
         {
-            Scheme = http.Scheme == "https" ? "wss" : "ws",
-            Query = "user_session_token=" + Uri.EscapeDataString(Token ?? "")
+            Scheme = http.Scheme == "https" ? "wss" : "ws"
         }.Uri;
     }
 
@@ -74,7 +77,7 @@ public sealed partial class MessengerClient : IDisposable
     public async Task<ProfileDto> GetMe(CancellationToken ct = default) =>
         await Send<ProfileDto>(HttpMethod.Get, "users/me", null, ct) ?? throw new ApiException(500, "Пустой профиль");
 
-    public async Task<ProfileDto> GetUser(long id, CancellationToken ct = default) =>
+    public async Task<ProfileDto> GetUser(string id, CancellationToken ct = default) =>
         await Send<ProfileDto>(HttpMethod.Get, $"users/{id}", null, ct) ?? throw new ApiException(500, "Пустой профиль");
 
     public async Task<List<UserCardDto>> Search(string query, CancellationToken ct = default, bool prefix = false) =>
@@ -100,15 +103,16 @@ public sealed partial class MessengerClient : IDisposable
         content.Add(new StringContent(bio), "bio");
         content.Add(new ByteArrayContent(photo), "file", fileName);
         using var req = new HttpRequestMessage(HttpMethod.Post, "users/me/profile") { Content = content };
-        using var res = await _http.SendAsync(req, ct);
+        using var res = await SendRequest(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
             throw ParseError(text, res.StatusCode);
     }
 
-    public async Task<byte[]?> GetAvatar(long userId, CancellationToken ct = default)
+    public async Task<byte[]?> GetAvatar(string userId, CancellationToken ct = default)
     {
-        using var res = await _http.GetAsync($"users/{userId}/avatar", ct);
+        using var req = new HttpRequestMessage(HttpMethod.Get, $"users/{userId}/avatar");
+        using var res = await SendRequest(req, ct);
         if (res.StatusCode == HttpStatusCode.NotFound) return null;
         var data = await res.Content.ReadAsByteArrayAsync(ct);
         if (!res.IsSuccessStatusCode)
@@ -125,7 +129,8 @@ public sealed partial class MessengerClient : IDisposable
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(_http.Timeout);
         ct = timeout.Token;
-        using var res = await _http.GetAsync($"attachments/{attachmentId}", HttpCompletionOption.ResponseHeadersRead, ct);
+        using var req = new HttpRequestMessage(HttpMethod.Get, $"attachments/{attachmentId}");
+        using var res = await SendRequest(req, ct, HttpCompletionOption.ResponseHeadersRead);
         if (!res.IsSuccessStatusCode)
             throw ParseError(await res.Content.ReadAsStringAsync(ct), res.StatusCode);
         if (res.Content.Headers.ContentLength > maxBytes)
@@ -142,53 +147,55 @@ public sealed partial class MessengerClient : IDisposable
         return bytes.ToArray();
     }
 
-    public async Task<long> CreateDirect(long otherUserId, CancellationToken ct = default)
+    public async Task<string> CreateDirect(string otherUserId, CancellationToken ct = default)
     {
         var dto = await Send<ChatIdDto>(HttpMethod.Post, "chats", new Dictionary<string, object?>
         {
-            ["another_user_id"] = otherUserId
+            ["another_user_id"] = otherUserId,
+            ["chat_id"] = EntityIds.NewChat()
         }, ct);
         return dto?.ChatId ?? throw new ApiException(500, "Сервер не вернул chat_id");
     }
 
-    public async Task<long> CreateGroup(string title, IEnumerable<long> memberIds, CancellationToken ct = default)
+    public async Task<string> CreateGroup(string title, IEnumerable<string> memberIds, CancellationToken ct = default)
     {
         var dto = await Send<ChatIdDto>(HttpMethod.Post, "chats/group", new Dictionary<string, object?>
         {
             ["title"] = title,
-            ["member_ids"] = memberIds.ToArray()
+            ["member_ids"] = memberIds.ToArray(),
+            ["chat_id"] = EntityIds.NewChat()
         }, ct);
         return dto?.ChatId ?? throw new ApiException(500, "Сервер не вернул chat_id");
     }
 
-    public async Task<ChatDto> GetChat(long chatId, CancellationToken ct = default) =>
+    public async Task<ChatDto> GetChat(string chatId, CancellationToken ct = default) =>
         await Send<ChatDto>(HttpMethod.Get, $"chats/{chatId}", null, ct) ?? throw new ApiException(500, "Пустой чат");
 
-    public Task HideChat(long chatId, CancellationToken ct = default) =>
+    public Task HideChat(string chatId, CancellationToken ct = default) =>
         Send(HttpMethod.Delete, $"chats/{chatId}", new Dictionary<string, object?>(), ct);
 
-    public async Task<List<MemberDto>> GetMembers(long chatId, CancellationToken ct = default) =>
+    public async Task<List<MemberDto>> GetMembers(string chatId, CancellationToken ct = default) =>
         await Send<List<MemberDto>>(HttpMethod.Get, $"chats/{chatId}/members", null, ct) ?? new();
 
-    public Task AddMember(long chatId, long userId, CancellationToken ct = default) =>
+    public Task AddMember(string chatId, string userId, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"chats/{chatId}/members", new Dictionary<string, object?>
         {
             ["user_id"] = userId
         }, ct);
 
-    public Task RemoveMember(long chatId, long userId, CancellationToken ct = default) =>
+    public Task RemoveMember(string chatId, string userId, CancellationToken ct = default) =>
         Send(HttpMethod.Delete, $"chats/{chatId}/members/{userId}", null, ct);
 
-    public Task Leave(long chatId, CancellationToken ct = default) =>
+    public Task Leave(string chatId, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"chats/{chatId}/leave", new Dictionary<string, object?>(), ct);
 
-    public Task TransferOwner(long chatId, long userId, CancellationToken ct = default) =>
+    public Task TransferOwner(string chatId, string userId, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"chats/{chatId}/owner", new Dictionary<string, object?>
         {
             ["user_id"] = userId
         }, ct);
 
-    public Task SetRole(long chatId, long userId, string role, CancellationToken ct = default) =>
+    public Task SetRole(string chatId, string userId, string role, CancellationToken ct = default) =>
         Send(new HttpMethod("PATCH"), $"chats/{chatId}/members/{userId}", new Dictionary<string, object?>
         {
             ["role"] = role
@@ -198,7 +205,7 @@ public sealed partial class MessengerClient : IDisposable
     /// История упорядочена по sequence. ID-курсоры оставлены для старых вызовов API.
     /// </summary>
     public async Task<List<MessageDto>> GetMessages(
-        long chatId, int limit = 50, long? beforeId = null, long? afterId = null, CancellationToken ct = default,
+        string chatId, int limit = 50, string? beforeId = null, string? afterId = null, CancellationToken ct = default,
         long? beforeSequence = null, long? afterSequence = null)
     {
         var path = $"chats/{chatId}/messages?limit={limit}";
@@ -210,62 +217,63 @@ public sealed partial class MessengerClient : IDisposable
     }
 
     /// <summary>client_ref — идемпотентный ключ отправителя (до 64 символов), обычно Guid без дефисов.</summary>
-    public async Task<long> SendMessage(
-        long chatId, string text, long? replyToId = null, string? clientRef = null, CancellationToken ct = default)
+    public async Task<string> SendMessage(
+        string chatId, string text, string? replyToId = null, string? clientRef = null, CancellationToken ct = default)
     {
-        var body = new Dictionary<string, object?> { ["text"] = text };
+        var body = new Dictionary<string, object?> { ["text"] = text, ["message_id"] = EntityIds.NewMessage(chatId) };
         if (replyToId is { } rid) body["reply_to_id"] = rid;
         if (!string.IsNullOrWhiteSpace(clientRef)) body["client_ref"] = clientRef;
         var dto = await Send<MessageIdDto>(HttpMethod.Post, $"chats/{chatId}/messages", body, ct);
         return dto?.MessageId ?? throw new ApiException(500, "Сервер не вернул message_id");
     }
 
-    public async Task<long> ForwardMessage(long messageId, long chatId, CancellationToken ct = default)
+    public async Task<string> ForwardMessage(string messageId, string chatId, CancellationToken ct = default)
     {
         var dto = await Send<MessageIdDto>(HttpMethod.Post, $"messages/{messageId}/forward", new Dictionary<string, object?>
         {
-            ["chat_id"] = chatId
+            ["chat_id"] = chatId,
+            ["message_id"] = EntityIds.NewMessage(chatId)
         }, ct);
         return dto?.MessageId ?? throw new ApiException(500, "Сервер не вернул message_id");
     }
 
-    public Task MarkRead(long chatId, long messageId, CancellationToken ct = default) =>
+    public Task MarkRead(string chatId, string messageId, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"chats/{chatId}/read", new Dictionary<string, object?>
         {
             ["message_id"] = messageId
         }, ct);
 
-    public Task EditMessage(long messageId, string text, CancellationToken ct = default) =>
+    public Task EditMessage(string messageId, string text, CancellationToken ct = default) =>
         Send(new HttpMethod("PATCH"), $"messages/{messageId}", new Dictionary<string, object?>
         {
             ["text"] = text
         }, ct);
 
-    public Task DeleteMessage(long messageId, bool forEveryone, CancellationToken ct = default) =>
+    public Task DeleteMessage(string messageId, bool forEveryone, CancellationToken ct = default) =>
         Send(HttpMethod.Delete, $"messages/{messageId}", new Dictionary<string, object?>
         {
             ["for_everyone"] = forEveryone
         }, ct);
     
-    public async Task<List<PinDto>> GetPins(long chatId, CancellationToken ct = default) =>
+    public async Task<List<PinDto>> GetPins(string chatId, CancellationToken ct = default) =>
         await Send<List<PinDto>>(HttpMethod.Get, $"chats/{chatId}/pins", null, ct) ?? new();
 
-    public Task PinMessage(long chatId, long messageId, CancellationToken ct = default) =>
+    public Task PinMessage(string chatId, string messageId, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"chats/{chatId}/pins", new Dictionary<string, object?>
         {
             ["message_id"] = messageId
         }, ct);
 
-    public Task UnpinMessage(long chatId, long messageId, CancellationToken ct = default) =>
+    public Task UnpinMessage(string chatId, string messageId, CancellationToken ct = default) =>
         Send(HttpMethod.Delete, $"chats/{chatId}/pins/{messageId}", null, ct);
 
-    public Task AddReaction(long messageId, string emoji, CancellationToken ct = default) =>
+    public Task AddReaction(string messageId, string emoji, CancellationToken ct = default) =>
         Send(HttpMethod.Post, $"messages/{messageId}/reactions", new Dictionary<string, object?>
         {
             ["emoji"] = emoji
         }, ct);
 
-    public Task RemoveReaction(long messageId, string emoji, CancellationToken ct = default) =>
+    public Task RemoveReaction(string messageId, string emoji, CancellationToken ct = default) =>
         Send(HttpMethod.Delete, $"messages/{messageId}/reactions/{Uri.EscapeDataString(emoji)}", null, ct);
 
     public async Task<T?> Send<T>(HttpMethod method, string path, object? body, CancellationToken ct)
@@ -275,7 +283,7 @@ public sealed partial class MessengerClient : IDisposable
         using var req = new HttpRequestMessage(method, path);
         if (body != null)
             req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
-        using var res = await _http.SendAsync(req, ct);
+        using var res = await SendRequest(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
         {

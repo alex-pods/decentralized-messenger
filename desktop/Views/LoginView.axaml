@@ -85,6 +85,9 @@
                      Classes.invalid="{Binding ConnectionError, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
             <TextBlock Classes="caption" TextWrapping="Wrap" Margin="0,4,0,0"
                        Text="Аккаунты разных серверов независимы."/>
+            <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    IsVisible="{Binding CanRestoreSaved}" IsEnabled="{Binding !Busy}"
+                    Command="{Binding RestoreSavedCommand}" Content="Подключить сохранённый аккаунт"/>
           </StackPanel>
         </StackPanel>
       </Border>

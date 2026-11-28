@@ -94,7 +94,7 @@ public partial class ShellView : UserControl
     }
 
     bool _showChats = true;
-    long? _presentedChatId;
+    string? _presentedChatId;
     const double ChatSidebarWidth = 300;
 
     void OnShowChats(object? sender, RoutedEventArgs e)

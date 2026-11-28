@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace MessengerDesktop.Appearance;
 
 public sealed record ThemeFile(int SchemaVersion, ThemeSettings Theme);
-public sealed record ThemeShare(string Id, long OwnerId, int Version, int SchemaVersion, ThemeSettings Theme);
+public sealed record ThemeShare(string Id, string OwnerId, int Version, int SchemaVersion, ThemeSettings Theme);
 public static class ThemeExchange
 {
     public const int MaximumBytes = 16384;

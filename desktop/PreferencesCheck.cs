@@ -33,10 +33,10 @@ public static class PreferencesCheck
             Require(AppPreferences.SaveError == null, "Save error was not cleared after recovery");
 
             LocalPinStore.DirectoryPath = Path.Combine(directory, "pins");
-            LocalPinStore.Save("https://one.example/api/dev", 1, [new(2, 3, "local pin")]);
-            Require(LocalPinStore.Load("https://one.example/api/dev/", 1).Single().Text == "local pin", "Local pins did not persist");
-            Require(LocalPinStore.Load("https://one.example/api/dev", 2).Count == 0 &&
-                LocalPinStore.Load("https://two.example/api/dev", 1).Count == 0, "Pins leaked across users or servers");
+            LocalPinStore.Save("https://one.example/api/dev", "u1", [new("c2", "m3", "local pin")]);
+            Require(LocalPinStore.Load("https://one.example/api/dev/", "u1").Single().Text == "local pin", "Local pins did not persist");
+            Require(LocalPinStore.Load("https://one.example/api/dev", "u2").Count == 0 &&
+                LocalPinStore.Load("https://two.example/api/dev", "u1").Count == 0, "Pins leaked across users or servers");
             Console.WriteLine("PASS preferences: persistence, validation, corruption, write failure/recovery; local pin account/server isolation");
             return 0;
         }

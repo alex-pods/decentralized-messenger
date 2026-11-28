@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace MessengerDesktop;
 
-public sealed record PinListItem(long MessageId, string Text, bool Local, bool CanRemove,
+public sealed record PinListItem(string MessageId, string Text, bool Local, bool CanRemove,
     bool Mine, string? Sender, string? Time, long? Sequence = null, DateTimeOffset? SentAt = null)
 {
     public string Scope => Local ? "На этом устройстве" : "Для всех";
@@ -21,14 +21,14 @@ public partial class ShellViewModel
     private bool _showingPinnedMessages;
 
     public bool PinListEmpty => PinList.Count == 0;
-    public bool CanPinLocally => HasChat && SelectedMessage is { IsDeleted: false, IsNotStored: false };
+    public bool CanPinLocally => _history != null && HasChat && SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public string LocalPinActionLabel => SelectedChat != null && SelectedMessage != null &&
         ReadLocalPins().Any(p => p.ChatId == SelectedChat.Id && p.MessageId == SelectedMessage.Id)
             ? "Открепить на устройстве" : "Закрепить на устройстве";
 
     List<LocalPinStore.Entry> ReadLocalPins()
     {
-        try { return LocalPinStore.Load(_api.ServerBase, _me.Id); }
+        try { return _history?.ReadLocalPins() ?? []; }
         catch (Exception ex)
         {
             Error = "Не удалось прочитать личные закрепления: " + ex.Message;
@@ -64,7 +64,7 @@ public partial class ShellViewModel
         OnPropertyChanged(nameof(LocalPinActionLabel));
     }
 
-    PinListItem MakePin(long id, string text, bool local, bool canRemove, long? senderId, DateTimeOffset? sentAt, long? sequence)
+    PinListItem MakePin(string id, string text, bool local, bool canRemove, string? senderId, DateTimeOffset? sentAt, long? sequence)
     {
         var mine = senderId == _me.Id;
         var name = senderId is { } sender && !mine && IsGroup && _names.TryGetValue(sender, out var knownName)
@@ -84,7 +84,7 @@ public partial class ShellViewModel
         long? before = null;
         while (legacy.Any(id => !known.ContainsKey(id)))
         {
-            var page = await _api.GetMessages(chat.Id, 100, beforeSequence: before);
+            var page = await FetchHistory(chat.Id, 100, beforeSequence: before, preferCacheOnError: false);
             if (!SameChat(generation, chat.Id)) return;
             foreach (var message in page) known[message.Id] = message.Sequence;
             if (page.Count < 100) break;
@@ -93,26 +93,36 @@ public partial class ShellViewModel
         await Ui(() =>
         {
             if (!SameChat(generation, chat.Id)) return;
-            var pins = LocalPinStore.Load(_api.ServerBase, _me.Id);
-            for (var i = 0; i < pins.Count; i++)
-                if (pins[i].ChatId == chat.Id && pins[i].Sequence == null)
-                    pins[i] = pins[i] with { Sequence = known.GetValueOrDefault(pins[i].MessageId) };
-            LocalPinStore.Save(_api.ServerBase, _me.Id, pins);
+            _history?.UpdateLocalPins(pins =>
+            {
+                var changed = false;
+                for (var i = 0; i < pins.Count; i++)
+                {
+                    if (pins[i].ChatId != chat.Id || pins[i].Sequence != null ||
+                        !known.TryGetValue(pins[i].MessageId, out var sequence)) continue;
+                    pins[i] = pins[i] with { Sequence = sequence };
+                    changed = true;
+                }
+                return changed;
+            });
             RefreshPinList();
         });
     }
 
-    void UpdateLocalPin(long chatId, long messageId, string? text)
+    void UpdateLocalPin(string chatId, string messageId, string? text)
     {
         try
         {
-            var pins = LocalPinStore.Load(_api.ServerBase, _me.Id);
-            var index = pins.FindIndex(p => p.ChatId == chatId && p.MessageId == messageId);
-            if (index < 0) return;
-            if (text == null) pins.RemoveAt(index);
-            else pins[index] = pins[index] with { Text = text };
-            LocalPinStore.Save(_api.ServerBase, _me.Id, pins);
-            RefreshPinList();
+            var changed = false;
+            _history?.UpdateLocalPins(pins =>
+            {
+                var index = pins.FindIndex(p => p.ChatId == chatId && p.MessageId == messageId);
+                if (index < 0) return false;
+                if (text == null) pins.RemoveAt(index);
+                else pins[index] = pins[index] with { Text = text };
+                return changed = true;
+            });
+            if (changed) RefreshPinList();
         }
         catch (Exception ex) { Error = "Не удалось обновить личные закрепы: " + ex.Message; }
     }
@@ -131,15 +141,17 @@ public partial class ShellViewModel
     [RelayCommand]
     void ToggleLocalPin()
     {
-        if (!CanPinLocally || SelectedChat is not { } chat || SelectedMessage is not { } message) return;
+        if (_history == null || !CanPinLocally || SelectedChat is not { } chat || SelectedMessage is not { } message) return;
         try
         {
-            // Читаем напрямую: при повреждённом файле нельзя затирать его пустым списком.
-            var pins = LocalPinStore.Load(_api.ServerBase, _me.Id);
-            var added = pins.RemoveAll(p => p.ChatId == chat.Id && p.MessageId == message.Id) == 0;
-            if (added)
-                pins.Add(new(chat.Id, message.Id, message.Text, message.SenderId, message.SentAt, message.Sequence));
-            LocalPinStore.Save(_api.ServerBase, _me.Id, pins);
+            var added = false;
+            _history.UpdateLocalPins(pins =>
+            {
+                added = pins.RemoveAll(p => p.ChatId == chat.Id && p.MessageId == message.Id) == 0;
+                if (added)
+                    pins.Add(new(chat.Id, message.Id, message.Text, message.SenderId, message.SentAt, message.Sequence));
+                return true;
+            });
             RefreshPinList();
             if (added && _stripPins.FirstOrDefault()?.MessageId == message.Id)
             {
@@ -167,14 +179,13 @@ public partial class ShellViewModel
         {
             if (pin.Local)
             {
-                var pins = LocalPinStore.Load(_api.ServerBase, _me.Id);
-                pins.RemoveAll(p => p.ChatId == chat.Id && p.MessageId == pin.MessageId);
-                LocalPinStore.Save(_api.ServerBase, _me.Id, pins);
+                _history?.UpdateLocalPins(pins => pins.RemoveAll(p => p.ChatId == chat.Id && p.MessageId == pin.MessageId) > 0);
             }
             else
             {
                 if (!CanManagePins) return;
                 await _api.UnpinMessage(chat.Id, pin.MessageId);
+                CacheSharedPin(chat.Id, pin.MessageId, null);
                 if (SelectedChat?.Id == chat.Id) RemovePin(pin.MessageId);
             }
             RefreshPinList();

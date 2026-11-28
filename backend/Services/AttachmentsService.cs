@@ -12,9 +12,9 @@ public sealed record AttachmentDownload(string Path, string FileName);
 
 public interface IAttachmentsService
 {
-    Task<List<AttachmentResponse>> Upload(long messageId, long userId, IReadOnlyList<IFormFile> formFiles,
+    Task<List<AttachmentResponse>> Upload(string messageId, string userId, IReadOnlyList<IFormFile> formFiles,
         CancellationToken cancellationToken);
-    Task<AttachmentDownload> GetDownload(long attachmentId, long userId);
+    Task<AttachmentDownload> GetDownload(long attachmentId, string userId);
 }
 
 public sealed class AttachmentsService(
@@ -30,7 +30,7 @@ public sealed class AttachmentsService(
     private const int MaxFiles = 10;
 
     public async Task<List<AttachmentResponse>> Upload(
-        long messageId, long userId, IReadOnlyList<IFormFile> formFiles, CancellationToken cancellationToken)
+        string messageId, string userId, IReadOnlyList<IFormFile> formFiles, CancellationToken cancellationToken)
     {
         if (formFiles.Count == 0) throw AppException.BadRequest("file is required");
         if (formFiles.Count > MaxFiles) throw AppException.BadRequest("up to 10 files may be uploaded at once");
@@ -100,7 +100,7 @@ public sealed class AttachmentsService(
         return result;
     }
 
-    public async Task<AttachmentDownload> GetDownload(long attachmentId, long userId)
+    public async Task<AttachmentDownload> GetDownload(long attachmentId, string userId)
     {
         var attachment = await attachments.GetById(attachmentId)
             ?? throw AppException.NotFound("attachment not found");
@@ -112,12 +112,10 @@ public sealed class AttachmentsService(
         return new AttachmentDownload(files.GetAbsolutePath(attachment.StoragePath), attachment.FileName);
     }
 
-    private async Task RequireMember(long chatId, long userId)
+    private async Task RequireMember(string chatId, string userId)
     {
-        if (!await memberships.ChatExists(chatId))
-            throw AppException.NotFound("chat not found");
         if (!await memberships.IsMember(chatId, userId))
-            throw AppException.Forbidden("user is not a chat member");
+            throw AppException.NotFound("Chat not found");
     }
 
     private async Task CleanupFiles(IEnumerable<string> paths)

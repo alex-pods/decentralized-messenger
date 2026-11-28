@@ -7,13 +7,13 @@ namespace Messenger.Api.Repositories;
 
 public interface IAvatarsRepository
 {
-    Task<Dictionary<long, Avatar>> GetByUserIds(IReadOnlyCollection<long> userIds);
+    Task<Dictionary<string, Avatar>> GetByUserIds(IReadOnlyCollection<string> userIds);
     Task<string?> Swap(Avatar avatar, IDbTransaction transaction);
 }
 
 public sealed class AvatarsRepository(DbConnectionFactory db) : IAvatarsRepository
 {
-    public async Task<Dictionary<long, Avatar>> GetByUserIds(IReadOnlyCollection<long> userIds)
+    public async Task<Dictionary<string, Avatar>> GetByUserIds(IReadOnlyCollection<string> userIds)
     {
         if (userIds.Count == 0) return [];
         using var connection = db.Open();

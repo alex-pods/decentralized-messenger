@@ -3,17 +3,18 @@ using Dapper;
 using Messenger.Api.Database;
 using Messenger.Api.Infrastructure;
 using Messenger.Api.Models;
+using Messenger.Identifiers;
 
 namespace Messenger.Api.Repositories;
 
 public interface IUsersRepository
 {
-    Task<User?> GetById(long id);
+    Task<User?> GetById(string id);
     Task<User?> GetByTag(string tag);
-    Task<List<UserSearchResult>> Search(long viewerId, string query, int limit, bool prefix);
-    Task<long> Insert(string tag, Secret name, Secret passwordHash);
-    Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch, IDbTransaction? transaction = null);
-    Task TouchLastSeen(long id);
+    Task<List<UserSearchResult>> Search(string viewerId, string query, int limit, bool prefix);
+    Task<string> Insert(string tag, Secret name, Secret passwordHash);
+    Task UpdateProfile(string id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch, IDbTransaction? transaction = null);
+    Task TouchLastSeen(string id);
 }
 
 /// <summary>Database access for users.</summary>
@@ -21,7 +22,7 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
 {
     private const string Columns = "id, tag, name, bio, created_at AS CreatedAt, last_seen_at AS LastSeenAt, allow_tag_search AS AllowTagSearch, password_hash AS PasswordHash";
 
-    public async Task<User?> GetById(long id)
+    public async Task<User?> GetById(string id)
     {
         using var connection = db.Open();
         return await connection.QuerySingleOrDefaultAsync<User>(
@@ -35,7 +36,7 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
             $"SELECT {Columns} FROM users WHERE tag = @tag COLLATE NOCASE", new { tag });
     }
 
-    public async Task<List<UserSearchResult>> Search(long viewerId, string query, int limit, bool prefix)
+    public async Task<List<UserSearchResult>> Search(string viewerId, string query, int limit, bool prefix)
     {
         using var connection = db.Open();
         // The NOCASE tag index serves both the exact lookup and the escaped prefix scan.
@@ -65,15 +66,16 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
         return users.ToList();
     }
 
-    public async Task<long> Insert(string tag, Secret name, Secret passwordHash)
+    public async Task<string> Insert(string tag, Secret name, Secret passwordHash)
     {
         using var connection = db.Open();
-        return await connection.ExecuteScalarAsync<long>(
-            "INSERT INTO users(tag, name, password_hash) VALUES(@tag, @name, @passwordHash); SELECT last_insert_rowid()",
-            new { tag, name, passwordHash });
+        var id = EntityIds.NewUser();
+        await connection.ExecuteAsync("INSERT INTO users(id, tag, name, password_hash) VALUES(@id, @tag, @name, @passwordHash)",
+            new { id, tag, name, passwordHash });
+        return id;
     }
 
-    public async Task UpdateProfile(long id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch, IDbTransaction? transaction = null)
+    public async Task UpdateProfile(string id, Secret? name, bool updateBio, Secret? bio, bool? allowTagSearch, IDbTransaction? transaction = null)
     {
         using var ownedConnection = transaction == null ? db.Open() : null;
         var connection = transaction?.Connection ?? ownedConnection!;
@@ -82,7 +84,7 @@ public sealed class UsersRepository(DbConnectionFactory db) : IUsersRepository
             new { id, name, updateBio, bio, allowTagSearch }, transaction);
     }
 
-    public async Task TouchLastSeen(long id)
+    public async Task TouchLastSeen(string id)
     {
         using var connection = db.Open();
         await connection.ExecuteAsync(

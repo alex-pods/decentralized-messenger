@@ -9,7 +9,7 @@ public partial class UserProfilePage : UserControl
 {
     CancellationTokenSource? _load;
     ShellViewModel _shell = null!;
-    long _userId;
+    string _userId = "";
     Bitmap? _photo;
     bool _attached;
 
@@ -20,7 +20,7 @@ public partial class UserProfilePage : UserControl
         ProfileContent.Width = Math.Max(0, e.NewSize.Width - gutter);
     }
 
-    public UserProfilePage(ShellViewModel shell, long userId) : this()
+    public UserProfilePage(ShellViewModel shell, string userId) : this()
     {
         _shell = shell;
         _userId = userId;

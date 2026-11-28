@@ -8,8 +8,8 @@ public static class AttachmentsEndpoints
 {
     public static void MapAttachmentsEndpoints(this WebApplication app)
     {
-        app.MapPost("/messages/{message_id:long}/attachments",
-            async (long message_id, HttpContext context, IAttachmentsService service) =>
+        app.MapPost("/messages/{message_id}/attachments",
+            async (string message_id, HttpContext context, IAttachmentsService service) =>
             {
                 IFormCollection form;
                 try

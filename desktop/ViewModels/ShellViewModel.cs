@@ -17,10 +17,10 @@ public partial class ShellViewModel : ObservableObject
     private readonly Navigator _nav;
     private readonly MessengerClient _api;
     private readonly LiveConnection _live;
-    private readonly Dictionary<long, string> _names = new();
+    private readonly Dictionary<string, string> _names = new();
     private readonly object _avatarLoadsGate = new();
-    private readonly Dictionary<long, Task<byte[]?>> _avatarLoads = new();
-    private readonly ConcurrentDictionary<long, int> _avatarVersions = new();
+    private readonly Dictionary<string, Task<byte[]?>> _avatarLoads = new();
+    private readonly ConcurrentDictionary<string, int> _avatarVersions = new();
     private ProfileDto _me;
     private string _myRole = "";
     private readonly List<PinItem> _pins = new();
@@ -45,6 +45,7 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string? _error;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendDraft))]
+    [NotifyPropertyChangedFor(nameof(CanToggleRelay))]
     private bool _busy;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendDraft))]
@@ -83,6 +84,9 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(WorkspaceTitle))]
     [NotifyPropertyChangedFor(nameof(CanManagePins))]
     [NotifyPropertyChangedFor(nameof(CanPin))]
+    [NotifyPropertyChangedFor(nameof(RelayArmed))]
+    [NotifyPropertyChangedFor(nameof(CanToggleRelay))]
+    [NotifyPropertyChangedFor(nameof(ComposerWatermark))]
     private ChatItem? _selectedChat;
 
     [ObservableProperty]
@@ -102,12 +106,14 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ComposeHint))]
     [NotifyPropertyChangedFor(nameof(ComposeDetail))]
     [NotifyPropertyChangedFor(nameof(HasComposeHint))]
+    [NotifyPropertyChangedFor(nameof(CanToggleRelay))]
     private MessageItem? _replyTo;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ComposeHint))]
     [NotifyPropertyChangedFor(nameof(ComposeDetail))]
     [NotifyPropertyChangedFor(nameof(HasComposeHint))]
+    [NotifyPropertyChangedFor(nameof(CanToggleRelay))]
     private MessageItem? _editing;
 
     [ObservableProperty]
@@ -135,7 +141,7 @@ public partial class ShellViewModel : ObservableObject
     public bool HasDraftLengthHint => Draft.Trim().Length > 3800;
     public bool CanSendDraft => HasChat && !Busy && !AntispamRequired && !string.IsNullOrWhiteSpace(Draft) && Draft.Trim().Length <= 4096;
     public bool HasAvatar => Avatar is not null;
-    public long CurrentUserId => _me.Id;
+    public string CurrentUserId => _me.Id;
     internal MessengerClient ThemeApi => _api;
     public string ChatTitle => SelectedChat?.Title ?? "";
     public bool OverlayOpen => Overlay.Length > 0;
@@ -153,7 +159,7 @@ public partial class ShellViewModel : ObservableObject
     public bool CanEdit => SelectedMessage is { Mine: true, IsDeleted: false, IsNotStored: false, IsForwarded: false };
     public bool CanForward => SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public bool CanDeleteEveryone =>
-        SelectedMessage is { IsDeleted: false } && (SelectedMessage.Mine || _myRole is "owner" or "admin");
+        SelectedMessage is { IsDeleted: false, IsRelayed: false } && (SelectedMessage.Mine || _myRole is "owner" or "admin");
     public bool CanManagePins => HasChat && (!IsGroup || _myRole is "owner" or "admin");
     public bool CanPin => CanManagePins && SelectedMessage is { IsDeleted: false, IsNotStored: false };
     public bool SelectedIsPinned => SelectedMessage != null && _pins.Any(p => p.MessageId == SelectedMessage.Id);
@@ -173,15 +179,17 @@ public partial class ShellViewModel : ObservableObject
         : ReplyTo?.SenderName;
     public string? ComposeDetail => ReplyTo is { } original && Editing == null ? MessageMapper.Trim(original.Text, 100) : null;
 
-    public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me)
+    public ShellViewModel(Navigator nav, MessengerClient api, ProfileDto me, string? legacyServerAddress = null)
     {
         Messages.CollectionChanged += (_, _) => ScheduleTimelineUpdate();
         _nav = nav;
         _api = api;
         _api.AntispamChanged += OnAntispamChanged;
+        _api.RelayCapabilityChanged += OnRelayCapabilityChanged;
         AntispamRequired = _api.AntispamBlocked;
         _ = _api.DiscoverAntispam();
         _me = me;
+        _history = OpenLocalHistory(legacyServerAddress);
         _names[me.Id] = me.DisplayName;
         Header = $"{me.DisplayName}  @{me.Tag}";
         DisplayName = me.DisplayName;
@@ -191,10 +199,12 @@ public partial class ShellViewModel : ObservableObject
         _live = new LiveConnection(api);
         _live.Event += e => Dispatcher.UIThread.Post(() => Apply(e));
         _live.State += s => Dispatcher.UIThread.Post(() => Status = s);
+        _live.IdentityRejected += warning => Dispatcher.UIThread.Post(() => Error = warning);
         _live.SessionRevoked += () => Dispatcher.UIThread.Post(() => ForceLogout("Сессия завершена. Войдите снова."));
         _live.Reconnected += () => Dispatcher.UIThread.Post(() =>
         {
             _ = CatchUpAfterReconnect();
+            _ = ReloadChats();
             _ = LoadGroupActivity(SelectedChat);
         });
         _ = _live.RunAsync();
@@ -224,6 +234,10 @@ public partial class ShellViewModel : ObservableObject
         ClearImagePreviews();
         _live.Dispose();
         _api.AntispamChanged -= OnAntispamChanged;
+        _api.RelayCapabilityChanged -= OnRelayCapabilityChanged;
+        _liveMessages.Clear();
+        _relayDrafts.Clear();
+        _relayAttempts.Clear();
         _api.Dispose();
         DisposeItems(Chats);
         DisposeItems(SearchResults, GroupDraft);
@@ -245,13 +259,13 @@ public partial class ShellViewModel : ObservableObject
         DisposeItems(SearchResults, GroupDraft);
     }
 
-    string NameOf(long id) => id == _me.Id ? "Вы" : _names.TryGetValue(id, out var n) ? n : "#" + id;
+    string NameOf(string id) => id == _me.Id ? "Вы" : _names.TryGetValue(id, out var n) ? n : "#" + id;
 
     void RequestScroll() => Dispatcher.UIThread.Post(() => ScrollToEnd?.Invoke());
 
     static Task Ui(Action action) => Dispatcher.UIThread.InvokeAsync(action).GetTask();
 
-    async Task LoadAvatar(long userId, Action<byte[]?> apply)
+    async Task LoadAvatar(string userId, Action<byte[]?> apply)
     {
         var version = _avatarVersions.GetOrAdd(userId, 0);
         try
@@ -270,7 +284,7 @@ public partial class ShellViewModel : ObservableObject
         }
     }
 
-    Task<byte[]?> GetAvatarBytes(long userId)
+    Task<byte[]?> GetAvatarBytes(string userId)
     {
         lock (_avatarLoadsGate)
         {
@@ -290,7 +304,7 @@ public partial class ShellViewModel : ObservableObject
         }
     }
 
-    void RefreshAvatar(long userId, byte[]? bytes)
+    void RefreshAvatar(string userId, byte[]? bytes)
     {
         foreach (var chat in Chats.Where(c => c.AvatarUserId == userId)) chat.Avatar = CreateAvatar(bytes);
         foreach (var user in SearchResults.Concat(GroupDraft).Where(u => u.Id == userId)) user.Avatar = CreateAvatar(bytes);
@@ -298,7 +312,7 @@ public partial class ShellViewModel : ObservableObject
         if (userId == _me.Id) Avatar = CreateAvatar(bytes);
     }
 
-    void InvalidateAvatar(long userId)
+    void InvalidateAvatar(string userId)
     {
         _avatarVersions.AddOrUpdate(userId, 1, (_, version) => version + 1);
         lock (_avatarLoadsGate) _avatarLoads.Remove(userId);

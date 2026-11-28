@@ -1,6 +1,7 @@
 """Isolated migration, HTTP and native desktop checks for per-chat message order."""
 import argparse
 import base64
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 import json
@@ -17,32 +18,74 @@ import urllib.request
 
 
 def check_migration(repo, source, destination):
+    expected_links = {
+        'users': {'id': 'u'}, 'sessions': {'user_id': 'u'}, 'avatars': {'user_id': 'u'},
+        'chats': {'id': 'c', 'user_a_id': 'u', 'user_b_id': 'u', 'created_by': 'u'},
+        'users_chats': {'user_id': 'u', 'chat_id': 'c', 'last_read_message_id': 'm'},
+        'messages': {'id': 'm', 'chat_id': 'c', 'sender_id': 'u', 'reply_to_id': 'm'},
+        'message_hidden': {'user_id': 'u', 'message_id': 'm'}, 'attachments': {'message_id': 'm'},
+        'message_reactions': {'message_id': 'm', 'user_id': 'u'},
+        'message_forwards': {'message_id': 'm', 'author_id': 'u'},
+        'pinned_messages': {'chat_id': 'c', 'message_id': 'm', 'pinned_by': 'u'},
+        'shared_themes': {'owner_id': 'u'}, 'antispam_blocks': {'user_id': 'u'},
+        'antispam_attempts': {'user_id': 'u'}, 'group_activity': {'chat_id': 'c', 'user_id': 'u'},
+    }
+    migrations = repo / 'backend/Database/Migrations'
     with closing(sqlite3.connect(source.resolve().as_uri() + '?mode=ro', uri=True)) as original:
         with closing(sqlite3.connect(destination)) as copy, copy:
             original.backup(copy)
     with closing(sqlite3.connect(destination)) as db, db:
-        assert 'sequence' not in [r[1] for r in db.execute('PRAGMA table_info(messages)')], 'Use a pre-sequence database copy'
-        tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
-        before = {}
-        for table in tables:
-            columns = [r[1] for r in db.execute(f'PRAGMA table_info("{table}")')]
-            before[table] = (columns, db.execute(f'SELECT * FROM "{table}" ORDER BY rowid').fetchall())
         db.execute('PRAGMA foreign_keys=ON')
-        migration = (repo / 'backend/Database/Migrations/008_message_sequence.sql').read_text(encoding='utf-8')
-        db.executescript('BEGIN IMMEDIATE;\n' + migration + '\nCOMMIT;')
+        if 'sequence' not in [c[1] for c in db.execute('PRAGMA table_info(messages)')]:
+            sql = (migrations / '008_message_sequence.sql').read_text(encoding='utf-8')
+            db.executescript('BEGIN IMMEDIATE;\n' + sql + '\nCOMMIT;')
+        assert not db.execute('PRAGMA foreign_key_check').fetchall()
+        counters = dict(db.execute("SELECT name, seq FROM sqlite_sequence WHERE name IN ('sessions', 'attachments')"))
+        before = {}
+        for table in expected_links:
+            columns = [c[1] for c in db.execute(f'PRAGMA table_info("{table}")')]
+            before[table] = columns, db.execute(f'SELECT * FROM "{table}"').fetchall()
+
+        # Capture the temporary mapping on this test connection so every FK and every
+        # uninterpreted ciphertext byte can be compared. It is absent from the migrated DB.
+        sql = (migrations / '009_random_entity_ids.sql').read_text(encoding='utf-8')
+        snapshots = '\n'.join(f'CREATE TEMP TABLE audit_{name} AS SELECT * FROM id_{name};'
+                              for name in ('users', 'chats', 'messages'))
+        sql = sql.replace('DROP TABLE id_messages;', snapshots + '\nDROP TABLE id_messages;', 1)
+        db.executescript('BEGIN IMMEDIATE;\n' + sql + '\nCOMMIT;')
+        maps = {k: dict(db.execute(f'SELECT * FROM audit_{name}'))
+                for k, name in zip('ucm', ('users', 'chats', 'messages'))}
+
         for table, (columns, rows) in before.items():
-            selection = ','.join('"' + c + '"' for c in columns)
-            assert db.execute(f'SELECT {selection} FROM "{table}" ORDER BY rowid').fetchall() == rows, table
+            selection = ','.join(f'"{c}"' for c in columns)
+            actual = db.execute(f'SELECT {selection} FROM "{table}"').fetchall()
+            expected = []
+            for row in rows:
+                data = dict(zip(columns, row))
+                for column, kind in expected_links[table].items():
+                    data[column] = maps[kind].get(data[column])
+                if table == 'chats' and data['type'] == 'direct':
+                    data['user_a_id'], data['user_b_id'] = sorted((data['user_a_id'], data['user_b_id']))
+                if table == 'messages' and data['client_ref_payload'] is not None:
+                    old = dict(zip(columns, row))
+                    data['client_ref_payload'] = f"legacy:{old['chat_id']}|{old['reply_to_id'] or 0}|{old['client_ref_payload']}"
+                if table == 'antispam_attempts' and data['attempt_key'].startswith('send:'):
+                    _, old_chat, ref = data['attempt_key'].split(':', 2)
+                    if old_chat.isdecimal() and int(old_chat) in maps['c']:
+                        data['attempt_key'] = f"send:{maps['c'][int(old_chat)]}:{ref}"
+                expected.append(tuple(data[c] for c in columns))
+            assert Counter(actual) == Counter(expected), table
         assert not db.execute('PRAGMA foreign_key_check').fetchall()
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
-        assert not db.execute('''SELECT 1 FROM (
-            SELECT sequence, ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY id) expected FROM messages)
-            WHERE sequence <> expected''').fetchall()
-        assert not db.execute('''SELECT 1 FROM users_chats uc WHERE last_read_sequence <>
-            COALESCE((SELECT MAX(sequence) FROM messages m WHERE m.chat_id=uc.chat_id
-                      AND m.id <= uc.last_read_message_id),0)''').fetchall()
-    print('PASS migration: existing database copied, all old columns/IDs preserved, sequences/read cursors and foreign keys verified', flush=True)
-
+        assert dict(db.execute("SELECT name, seq FROM sqlite_sequence WHERE name IN ('sessions', 'attachments')")) == counters
+        assert not db.execute("SELECT name FROM sqlite_master WHERE name LIKE 'old_%'").fetchall()
+        assert not db.execute("SELECT 1 FROM messages WHERE substr(id,1,49) <> chat_id || '.' OR sequence IS NULL").fetchall()
+        relay = (migrations / '010_relay_receipts.sql').read_text(encoding='utf-8')
+        db.executescript('BEGIN IMMEDIATE;\n' + relay + '\nCOMMIT;')
+        assert not db.execute('SELECT 1 FROM relay_receipts').fetchall()
+        assert not db.execute('PRAGMA foreign_key_check').fetchall()
+        assert db.execute('SELECT COUNT(*) FROM messages').fetchone()[0] == len(maps['m'])
+        print(f"PASS database copy: {len(maps['u'])} users, {len(maps['c'])} chats, {len(maps['m'])} messages, all rows, references and ciphertext verified", flush=True)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -88,6 +131,7 @@ def main():
                     request(path, token, body, method)
                 except urllib.error.HTTPError as exception:
                     assert exception.code == status, (path, exception.code)
+                    return json.loads(exception.read())
                 else:
                     raise AssertionError('Expected error: ' + path)
             try:
@@ -106,22 +150,39 @@ def main():
                     return token, request('/users/me', token)['id']
                 alice, alice_id = user('seqalice')
                 bob, bob_id = user('seqbob')
-                direct = request('/chats', alice, {'another_user_id': bob_id})['chat_id']
-                other = request('/chats/group', alice, {'title': 'Other chat', 'member_ids': [bob_id]})['chat_id']
-                def send(chat, text, ref=None):
-                    body = {'text': text}
+                assert all(isinstance(user_id, str) and len(user_id) == 32 for user_id in (alice_id, bob_id))
+                candidate = secrets.token_hex(24)
+                direct = request('/chats', alice, {'another_user_id': bob_id, 'chat_id': candidate})['chat_id']
+                assert direct == candidate
+                assert request('/chats', bob, {'another_user_id': alice_id, 'chat_id': secrets.token_hex(24)})['chat_id'] == direct
+                error(400, '/chats', alice, {'another_user_id': bob_id, 'chat_id': 'invalid'})
+                outsider, _ = user('seqoutsider')
+                missing_chat = secrets.token_hex(24)
+                for route in ('', '/messages', '/members', '/pins'):
+                    absent = error(404, f'/chats/{missing_chat}{route}', outsider)
+                    forbidden = error(404, f'/chats/{direct}{route}', outsider)
+                    assert (absent['code'], absent['error']) == (forbidden['code'], forbidden['error'])
+                other = request('/chats/group', alice, {'title': 'Other chat', 'member_ids': [bob_id], 'chat_id': secrets.token_hex(24)})['chat_id']
+                error(409, '/chats/group', alice, {'title': 'Duplicate', 'chat_id': other})
+                def message_id(chat, suffix=None):
+                    return chat + '.' + (suffix or secrets.token_hex(16))
+                def send(chat, text, ref=None, suffix=None):
+                    body = {'text': text, 'message_id': message_id(chat, suffix)}
                     if ref:
                         body['client_ref'] = ref
                     return request(f'/chats/{chat}/messages', alice, body)['message_id']
                 ids = []
                 for n in range(6):
-                    ids.append(send(direct, f'ordered {n}', 'first' if n == 0 else None))
+                    ids.append(send(direct, f'ordered {n}', 'first' if n == 0 else None, f'{100-n:032x}'))
                     send(other, f'interleaved {n}')
                 assert send(direct, 'ordered 0', 'first') == ids[0]
-                error(409, f'/chats/{direct}/messages', alice, {'text': 'different', 'client_ref': 'first'})
+                error(409, f'/chats/{direct}/messages', alice, {'text': 'different', 'client_ref': 'first', 'message_id': message_id(direct)})
                 history = request(f'/chats/{direct}/messages', bob)
                 assert [m['sequence'] for m in history] == list(range(1, 7))
                 assert [m['id'] for m in history] == ids
+                assert ids[0] > ids[1]
+                error(400, f'/chats/{direct}/messages', alice, {'text':'bad prefix', 'message_id':message_id(other)})
+                error(409, f'/chats/{direct}/messages', alice, {'text':'duplicate ID', 'message_id':ids[0]})
                 assert request(f'/chats/{other}/messages', bob)[0]['sequence'] == 1
                 with ThreadPoolExecutor(max_workers=8) as pool:
                     list(pool.map(lambda n: send(direct, f'concurrent {n}'), range(16)))
@@ -133,14 +194,8 @@ def main():
                 assert request(f'/chats/{direct}/messages', bob)[-1]['sequence'] == 23
                 print('PASS sequence allocation: per-chat order, concurrent sends and idempotent retries', flush=True)
 
-                # Scramble IDs only in the disposable database: the server must still use sequence.
-                with closing(sqlite3.connect(database)) as db, db:
-                    rows = db.execute('SELECT id,sequence FROM messages WHERE chat_id=?', (direct,)).fetchall()
-                    for message_id, sequence in rows:
-                        db.execute('UPDATE messages SET id=? WHERE id=?', (100000 - sequence * 10, message_id))
                 history = request(f'/chats/{direct}/messages?after_sequence=0', bob)
                 assert [m['sequence'] for m in history] == list(range(1, 24))
-                assert history[0]['id'] > history[-1]['id']
                 third = history[2]['id']
                 assert [m['sequence'] for m in request(f'/chats/{direct}/messages?before_sequence=4&limit=2', bob)] == [2, 3]
                 assert [m['sequence'] for m in request(f'/chats/{direct}/messages?after_sequence=3&before_sequence=6', bob)] == [4, 5]
@@ -162,11 +217,11 @@ def main():
                 request(f'/chats/{direct}/pins', alice, {'message_id': history[1]['id']})
                 request(f'/chats/{direct}/pins', alice, {'message_id': history[4]['id']})
                 assert [p['message']['sequence'] for p in request(f'/chats/{direct}/pins', bob)] == [5, 2]
-                reply = request(f'/chats/{direct}/messages', alice, {'text': 'Reply', 'reply_to_id': third})['message_id']
+                reply = request(f'/chats/{direct}/messages', alice, {'text': 'Reply', 'reply_to_id': third, 'message_id': message_id(direct)})['message_id']
                 request(f'/messages/{third}', alice, {'text': 'Edited'}, 'PATCH')
                 edited = next(m for m in request(f'/chats/{direct}/messages', bob) if m['id'] == third)
                 assert edited['sequence'] == 3 and edited['text'] == 'Edited'
-                forwarded = request(f'/messages/{third}/forward', alice, {'chat_id': other})['message_id']
+                forwarded = request(f'/messages/{third}/forward', alice, {'chat_id': other, 'message_id': message_id(other)})['message_id']
                 assert next(m for m in request(f'/chats/{other}/messages', bob) if m['id'] == forwarded)['sequence'] == 7
                 request(f'/messages/{reply}', alice, {'for_everyone': True}, 'DELETE')
                 assert request(f'/chats/{direct}/messages', bob)[-1]['sequence'] == 24

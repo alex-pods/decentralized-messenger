@@ -129,7 +129,7 @@ public static class SelfCheck
         Console.WriteLine("delete");
 
         // Закрепы: порядок как в Telegram — снизу вверх по чату (больший id первым).
-        var pinIds = new List<long>();
+        var pinIds = new List<string>();
         for (var i = 0; i < 12; i++)
             pinIds.Add(await a.SendMessage(chatId, "pin-msg-" + i, clientRef: Guid.NewGuid().ToString("N")));
         await a.PinMessage(chatId, pinIds[2]);

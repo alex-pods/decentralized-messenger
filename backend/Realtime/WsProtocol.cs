@@ -6,9 +6,10 @@ public static class WsProtocol
     {
         url = $"ws://<host>{pathBase}/ws?user_session_token=<token>",
 
-        auth = "Session token: user_session_token query parameter " +
-               "(token alias supported). HTTP uses Bearer. " +
+        auth = "Authorization: Bearer <token>. Legacy query parameters user_session_token and token are supported. " +
                "Logout closes only that session's sockets.",
+
+        relay_opt_in = "Send Messenger-Message-Relay: 1 when opening the socket to receive message_relayed.",
 
         close_codes = new
         {
@@ -75,6 +76,13 @@ public static class WsProtocol
                 type = "message",
                 follow = true,
                 payload = "chat_id, message"
+            },
+            new
+            {
+                type = "message_relayed",
+                follow = true,
+                payload = "chat_id, message",
+                note = "Live recipients only; content_state=relayed; no history replay"
             },
             new
             {

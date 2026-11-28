@@ -2,7 +2,7 @@ namespace MessengerDesktop;
 
 public partial class ShellViewModel
 {
-    public async Task<string?> OpenUserConversation(long userId)
+    public async Task<string?> OpenUserConversation(string userId)
     {
         if (userId == _me.Id) return "Это ваш профиль";
         try

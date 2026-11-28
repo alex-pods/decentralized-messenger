@@ -9,7 +9,7 @@ namespace MessengerDesktop.Appearance;
 public sealed partial class AppearanceEditor
 {
     readonly MessengerClient? _api;
-    readonly long? _owner;
+    readonly string? _owner;
     ThemeShare? _remote;
     readonly TextBox _themeLink = new() { Name = "ThemeLink", Watermark = "https://…/themes/…" };
     readonly TextBlock _exchangeStatus = new() { Name = "ThemeExchangeStatus", TextWrapping = TextWrapping.Wrap, Classes = { "caption" }, IsVisible = false };

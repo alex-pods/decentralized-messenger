@@ -10,8 +10,8 @@ public static class MessagesEndpoints
 {
     public static void MapMessagesEndpoints(this WebApplication app)
     {
-        app.MapPatch("/messages/{message_id:long}",
-            async (long message_id, EditMessageRequest request, HttpContext context,
+        app.MapPatch("/messages/{message_id}",
+            async (string message_id, EditMessageRequest request, HttpContext context,
                 IMessagesService service, CancellationToken cancellationToken) =>
             {
                 await service.EditAsync(message_id, CurrentUser.GetId(context), request, cancellationToken);
@@ -20,8 +20,8 @@ public static class MessagesEndpoints
             .WithName("EditMessage")
             .WithSummary("Редактировать своё сообщение");
 
-        app.MapDelete("/messages/{message_id:long}",
-            async (long message_id, [FromBody] DeleteMessageRequest? request, HttpContext context,
+        app.MapDelete("/messages/{message_id}",
+            async (string message_id, [FromBody] DeleteMessageRequest? request, HttpContext context,
                 IMessagesService service, CancellationToken cancellationToken) =>
             {
                 if (request?.ForEveryone is null)
@@ -33,8 +33,8 @@ public static class MessagesEndpoints
             .WithName("DeleteMessage")
             .WithSummary("Удалить сообщение");
 
-        app.MapPost("/messages/{message_id:long}/forward",
-            async (long message_id, ForwardMessageRequest request, HttpContext context,
+        app.MapPost("/messages/{message_id}/forward",
+            async (string message_id, ForwardMessageRequest request, HttpContext context,
                 IMessagesService service, CancellationToken cancellationToken) =>
             {
                 var forwarded = await service.ForwardAsync(

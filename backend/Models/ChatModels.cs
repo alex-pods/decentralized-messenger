@@ -20,22 +20,22 @@ public enum LeaveResult
     OwnerTransferRequired
 }
 
-public sealed record UserCardRow(long Id, string Tag, string DisplayName);
+public sealed record UserCardRow(string Id, string Tag, string DisplayName);
 
 public sealed record ChatAccess(ChatType Type, MemberRole? Role);
 
 public sealed record ChatSummary(
-    long Id,
+    string Id,
     ChatType Type,
     string? Title,
-    long? CreatedBy,
+    string? CreatedBy,
     DateTimeOffset CreatedAt,
     UserCardRow? OtherUser,
-    long? LastMessageId
+    string? LastMessageId
 );
 
 public sealed record MemberRow(
-    long UserId,
+    string UserId,
     string Tag,
     string DisplayName,
     MemberRole Role,
@@ -43,7 +43,7 @@ public sealed record MemberRow(
 );
 
 public sealed record MarkReadResult(
-    long LastReadMessageId,
+    string? LastReadMessageId,
     bool Changed,
     long LastReadSequence);
 
@@ -51,4 +51,4 @@ public sealed record LeaveGroupResult(
     LeaveResult Result,
     IReadOnlyList<string> AttachmentPaths);
 
-public sealed record DirectChatResult(long ChatId, bool Created);
+public sealed record DirectChatResult(string ChatId, bool Created);

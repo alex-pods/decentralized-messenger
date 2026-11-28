@@ -19,19 +19,20 @@ public sealed class LiveConnection : IDisposable
     private readonly MessengerClient _api;
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _send = new(1, 1);
-    private readonly HashSet<long> _followed = new();
+    private readonly HashSet<string> _followed = new();
     private ClientWebSocket? _ws;
     private bool _everConnected;
 
     public event Action<WsEventDto>? Event;
     public event Action<string>? State;
     public event Action? SessionRevoked;
+    public event Action<string>? IdentityRejected;
     /// <summary>Сокет снова онлайн и follow восстановлены — клиент догоняет историю через after_sequence.</summary>
     public event Action? Reconnected;
 
     public LiveConnection(MessengerClient api) => _api = api;
 
-    public void Follow(long chatId)
+    public void Follow(string chatId)
     {
         lock (_followed) _followed.Add(chatId);
         var ws = _ws;
@@ -53,6 +54,12 @@ public sealed class LiveConnection : IDisposable
                 SessionRevoked?.Invoke();
                 return;
             }
+            catch (ServerIdentityException ex)
+            {
+                State?.Invoke("нет соединения");
+                IdentityRejected?.Invoke(ex.Message);
+                return;
+            }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 return;
@@ -71,12 +78,13 @@ public sealed class LiveConnection : IDisposable
     async Task Session(CancellationToken ct)
     {
         using var ws = new ClientWebSocket();
-        await ws.ConnectAsync(_api.WebSocketUri(), ct);
+        ws.Options.SetRequestHeader("Messenger-Message-Relay", "1");
+        await _api.ConnectAuthenticatedSocket(ws, _api.WebSocketUri(), ct);
         _ws = ws;
         State?.Invoke("онлайн");
         try
         {
-            long[] ids;
+            string[] ids;
             lock (_followed) ids = _followed.ToArray();
             foreach (var id in ids)
                 await SendRaw(ws, new { action = "follow", chat_id = id }, ct);

@@ -4,10 +4,10 @@ namespace MessengerDesktop;
 
 public enum WorkspacePage { Account, Members, Contact, Settings, Appearance }
 
-public sealed class WorkspaceRoute(WorkspacePage page, long? userId = null, string? section = null)
+public sealed class WorkspaceRoute(WorkspacePage page, string? userId = null, string? section = null)
 {
     public WorkspacePage Page { get; } = page;
-    public long? UserId { get; } = userId;
+    public string? UserId { get; } = userId;
     public string? Section { get; } = section;
 }
 
@@ -27,13 +27,13 @@ public partial class ShellViewModel
         _ => ""
     };
 
-    internal string? KnownContactName(long userId) => _names.GetValueOrDefault(userId);
+    internal string? KnownContactName(string userId) => _names.GetValueOrDefault(userId);
 
     internal bool ContainsWorkspace(WorkspaceRoute route) => Workspace == route || _workspaceHistory.Contains(route);
     internal bool HasWorkspacePage(WorkspacePage page) =>
         Workspace?.Page == page || _workspaceHistory.Any(route => route.Page == page);
 
-    internal void NavigateWorkspace(WorkspacePage page, long? userId = null, string? section = null)
+    internal void NavigateWorkspace(WorkspacePage page, string? userId = null, string? section = null)
     {
         if (Workspace is { } current)
         {

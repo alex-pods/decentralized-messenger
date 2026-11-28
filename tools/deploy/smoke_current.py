@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import secrets
 import subprocess
 import time
 import urllib.request
@@ -53,9 +54,9 @@ def check(base, container=None, expect_assets=False):
         token=request('/auth/login',credentials)['user_session_token']
         users.append((token,request('/users/me',token=token)['id']))
     token=users[0][0]
-    chat=request('/chats',{'another_user_id':users[1][1]},token)['chat_id']
+    chat=request('/chats',{'another_user_id': users[1][1], 'chat_id': secrets.token_hex(24)},token)['chat_id']
     text='Persistent message '+uuid.uuid4().hex
-    request(f'/chats/{chat}/messages',{'text':text,'client_ref':uuid.uuid4().hex},token)
+    request(f'/chats/{chat}/messages',{'text': text, 'client_ref': uuid.uuid4().hex, 'message_id': chat + '.' + secrets.token_hex(16)},token)
     check_assets(token)
     if container:
         subprocess.run(['docker','restart',container],check=True,stdout=subprocess.DEVNULL)

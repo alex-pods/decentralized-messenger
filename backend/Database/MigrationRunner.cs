@@ -42,7 +42,10 @@ public static class MigrationRunner
 
             var sql = File.ReadAllText(file);
 
+            var replacesIdentities = id == "009_random_entity_ids.sql";
+            if (replacesIdentities) RequireForeignKeys(connection, transaction);
             connection.Execute(sql, transaction: transaction);
+            if (replacesIdentities) RequireForeignKeys(connection, transaction);
 
             connection.Execute(
                 "INSERT INTO schema_migrations(id) VALUES(@id)",
@@ -53,5 +56,11 @@ public static class MigrationRunner
             transaction.Commit();
             Console.WriteLine($"Applied: {id}");
         }
+    }
+
+    private static void RequireForeignKeys(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction)
+    {
+        if (connection.Query("PRAGMA foreign_key_check;", transaction: transaction).Any())
+            throw new InvalidDataException("The identity migration requires valid database references");
     }
 }

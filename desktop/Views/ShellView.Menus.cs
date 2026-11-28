@@ -93,7 +93,7 @@ public partial class ShellView
         _vm.SelectedMessage = message;
         var menu = CreateMenu();
         ActiveMessageMenu = menu;
-        if (!message.IsDeleted)
+        if (!message.IsDeleted && !message.IsRelayed)
         {
             var reactions = new ReactionPicker(compact: true) { Width = 264 };
             reactions.Picked += emoji => { _vm.ToggleReactionCommand.Execute(emoji); menu.Close(); };
@@ -101,7 +101,7 @@ public partial class ShellView
             menu.Items.Add(new Separator());
             menu.Items.Add(ActionItem("Ответить", "IcReply", _vm.ReplyCommand));
         }
-        if (!message.IsDeleted && !message.IsNotStored)
+        if (!message.IsDeleted && (!message.IsNotStored || message.IsRelayed))
         {
             var copy = new MenuItem { Header = "Копировать текст", Icon = MenuIcon("IcCopy") };
             copy.Click += async (_, _) =>
@@ -129,7 +129,7 @@ public partial class ShellView
             menu.Items.Add(unpin);
         }
         menu.Items.Add(new Separator());
-        menu.Items.Add(ActionItem("Удалить у меня", "IcTrash", _vm.DeleteForMeCommand));
+        menu.Items.Add(ActionItem(message.IsRelayed ? "Убрать из переписки" : "Удалить у меня", "IcTrash", _vm.DeleteForMeCommand));
         if (_vm.CanDeleteEveryone)
         {
             var delete = new MenuItem { Header = "Удалить у всех", Icon = MenuIcon("IcTrash"), Classes = { "danger" } };

@@ -77,7 +77,7 @@ static class ConcentrationChecks
         Save(descriptor with{Sha256=new string('0',64)});
         try{await catalog.LoadAsync(remote, CancellationToken.None);throw new Exception("Bad hash accepted");}catch(InvalidDataException){}
         var handler=new MediaHandler(bytes);
-        using var api=new MessengerClient("http://test.invalid/api/dev","test-token",handler);
+        using var api=new MessengerClient("https://test.invalid/api/dev","test-token",handler);
         var path=await api.DownloadConcentrationClip(descriptor,null,CancellationToken.None);
         try
         {
@@ -94,10 +94,10 @@ static class ConcentrationChecks
     static Messenger.Api.Antispam.AntispamMediaCatalog CreateCatalog(IConfiguration config) =>
         new(config, new(true), NullLogger<Messenger.Api.Antispam.AntispamMediaCatalog>.Instance);
 
-    sealed class MediaHandler(byte[] data):HttpMessageHandler
+    sealed class MediaHandler(byte[] data):SignedTestServer
     {
         public int Count;public bool Corrupt;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
+        protected override Task<HttpResponseMessage> SendVerified(HttpRequestMessage request,CancellationToken ct)
         {
             Count++;Check(request.Headers.Authorization?.Parameter=="test-token","Media request lost authorization");
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(Corrupt?new byte[data.Length]:data)});

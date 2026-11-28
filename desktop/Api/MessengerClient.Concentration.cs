@@ -33,7 +33,8 @@ public sealed partial class MessengerClient
         var partial=path+"."+Guid.NewGuid().ToString("N")+".part";
         try
         {
-            using var response=await _http.GetAsync("antispam/media/"+Uri.EscapeDataString(clip.Id),HttpCompletionOption.ResponseHeadersRead,ct);
+            using var request = new HttpRequestMessage(HttpMethod.Get, "antispam/media/" + Uri.EscapeDataString(clip.Id));
+            using var response = await SendRequest(request, ct, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
             if(response.Content.Headers.ContentLength is { } length && length!=clip.Bytes)throw new IOException("Размер ролика не совпадает");
             await using(var source=await response.Content.ReadAsStreamAsync(ct))

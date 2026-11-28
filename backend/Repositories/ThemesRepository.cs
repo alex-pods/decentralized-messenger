@@ -7,14 +7,14 @@ namespace Messenger.Api.Repositories;
 
 public sealed class ThemesRepository(DbConnectionFactory db)
 {
-    sealed class Row { public string Id { get; set; } = ""; public long OwnerId { get; set; } public int Version { get; set; } public string Document { get; set; } = ""; }
+    sealed class Row { public string Id { get; set; } = ""; public string OwnerId { get; set; } = ""; public int Version { get; set; } public string Document { get; set; } = ""; }
     public async Task<SharedTheme> Get(string id)
     {
         using var connection = db.Open();
         var row = await connection.QuerySingleOrDefaultAsync<Row>("SELECT id, owner_id AS OwnerId, version, document FROM shared_themes WHERE id=@id", new { id });
         return row == null ? throw AppException.NotFound("Theme not found") : new(row.Id, row.OwnerId, row.Version, 1, JsonSerializer.Deserialize<ThemeDocument>(row.Document)!);
     }
-    public async Task<SharedTheme> Create(long owner, ThemeCreate request)
+    public async Task<SharedTheme> Create(string owner, ThemeCreate request)
     {
         if (request.SchemaVersion != 1 || request.Theme == null) throw AppException.BadRequest("Unsupported theme schema");
         request.Theme.Validate();
@@ -27,7 +27,7 @@ public sealed class ThemesRepository(DbConnectionFactory db)
         transaction.Commit();
         return new(id, owner, 1, 1, request.Theme);
     }
-    public async Task<SharedTheme> Update(long owner, string id, ThemeUpdate request)
+    public async Task<SharedTheme> Update(string owner, string id, ThemeUpdate request)
     {
         var old = await Get(id);
         if (old.OwnerId != owner) throw AppException.Forbidden("Only the theme owner can update it");
@@ -40,7 +40,7 @@ public sealed class ThemesRepository(DbConnectionFactory db)
         if (changed == 0) throw AppException.Conflict("theme_version", "Theme changed; reload before updating");
         return new(id, owner, request.Version + 1, 1, theme);
     }
-    public async Task Delete(long owner, string id)
+    public async Task Delete(string owner, string id)
     {
         var old = await Get(id);
         if (old.OwnerId != owner) throw AppException.Forbidden("Only the theme owner can delete it");

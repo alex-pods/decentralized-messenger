@@ -9,9 +9,9 @@ public sealed class WsConnectionRegistry
     private int shuttingDown;
     private readonly ConcurrentDictionary<Guid, WsConnection> connections = new();
 
-    public WsConnection Register(long userId, WebSocket socket, string tokenHash)
+    public WsConnection Register(string userId, WebSocket socket, string tokenHash, bool supportsRelay = false)
     {
-        var connection = new WsConnection(userId, socket, tokenHash);
+        var connection = new WsConnection(userId, socket, tokenHash, supportsRelay);
 
         if (!connections.TryAdd(connection.Id, connection))
             throw new InvalidOperationException("Duplicate connection ID.");
@@ -28,7 +28,7 @@ public sealed class WsConnectionRegistry
     public void Remove(Guid connectionId) =>
         connections.TryRemove(connectionId, out _);
 
-    public WsConnection[] GetByUser(long userId) =>
+    public WsConnection[] GetByUser(string userId) =>
         connections.Values
             .Where(connection => connection.UserId == userId)
             .ToArray();

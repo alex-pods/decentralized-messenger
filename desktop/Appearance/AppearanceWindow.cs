@@ -8,7 +8,7 @@ internal sealed class AppearanceWindow : Window
 {
     readonly AppearanceEditor _editor;
 
-    public AppearanceWindow(MessengerClient? api = null, long? owner = null)
+    public AppearanceWindow(MessengerClient? api = null, string? owner = null)
     {
         Title = "Оформление";
         Width = 540;

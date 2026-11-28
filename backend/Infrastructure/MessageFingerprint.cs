@@ -6,13 +6,19 @@ namespace Messenger.Api.Infrastructure;
 public static class MessageFingerprint
 {
     public static string Compute(
-        long chatId,
+        string chatId,
         string text,
-        long? replyToId)
+        string? replyToId)
         => Convert.ToHexString(
             SHA256.HashData(
                 Encoding.UTF8.GetBytes(
-                    FormattableString.Invariant(
-                        $"{chatId}|{replyToId ?? 0}|{text}"))))
+                    $"{chatId}|{replyToId ?? "0"}|{text}")))
             .ToLowerInvariant();
+
+    public static bool MatchesMigrated(string value, string text, bool hasReply)
+    {
+        var parts = value["legacy:".Length..].Split('|');
+        return parts.Length == 3 && (parts[1] != "0") == hasReply &&
+            parts[2] == Compute(parts[0], text, parts[1]);
+    }
 }

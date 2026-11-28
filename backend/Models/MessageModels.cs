@@ -10,10 +10,10 @@ public enum MessageContentState
 }
 
 public sealed record MessageRow(
-    long Id,
-    long ChatId,
-    long SenderId,
-    long? ReplyToId,
+    string Id,
+    string ChatId,
+    string SenderId,
+    string? ReplyToId,
     string? Text,
     MessageContentState ContentState,
     DateTimeOffset SentAt,
@@ -25,13 +25,14 @@ public sealed record MessageRow(
     long Sequence = 0
 );
 
-public sealed record ForwardInfo(long? AuthorId, string AuthorName, DateTimeOffset OriginalSentAt);
+public sealed record ForwardInfo(string? AuthorId, string AuthorName, DateTimeOffset OriginalSentAt);
 
 public sealed record NewMessage(
-    long ChatId,
-    long SenderId,
+    string Id,
+    string ChatId,
+    string SenderId,
     Secret Text,
-    long? ReplyToId,
+    string? ReplyToId,
     Secret? ClientRef
 );
 
@@ -39,13 +40,13 @@ public sealed record AddMessageResult(MessageRow Message, bool Created, bool Con
 
 public sealed record DeleteMessageResult(MessageRow Message, bool Changed, IReadOnlyList<string> AttachmentPaths);
 
-public sealed record HistoryQuery(int Limit, long? BeforeId = null, long? AfterId = null,
+public sealed record HistoryQuery(int Limit, string? BeforeId = null, string? AfterId = null,
     long? BeforeSequence = null, long? AfterSequence = null);
 
 public sealed record PinRow(
-    long MessageId,
-    long PinnedBy,
+    string MessageId,
+    string PinnedBy,
     DateTimeOffset PinnedAt,
     MessageRow Message);
 
-public sealed record ReactionRow(string Emoji, IReadOnlyList<long> UserIds);
+public sealed record ReactionRow(string Emoji, IReadOnlyList<string> UserIds);

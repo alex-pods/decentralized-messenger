@@ -5,7 +5,7 @@ namespace Messenger.Api.Contracts.Responses;
 
 public sealed record AttachmentResponse(
     [property: JsonPropertyName("id")] long Id,
-    [property: JsonPropertyName("message_id")] long MessageId,
+    [property: JsonPropertyName("message_id")] string MessageId,
     [property: JsonPropertyName("file_name")] string? FileName,
     [property: JsonPropertyName("file_type")] string? FileType,
     [property: JsonPropertyName("file_size_bytes")] long FileSizeBytes)

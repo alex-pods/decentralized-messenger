@@ -10,7 +10,7 @@ public partial class ShellViewModel
 {
     public ObservableCollection<ImagePreviewItem> ImagePreviews { get; } = new();
     CancellationTokenSource? _imageLoad;
-    long? _imageMessageId;
+    string? _imageMessageId;
 
     [RelayCommand]
     void ShowImages(MessageItem? message)

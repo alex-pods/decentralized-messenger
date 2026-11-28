@@ -7,23 +7,23 @@ namespace Messenger.Api.Repositories;
 
 public interface IReactionsRepository
 {
-    Task<IReadOnlyDictionary<long, IReadOnlyList<ReactionRow>>> GetByMessageIdsAsync(
-        IReadOnlyCollection<long> messageIds,
+    Task<IReadOnlyDictionary<string, IReadOnlyList<ReactionRow>>> GetByMessageIdsAsync(
+        IReadOnlyCollection<string> messageIds,
         CancellationToken ct = default);
 
-    Task<bool> AddAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default);
+    Task<bool> AddAsync(string messageId, string userId, Secret emoji, CancellationToken ct = default);
 
-    Task<bool> RemoveAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default);
+    Task<bool> RemoveAsync(string messageId, string userId, Secret emoji, CancellationToken ct = default);
 }
 
 public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepository
 {
-    public async Task<IReadOnlyDictionary<long, IReadOnlyList<ReactionRow>>> GetByMessageIdsAsync(
-        IReadOnlyCollection<long> messageIds,
+    public async Task<IReadOnlyDictionary<string, IReadOnlyList<ReactionRow>>> GetByMessageIdsAsync(
+        IReadOnlyCollection<string> messageIds,
         CancellationToken ct = default)
     {
         if (messageIds.Count == 0)
-            return new Dictionary<long, IReadOnlyList<ReactionRow>>();
+            return new Dictionary<string, IReadOnlyList<ReactionRow>>();
 
         using var c = db.Open();
         var raw = await c.QueryAsync<ReactionRowRaw>(new CommandDefinition(
@@ -46,7 +46,7 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
                     .ToList());
     }
 
-    public async Task<bool> AddAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default)
+    public async Task<bool> AddAsync(string messageId, string userId, Secret emoji, CancellationToken ct = default)
     {
         using var c = db.Open();
         var rows = await c.ExecuteAsync(new CommandDefinition(
@@ -61,7 +61,7 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
         return rows > 0;
     }
 
-    public async Task<bool> RemoveAsync(long messageId, long userId, Secret emoji, CancellationToken ct = default)
+    public async Task<bool> RemoveAsync(string messageId, string userId, Secret emoji, CancellationToken ct = default)
     {
         using var c = db.Open();
         var rows = await c.ExecuteAsync(new CommandDefinition(
@@ -70,5 +70,5 @@ public sealed class ReactionsRepository(DbConnectionFactory db) : IReactionsRepo
         return rows > 0;
     }
 
-    private sealed record ReactionRowRaw(long MessageId, Secret Emoji, long UserId);
+    private sealed record ReactionRowRaw(string MessageId, Secret Emoji, string UserId);
 }

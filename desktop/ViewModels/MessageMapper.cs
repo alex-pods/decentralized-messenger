@@ -36,13 +36,13 @@ public static class MessageMapper
         return text[..end] + "…";
     }
 
-    internal static string? PreviewAuthor(long senderId, long myId, Func<long, string> nameOf)
+    internal static string? PreviewAuthor(string senderId, string myId, Func<string, string> nameOf)
     {
         var who = senderId == myId ? "Вы" : nameOf(senderId);
         return who == $"#{senderId}" ? null : who;
     }
 
-    public static ChatItem MapChat(ChatDto c, long myId, Func<long, string> nameOf)
+    public static ChatItem MapChat(ChatDto c, string myId, Func<string, string> nameOf)
     {
         var title = c.Type == "group"
             ? (string.IsNullOrWhiteSpace(c.Title) ? "Группа" : c.Title!)
@@ -55,7 +55,7 @@ public static class MessageMapper
             Tag = c.OtherUser?.Tag,
             AvatarUserId = c.Type == "direct" ? c.OtherUser?.Id : null,
             Kind = c.Type == "group" ? "Группа" : "Личный чат",
-            LastMessageId = c.LastMessage?.Id ?? 0,
+            LastMessageId = c.LastMessage?.Id,
             LastMessageSequence = c.LastMessage?.Sequence ?? 0,
             LastMessageSentAt = DateTimeOffset.TryParse(c.LastMessage?.SentAt, out var lastSent) ? lastSent : null,
             CreatedAt = DateTimeOffset.TryParse(c.CreatedAt, out var created) ? created : DateTimeOffset.MinValue,
@@ -66,9 +66,10 @@ public static class MessageMapper
         return chat;
     }
 
-    public static MessageItem ToItem(MessageDto m, long myId, Func<long, string> nameOf)
+    public static MessageItem ToItem(MessageDto m, string myId, Func<string, string> nameOf)
     {
         var meta = FormatTime(m.SentAt);
+        if (m.ContentState == "relayed") meta += " · без хранения";
         if (m.EditedAt != null) meta += " · изменено";
         if (m.SenderId == myId && m.ReadAt != null) meta += " · прочитано";
         else if (m.SenderId == myId && m.DeliveredAt != null) meta += " · доставлено";
@@ -88,17 +89,18 @@ public static class MessageMapper
             Forwarded = m.ForwardedFrom is { } f ? "↪ Переслано от " + f.AuthorName : "",
             ForwardedTip = m.ForwardedFrom is { } g ? "Отправлено " + FormatDateTime(g.OriginalSentAt) : "",
             IsDeleted = m.ContentState == "deleted",
-            IsNotStored = m.ContentState == "not_stored"
+            IsNotStored = m.ContentState is "not_stored" or "relayed",
+            IsRelayed = m.ContentState == "relayed"
         };
-        item.Images = m.ContentState is "deleted" or "not_stored" ? [] :
+        item.Images = m.ContentState is "deleted" or "not_stored" or "relayed" ? [] :
             m.Attachments?.Where(a => a.IsImage).DistinctBy(a => a.Id).ToArray() ?? [];
         item.SetReactions(ReactionMap(m.Reactions));
         return item;
     }
 
-    public static Dictionary<string, HashSet<long>> ReactionMap(List<ReactionDto>? list)
+    public static Dictionary<string, HashSet<string>> ReactionMap(List<ReactionDto>? list)
     {
-        var map = new Dictionary<string, HashSet<long>>();
+        var map = new Dictionary<string, HashSet<string>>();
         if (list is null) return map;
         foreach (var r in list)
             if (!string.IsNullOrEmpty(r.Emoji) && r.UserIds is { Count: > 0 })

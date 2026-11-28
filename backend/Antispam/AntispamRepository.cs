@@ -6,13 +6,13 @@ namespace Messenger.Api.Antispam;
 
 public sealed class AntispamRepository(DbConnectionFactory db)
 {
-    public string? BlockId(long userId)
+    public string? BlockId(string userId)
     {
         using var connection = db.Open();
         return connection.QuerySingleOrDefault<string>("SELECT block_id FROM antispam_blocks WHERE user_id=@userId", new { userId });
     }
 
-    public bool Reserve(long userId, string key, string? clientRef, long now, AntispamOptions options)
+    public bool Reserve(string userId, string key, string? clientRef, long now, AntispamOptions options)
     {
         using var connection = (SqliteConnection)db.Open();
         // Immediate transaction serializes bursts across requests, chats and server processes.
@@ -36,7 +36,7 @@ public sealed class AntispamRepository(DbConnectionFactory db)
         tx.Commit(); return true;
     }
 
-    public bool Clear(long userId, string blockId)
+    public bool Clear(string userId, string blockId)
     {
         using var connection = db.Open();
         using var tx = connection.BeginTransaction();

@@ -41,11 +41,24 @@ public partial class ShellViewModel
         catch (ObjectDisposedException) when (_closed) { }
     }
 
-    async Task<GroupActivityItem[]> GetActivity(long chatId, long? beforeId = null)
+    async Task<GroupActivityItem[]> GetActivity(string chatId, long? beforeId = null)
     {
         var path = $"chats/{chatId}/activity";
         if (beforeId is { } id) path += $"?before_id={id}";
-        return await _api.Send<GroupActivityItem[]>(HttpMethod.Get, path, null, default) ?? [];
+        var version = HistoryVersion(chatId);
+        try
+        {
+            var items = await _api.Send<GroupActivityItem[]>(HttpMethod.Get, path, null, default) ?? [];
+            if (version == HistoryVersion(chatId))
+                CacheHistory(store => store.SaveActivity(chatId, items));
+            return items;
+        }
+        catch (Exception ex) when (CanUseLocalHistory(ex))
+        {
+            var cached = await ReadLocalHistory(store => store.ReadActivity(chatId, ActivityPageSize, beforeId));
+            if (cached == null) throw;
+            return cached;
+        }
     }
 
     void AddActivity(IEnumerable<GroupActivityItem> items)
@@ -110,7 +123,7 @@ public sealed class GroupActivityLine : TimelineItem
     };
     public string Description => $"{Name} · {ActionLabel}";
     public string Name => string.IsNullOrWhiteSpace(Event.DisplayName) ? "Удалённый аккаунт" : Event.DisplayName;
-    public bool HasProfile => Event.UserId is > 0;
+    public bool HasProfile => !string.IsNullOrEmpty(Event.UserId);
 
     public GroupActivityLine(GroupActivityItem item)
     {
@@ -120,4 +133,4 @@ public sealed class GroupActivityLine : TimelineItem
     }
 }
 
-public sealed record GroupActivityItem(long Id, string Kind, string? DisplayName, string OccurredAt, long? UserId);
+public sealed record GroupActivityItem(long Id, string Kind, string? DisplayName, string OccurredAt, string? UserId);

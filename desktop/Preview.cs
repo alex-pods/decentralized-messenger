@@ -136,10 +136,10 @@ public static partial class Preview
         var start = new DateTimeOffset(DateTime.Today.AddHours(12));
         var grouped = new[]
         {
-            new MessageItem { SenderId = 1, SentAt = start },
-            new MessageItem { SenderId = 1, SentAt = start.AddMinutes(1) },
-            new MessageItem { SenderId = 2, SentAt = start.AddMinutes(2) },
-            new MessageItem { SenderId = 2, SentAt = start.AddDays(1) }
+            new MessageItem { SenderId = "u1", SentAt = start },
+            new MessageItem { SenderId = "u1", SentAt = start.AddMinutes(1) },
+            new MessageItem { SenderId = "u2", SentAt = start.AddMinutes(2) },
+            new MessageItem { SenderId = "u2", SentAt = start.AddDays(1) }
         };
         ShellViewModel.GroupTimeline(grouped);
         if (!grouped[0].StartsDay || grouped[1].StartsRun || !grouped[2].StartsRun || !grouped[3].StartsDay)
@@ -158,8 +158,8 @@ public static partial class Preview
                     throw new Exception("Message timestamp overlaps the text");
             }
         });
-        var multiline = new MessageDto { SenderId = 1, Text = "Первая строка\nВторая строка" };
-        var chatPreview = MessageMapper.MapChat(new ChatDto { Type = "group", LastMessage = multiline }, 2, _ => "Александр");
+        var multiline = new MessageDto { SenderId = "u1", Text = "Первая строка\nВторая строка" };
+        var chatPreview = MessageMapper.MapChat(new ChatDto { Type = "group", LastMessage = multiline }, "u2", _ => "Александр");
         if (!MessageMapper.Body(multiline).Contains('\n') || chatPreview.Preview.Contains('\n'))
             throw new Exception("Message body and sidebar newline handling are inconsistent");
         var originalChat = vm.SelectedChat!;
@@ -314,8 +314,8 @@ public static partial class Preview
         {
             vm.ShowGroupCommand.Execute(null);
             vm.GroupTitle = "Поездка на выходные";
-            vm.GroupDraft.Add(new UserCardDto { Id = -101, DisplayName = "Очень длинное имя участника группы для проверки переноса", Tag = "preview" });
-            vm.SearchResults.Add(new UserCardDto { Id = -102, DisplayName = "Мария Александрова", Tag = "maria" });
+            vm.GroupDraft.Add(new UserCardDto { Id = "preview-user-101", DisplayName = "Очень длинное имя участника группы для проверки переноса", Tag = "preview" });
+            vm.SearchResults.Add(new UserCardDto { Id = "preview-user-102", DisplayName = "Мария Александрова", Tag = "maria" });
         });
         await Task.Delay(150);
         await Shot(window, "group-filled");
@@ -326,7 +326,7 @@ public static partial class Preview
         {
             window.Height = 560;
             for (var i = 0; i < 12; i++)
-                vm.GroupDraft.Add(new UserCardDto { Id = -200 - i, DisplayName = "Александра Константинопольская", Tag = $"alex_{i:00}" });
+                vm.GroupDraft.Add(new UserCardDto { Id = $"preview-user-{i}", DisplayName = "Александра Константинопольская", Tag = $"alex_{i:00}" });
         });
         await Until(() =>
         {

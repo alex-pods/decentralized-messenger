@@ -16,7 +16,7 @@ public interface IAuthService
     Task Register(string? login, string? password);
     Task<TokenResponse> Login(string? login, string? password);
     Task Logout(string token);
-    Task<long> GetUserIdByToken(string token);
+    Task<string> GetUserIdByToken(string token);
 }
 
 public sealed class AuthService(
@@ -77,15 +77,15 @@ public sealed class AuthService(
             "session revoked");
     }
 
-    public async Task<long> GetUserIdByToken(string token)
+    public async Task<string> GetUserIdByToken(string token)
     {
         if (string.IsNullOrWhiteSpace(token))
             throw AppException.Unauthorized("missing bearer token");
         var userId = await sessions.GetUserId(SessionTokenHash.Compute(token));
         if (userId is null)
             throw AppException.Unauthorized("invalid or expired session");
-        await users.TouchLastSeen(userId.Value);
-        return userId.Value;
+        await users.TouchLastSeen(userId);
+        return userId;
     }
 
     private static string HashPassword(string password)

@@ -4,7 +4,7 @@ namespace Messenger.Api.Models;
 
 /// <summary>A row from the users table.</summary>
 public sealed record User(
-    long Id,
+    string Id,
     string Tag,
     Secret Name,
     Secret? Bio,
@@ -13,4 +13,4 @@ public sealed record User(
     long AllowTagSearch,
     Secret PasswordHash);
 
-public sealed record UserSearchResult(long Id, string Tag, Secret Name);
+public sealed record UserSearchResult(string Id, string Tag, Secret Name);

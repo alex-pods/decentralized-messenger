@@ -20,4 +20,4 @@ public sealed record ThemePatch(string? Name, bool? Dark, string? Background, st
         Surface ?? old.Surface, Text ?? old.Text, Accent ?? old.Accent);
 }
 public sealed record ThemeUpdate(int Version, ThemePatch Theme);
-public sealed record SharedTheme(string Id, long OwnerId, int Version, int SchemaVersion, ThemeDocument Theme);
+public sealed record SharedTheme(string Id, string OwnerId, int Version, int SchemaVersion, ThemeDocument Theme);

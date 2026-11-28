@@ -20,17 +20,17 @@ public sealed class TokenDto
 
 public sealed class ChatIdDto
 {
-    [JsonPropertyName("chat_id")] public long ChatId { get; set; }
+    [JsonPropertyName("chat_id")] public string ChatId { get; set; } = "";
 }
 
 public sealed class MessageIdDto
 {
-    [JsonPropertyName("message_id")] public long MessageId { get; set; }
+    [JsonPropertyName("message_id")] public string MessageId { get; set; } = "";
 }
 
 public partial class UserCardDto : ObservableObject, IDisposable
 {
-    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("tag")] public string Tag { get; set; } = "";
     [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
     public string Label => string.IsNullOrWhiteSpace(DisplayName) ? "@" + Tag : $"{DisplayName}  @{Tag}";
@@ -57,7 +57,7 @@ public partial class UserCardDto : ObservableObject, IDisposable
 
 public sealed class ProfileDto
 {
-    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("tag")] public string Tag { get; set; } = "";
     [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
     [JsonPropertyName("path_to_avatar_file")] public string? PathToAvatarFile { get; set; }
@@ -69,11 +69,11 @@ public sealed class ProfileDto
 
 public sealed class MessageDto
 {
-    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("sequence")] public long Sequence { get; set; }
-    [JsonPropertyName("chat_id")] public long ChatId { get; set; }
-    [JsonPropertyName("sender_id")] public long SenderId { get; set; }
-    [JsonPropertyName("reply_to_id")] public long? ReplyToId { get; set; }
+    [JsonPropertyName("chat_id")] public string ChatId { get; set; } = "";
+    [JsonPropertyName("sender_id")] public string SenderId { get; set; } = "";
+    [JsonPropertyName("reply_to_id")] public string? ReplyToId { get; set; }
     [JsonPropertyName("text")] public string? Text { get; set; }
     [JsonPropertyName("content_state")] public string ContentState { get; set; } = "stored";
     [JsonPropertyName("sent_at")] public string? SentAt { get; set; }
@@ -89,7 +89,7 @@ public sealed class MessageDto
 public sealed class AttachmentDto
 {
     [JsonPropertyName("id")] public long Id { get; set; }
-    [JsonPropertyName("message_id")] public long MessageId { get; set; }
+    [JsonPropertyName("message_id")] public string MessageId { get; set; } = "";
     [JsonPropertyName("file_name")] public string? FileName { get; set; }
     [JsonPropertyName("file_type")] public string? FileType { get; set; }
     [JsonPropertyName("file_size_bytes")] public long FileSizeBytes { get; set; }
@@ -101,14 +101,14 @@ public sealed class AttachmentDto
 
 public sealed class ForwardedFromDto
 {
-    [JsonPropertyName("author_id")] public long? AuthorId { get; set; }
+    [JsonPropertyName("author_id")] public string? AuthorId { get; set; }
     [JsonPropertyName("author_name")] public string AuthorName { get; set; } = "";
     [JsonPropertyName("original_sent_at")] public string? OriginalSentAt { get; set; }
 }
 
 public sealed class MemberDto
 {
-    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("tag")] public string Tag { get; set; } = "";
     [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
     [JsonPropertyName("role")] public string Role { get; set; } = "member";
@@ -117,19 +117,19 @@ public sealed class MemberDto
 
 public sealed class ChatDto
 {
-    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("type")] public string Type { get; set; } = "";
     [JsonPropertyName("title")] public string? Title { get; set; }
     [JsonPropertyName("other_user")] public UserCardDto? OtherUser { get; set; }
     [JsonPropertyName("created_at")] public string? CreatedAt { get; set; }
-    [JsonPropertyName("created_by")] public long? CreatedBy { get; set; }
+    [JsonPropertyName("created_by")] public string? CreatedBy { get; set; }
     [JsonPropertyName("last_message")] public MessageDto? LastMessage { get; set; }
 }
 
 public sealed class PinDto
 {
-    [JsonPropertyName("message_id")] public long MessageId { get; set; }
-    [JsonPropertyName("pinned_by")] public long PinnedBy { get; set; }
+    [JsonPropertyName("message_id")] public string MessageId { get; set; } = "";
+    [JsonPropertyName("pinned_by")] public string PinnedBy { get; set; } = "";
     [JsonPropertyName("pinned_at")] public string? PinnedAt { get; set; }
     [JsonPropertyName("message")] public MessageDto? Message { get; set; }
 }
@@ -137,17 +137,17 @@ public sealed class PinDto
 public sealed class WsEventDto
 {
     [JsonPropertyName("type")] public string Type { get; set; } = "";
-    [JsonPropertyName("chat_id")] public long? ChatId { get; set; }
+    [JsonPropertyName("chat_id")] public string? ChatId { get; set; }
     [JsonPropertyName("message")] public MessageDto? Message { get; set; }
-    [JsonPropertyName("message_id")] public long? MessageId { get; set; }
+    [JsonPropertyName("message_id")] public string? MessageId { get; set; }
     [JsonPropertyName("attachment")] public AttachmentDto? Attachment { get; set; }
     [JsonPropertyName("for_everyone")] public bool? ForEveryone { get; set; }
-    [JsonPropertyName("user_id")] public long? UserId { get; set; }
+    [JsonPropertyName("user_id")] public string? UserId { get; set; }
     [JsonPropertyName("user")] public UserCardDto? User { get; set; }
     [JsonPropertyName("emoji")] public string? Emoji { get; set; }
     [JsonPropertyName("role")] public string? Role { get; set; }
     [JsonPropertyName("detail")] public string? Detail { get; set; }
-    [JsonPropertyName("last_read_message_id")] public long? LastReadMessageId { get; set; }
+    [JsonPropertyName("last_read_message_id")] public string? LastReadMessageId { get; set; }
     [JsonPropertyName("last_read_sequence")] public long? LastReadSequence { get; set; }
 }
 
@@ -161,5 +161,5 @@ public sealed class ApiException(int status, string message, string? code = null
 public sealed class ReactionDto
 {
     [JsonPropertyName("emoji")] public string? Emoji { get; set; }
-    [JsonPropertyName("user_ids")] public List<long>? UserIds { get; set; }
+    [JsonPropertyName("user_ids")] public List<string>? UserIds { get; set; }
 }

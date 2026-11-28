@@ -1,7 +1,8 @@
 namespace MessengerDesktop;
 
 public sealed record AntispamCapability(bool Enabled, int Protocol);
-public sealed record ServerCapabilities(AntispamCapability? Antispam);
+public sealed record ServerCapabilities(AntispamCapability? Antispam,
+    [property: System.Text.Json.Serialization.JsonPropertyName("message_relay")] bool MessageRelay = false);
 public sealed record AntispamStatus(bool Enabled, bool Required);
 public sealed record AntispamChallenge(string Id, int CountdownMs, int DurationMs, int RequiredScore);
 
@@ -18,7 +19,7 @@ public sealed partial class MessengerClient
     }
 
     internal static bool IsMessageMutation(HttpMethod method, string path) =>
-        method == HttpMethod.Post && (path.StartsWith("chats/") && path.EndsWith("/messages") || path.StartsWith("messages/") && (path.EndsWith("/forward") || path.EndsWith("/attachments"))) ||
+        method == HttpMethod.Post && (path.StartsWith("chats/") && (path.EndsWith("/messages") || path.EndsWith("/messages/relay")) || path.StartsWith("messages/") && (path.EndsWith("/forward") || path.EndsWith("/attachments"))) ||
         method == HttpMethod.Patch && path.StartsWith("messages/");
 
     public async Task DiscoverAntispam(CancellationToken ct = default)
@@ -26,6 +27,7 @@ public sealed partial class MessengerClient
         try
         {
             var capabilities = await Send<ServerCapabilities>(HttpMethod.Get, "capabilities", null, ct);
+            SetRelaySupported(capabilities?.MessageRelay == true);
             // Missing /capabilities, missing property and an omitted enabled flag all mean off.
             AntispamSupported = capabilities?.Antispam is { Enabled: true, Protocol: 1 };
             if (AntispamSupported) await RefreshAntispam(ct);

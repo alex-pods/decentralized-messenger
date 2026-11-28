@@ -1,4 +1,5 @@
 using Messenger.Api.Common.Errors;
+using Messenger.Identifiers;
 using Messenger.Api.Contracts.Requests;
 using Messenger.Api.Contracts.Responses;
 using Messenger.Api.Repositories;
@@ -10,10 +11,10 @@ public static class PinsEndpoints
 {
     public static void MapPinsEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/chats/{chatId:long}/pins");
+        var group = app.MapGroup("/chats/{chatId}/pins");
 
         group.MapGet("", async (
-            long chatId, HttpContext context, IMessagesService service, CancellationToken cancellationToken) =>
+            string chatId, HttpContext context, IMessagesService service, CancellationToken cancellationToken) =>
         {
             var pins = await service.ListPinsAsync(chatId, CurrentUser.GetId(context), cancellationToken);
             var result = new List<PinResponse>(pins.Count);
@@ -30,17 +31,17 @@ public static class PinsEndpoints
         }).WithName("ListPins").WithSummary("Закреплённые сообщения чата");
 
         group.MapPost("", async (
-            long chatId, PinMessageRequest request, HttpContext context,
+            string chatId, PinMessageRequest request, HttpContext context,
             IMessagesService service, CancellationToken cancellationToken) =>
         {
-            if (request.MessageId < 1)
+            if (!EntityIds.IsMessage(request.MessageId))
                 throw AppException.BadRequest("message_id must be positive");
             await service.PinAsync(chatId, CurrentUser.GetId(context), request.MessageId, cancellationToken);
             return Results.NoContent();
         }).WithName("PinMessage").WithSummary("Закрепить сообщение");
 
-        group.MapDelete("/{messageId:long}", async (
-            long chatId, long messageId, HttpContext context,
+        group.MapDelete("/{messageId}", async (
+            string chatId, string messageId, HttpContext context,
             IMessagesService service, CancellationToken cancellationToken) =>
         {
             await service.UnpinAsync(chatId, CurrentUser.GetId(context), messageId, cancellationToken);

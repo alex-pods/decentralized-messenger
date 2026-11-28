@@ -8,12 +8,9 @@ namespace Messenger.Api.Antispam;
 public static class AntispamEndpoints
 {
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    public sealed class PublicCapabilities;
 
     public static void MapAntispamEndpoints(this WebApplication app)
     {
-        app.MapGet("/capabilities", (AntispamService service, AntispamMediaCatalog media) => Results.Ok(new { antispam = new { enabled = service.Enabled, protocol = 1, concentration = service.Enabled && media.Available } }))
-            .WithMetadata(new PublicCapabilities()).WithSummary("Возможности сервера; отсутствие antispam означает выключенный антиспам");
         app.MapGet("/antispam/status", (HttpContext ctx, AntispamService service) =>
             Results.Ok(new { enabled = service.Enabled, required = service.Required(CurrentUser.GetId(ctx)) }));
         app.MapGet("/antispam/media", (AntispamMediaCatalog media) => Results.Ok(new { version=1, clips=media.Clips }));

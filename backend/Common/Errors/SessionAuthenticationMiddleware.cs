@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Messenger.Api.Endpoints;
+using Microsoft.AspNetCore.Http.Features;
 using Messenger.Api.Services;
 
 namespace Messenger.Api.Common.Errors;
@@ -7,6 +9,15 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, IAuthService auth)
     {
+        if (context.GetEndpoint()?.Metadata.GetMetadata<MessageRelayEndpoints.RelayBody>() != null)
+        {
+            const int maxRelayBytes = 32768;
+            var feature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (feature is { IsReadOnly: false }) feature.MaxRequestBodySize = maxRelayBytes;
+            context.Response.Headers.CacheControl = "no-store";
+            if (context.Request.ContentLength > maxRelayBytes)
+                throw AppException.PayloadTooLarge("Relay request is too large");
+        }
         if (context.Request.Path.StartsWithSegments("/themes"))
         {
             var size = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
@@ -17,8 +28,18 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
         {
             await next(context); return;
         }
-        if (context.GetEndpoint()?.Metadata.GetMetadata<Messenger.Api.Antispam.AntispamEndpoints.PublicCapabilities>() != null)
+        if (context.GetEndpoint()?.Metadata.GetMetadata<CapabilitiesEndpoints.PublicRead>() != null)
         { await next(context); return; }
+        if (context.GetEndpoint()?.Metadata.GetMetadata<ServerIdentityEndpoints.PublicProof>() != null)
+        {
+            const int maxProofRequestBytes = 512;
+            var limit = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = maxProofRequestBytes;
+            if (context.Request.ContentLength > maxProofRequestBytes)
+                throw AppException.PayloadTooLarge("Server identity request is too large");
+            await next(context);
+            return;
+        }
         var requestPath = context.Request.Path.Value?.TrimEnd('/');
 
         if (HttpMethods.IsGet(context.Request.Method) &&
@@ -47,26 +68,24 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
         "/ws",
         StringComparison.OrdinalIgnoreCase);
 
+        var authorization = context.Request.Headers.Authorization.ToString();
         string token;
-
-        if (isWsEndpoint)
+        if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-        token = context.Request.Query["user_session_token"].ToString();
-
-        if (string.IsNullOrWhiteSpace(token))
-            token = context.Request.Query["token"].ToString();
+            token = authorization["Bearer ".Length..].Trim();
+        }
+        else if (isWsEndpoint && authorization.Length == 0)
+        {
+            token = context.Request.Query["user_session_token"].ToString();
+            if (string.IsNullOrWhiteSpace(token))
+                token = context.Request.Query["token"].ToString();
         }
         else
         {
-            var authorization = context.Request.Headers.Authorization.ToString();
-
-            if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                throw AppException.Unauthorized("missing bearer token");
-
-            token = authorization["Bearer ".Length..].Trim();
+            throw AppException.Unauthorized("missing bearer token");
         }
 
-        long userId;
+        string userId;
 
         try
         {
@@ -81,7 +100,7 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
         context.Items[CurrentUser.ContextKey] = userId;
         context.Items[CurrentUser.TokenContextKey] = token;
         context.User = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Session"));
+            [new Claim(ClaimTypes.NameIdentifier, userId)], "Session"));
         await next(context);
     }
 }
@@ -91,8 +110,8 @@ public static class CurrentUser
     internal const string ContextKey = "Messenger.Api.CurrentUserId";
     internal const string TokenContextKey = "Messenger.Api.SessionToken";
 
-    public static long GetId(HttpContext context) =>
-        context.Items.TryGetValue(ContextKey, out var value) && value is long id
+    public static string GetId(HttpContext context) =>
+        context.Items.TryGetValue(ContextKey, out var value) && value is string id
             ? id
             : throw AppException.Unauthorized("missing bearer token");
 

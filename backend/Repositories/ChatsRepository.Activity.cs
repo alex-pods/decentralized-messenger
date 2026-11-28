@@ -5,12 +5,12 @@ using Messenger.Api.Common.Errors;
 
 namespace Messenger.Api.Repositories;
 
-public sealed record GroupActivity(long Id, string Kind, string? DisplayName, string OccurredAt, long? UserId);
+public sealed record GroupActivity(long Id, string Kind, string? DisplayName, string OccurredAt, string? UserId);
 
 public sealed partial class ChatsRepository
 {
     public async Task<IReadOnlyList<GroupActivity>> GetGroupActivityAsync(
-        long chatId, long viewerId, long? beforeId = null, CancellationToken ct = default)
+        string chatId, string viewerId, long? beforeId = null, CancellationToken ct = default)
     {
         using var connection = db.Open();
         var rows = (await connection.QueryAsync<ActivityRow>(new CommandDefinition(
@@ -32,7 +32,7 @@ public sealed partial class ChatsRepository
     }
 
     static Task RecordActivity(IDbConnection connection, IDbTransaction transaction,
-        long chatId, long userId, string kind, CancellationToken ct) =>
+        string chatId, string userId, string kind, CancellationToken ct) =>
         connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO group_activity(chat_id, user_id, kind, occurred_at)
@@ -43,7 +43,7 @@ public sealed partial class ChatsRepository
     sealed class ActivityRow
     {
         public long? Id { get; set; }
-        public long? UserId { get; set; }
+        public string? UserId { get; set; }
         public string Kind { get; set; } = "";
         public Secret? DisplayName { get; set; }
         public string OccurredAt { get; set; } = "";

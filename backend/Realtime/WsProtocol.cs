@@ -6,9 +6,10 @@ public static class WsProtocol
     {
         url = $"ws://<host>{pathBase}/ws?user_session_token=<token>",
 
-        auth = "Session token: user_session_token query parameter " +
-               "(token alias supported). HTTP uses Bearer. " +
+        auth = "Authorization: Bearer <token>. Legacy query parameters user_session_token and token are supported. " +
                "Logout closes only that session's sockets.",
+
+        relay_opt_in = "Send Messenger-Message-Relay: 1 when opening the socket to receive message_relayed.",
 
         close_codes = new
         {
@@ -75,6 +76,13 @@ public static class WsProtocol
                 type = "message",
                 follow = true,
                 payload = "chat_id, message"
+            },
+            new
+            {
+                type = "message_relayed",
+                follow = true,
+                payload = "chat_id, message",
+                note = "Live recipients only; content_state=relayed; no history replay"
             },
             new
             {
@@ -160,7 +168,7 @@ public static class WsProtocol
             {
                 type = "read",
                 follow = true,
-                payload = "chat_id, user_id, last_read_message_id"
+                payload = "chat_id, user_id, last_read_message_id, last_read_sequence"
             },
             new
             {
@@ -172,10 +180,10 @@ public static class WsProtocol
         },
 
         reconnect = "Reconnect, follow chats, then GET " +
-                    "/chats/{id}/messages?after_id=<last id> until empty. " +
+                    "/chats/{id}/messages?after_sequence=<last sequence> until empty. " +
                     "Deduplicate by message id. Refresh chat/member lists " +
                     "and loaded history to recover edits, deletions and " +
-                    "reactions: after_id only recovers new messages.",
+                    "reactions: after_sequence only recovers new messages.",
 
         delivery = "delivered_at means queued to at least one other user's " +
                    "online connection, not a client acknowledgement. " +

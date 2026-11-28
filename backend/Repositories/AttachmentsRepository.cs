@@ -7,14 +7,14 @@ namespace Messenger.Api.Repositories;
 
 public interface IAttachmentsRepository
 {
-    Task<List<Attachment>> GetByMessageIds(IReadOnlyCollection<long> messageIds);
+    Task<List<Attachment>> GetByMessageIds(IReadOnlyCollection<string> messageIds);
     Task<Attachment?> GetById(long id);
     Task InsertMany(IReadOnlyCollection<Attachment> attachments);
 }
 
 public sealed class AttachmentsRepository(DbConnectionFactory db) : IAttachmentsRepository
 {
-    public async Task<List<Attachment>> GetByMessageIds(IReadOnlyCollection<long> messageIds)
+    public async Task<List<Attachment>> GetByMessageIds(IReadOnlyCollection<string> messageIds)
     {
         if (messageIds.Count == 0) return [];
         using var connection = db.Open();

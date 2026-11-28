@@ -123,7 +123,7 @@ public static partial class Preview
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             for (var i = 0; i < 24; i++)
-                vm.Members.Add(new MemberRow { Id = -800 - i, Title = "Длинное имя участника демонстрационной группы", TagLabel = $"@contact_{i:00}" });
+                vm.Members.Add(new MemberRow { Id = $"test-member-{i}", Title = "Длинное имя участника демонстрационной группы", TagLabel = $"@contact_{i:00}" });
             var ownerIndex = vm.Members.ToList().FindIndex(member => member.Id == longContact.Id);
             if (ownerIndex >= 0) vm.Members.Move(ownerIndex, vm.Members.Count - 1);
             Resize(window, 360);
@@ -156,7 +156,7 @@ public static partial class Preview
             Math.Abs(groupScroll.Offset.Y - memberOffset) < 2, "Back from pins did not restore the group page and member position");
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            foreach (var member in vm.Members.Where(member => member.Id < 0).ToArray()) vm.Members.Remove(member);
+            foreach (var member in vm.Members.Where(member => member.Id.StartsWith("test-member-", StringComparison.Ordinal)).ToArray()) vm.Members.Remove(member);
         });
         await OnUiAsync(() => vm.HideChatCommand.ExecuteAsync(null));
         await OnUiAsync(() => vm.ReloadChatsCommand.ExecuteAsync(null));

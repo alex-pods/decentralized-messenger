@@ -41,11 +41,24 @@ public partial class ShellViewModel
         catch (ObjectDisposedException) when (_closed) { }
     }
 
-    async Task<GroupActivityItem[]> GetActivity(long chatId, long? beforeId = null)
+    async Task<GroupActivityItem[]> GetActivity(string chatId, long? beforeId = null)
     {
         var path = $"chats/{chatId}/activity";
         if (beforeId is { } id) path += $"?before_id={id}";
-        return await _api.Send<GroupActivityItem[]>(HttpMethod.Get, path, null, default) ?? [];
+        var version = HistoryVersion(chatId);
+        try
+        {
+            var items = await _api.Send<GroupActivityItem[]>(HttpMethod.Get, path, null, default) ?? [];
+            if (version == HistoryVersion(chatId))
+                CacheHistory(store => store.SaveActivity(chatId, items));
+            return items;
+        }
+        catch (Exception ex) when (CanUseLocalHistory(ex))
+        {
+            var cached = await ReadLocalHistory(store => store.ReadActivity(chatId, ActivityPageSize, beforeId));
+            if (cached == null) throw;
+            return cached;
+        }
     }
 
     void AddActivity(IEnumerable<GroupActivityItem> items)
@@ -69,10 +82,7 @@ public partial class ShellViewModel
     {
         _timelineUpdateQueued = false;
         UpdateReplyPreviews();
-        var sorted = Messages.Cast<TimelineItem>().Concat(_activity.Values.OrderBy(line => line.Event.Id))
-            .OrderBy(item => item.SentAt)
-            .ThenBy(item => item is GroupActivityLine ? 0 : 1)
-            .ToArray();
+        var sorted = MergeTimeline(Messages, _activity.Values);
         GroupTimeline(sorted);
 
         // Keep existing item containers and the scroll position across live inserts and older pages.
@@ -82,6 +92,21 @@ public partial class ShellViewModel
         for (var i = 0; i < sorted.Length; i++)
             if (i == Timeline.Count || !ReferenceEquals(sorted[i], Timeline[i]))
                 Timeline.Insert(i, sorted[i]);
+    }
+
+    internal static TimelineItem[] MergeTimeline(IEnumerable<MessageItem> messages, IEnumerable<GroupActivityLine> activity)
+    {
+        var ordered = messages.OrderBy(m => m.Sequence).ToArray();
+        var result = new List<TimelineItem>();
+        var index = 0;
+        foreach (var entry in activity.OrderBy(a => a.SentAt).ThenBy(a => a.Event.Id))
+        {
+            while (index < ordered.Length && ordered[index].SentAt < entry.SentAt)
+                result.Add(ordered[index++]);
+            result.Add(entry);
+        }
+        result.AddRange(ordered.Skip(index));
+        return result.ToArray();
     }
 }
 
@@ -98,7 +123,7 @@ public sealed class GroupActivityLine : TimelineItem
     };
     public string Description => $"{Name} · {ActionLabel}";
     public string Name => string.IsNullOrWhiteSpace(Event.DisplayName) ? "Удалённый аккаунт" : Event.DisplayName;
-    public bool HasProfile => Event.UserId is > 0;
+    public bool HasProfile => !string.IsNullOrEmpty(Event.UserId);
 
     public GroupActivityLine(GroupActivityItem item)
     {
@@ -108,4 +133,4 @@ public sealed class GroupActivityLine : TimelineItem
     }
 }
 
-public sealed record GroupActivityItem(long Id, string Kind, string? DisplayName, string OccurredAt, long? UserId);
+public sealed record GroupActivityItem(long Id, string Kind, string? DisplayName, string OccurredAt, string? UserId);

@@ -2,7 +2,7 @@ namespace MessengerDesktop;
 
 public partial class ShellViewModel
 {
-    readonly Dictionary<long, string> _drafts = new();
+    readonly Dictionary<string, string> _drafts = new();
     string _beforeEdit = "";
 
     partial void OnSelectedChatChanging(ChatItem? value)
@@ -13,7 +13,7 @@ public partial class ShellViewModel
 
     void RestoreDraft(ChatItem? chat) => Draft = chat != null && _drafts.TryGetValue(chat.Id, out var saved) ? saved : "";
 
-    void CompleteCompose(long chatId, string submitted, bool editing)
+    void CompleteCompose(string chatId, string submitted, bool editing)
     {
         if (SelectedChat?.Id != chatId)
         {

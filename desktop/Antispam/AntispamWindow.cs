@@ -140,8 +140,7 @@ public sealed partial class AntispamWindow : Window
         {
             _challenge = await _api.CreateAntispamChallenge(_lifetime.Token);
             if (_ended) return;
-            _socket.Options.SetRequestHeader("Authorization", "Bearer " + _api.Token);
-            await _socket.ConnectAsync(_api.AntispamWebSocketUri(_challenge.Id), _lifetime.Token);
+            await _api.ConnectAuthenticatedSocket(_socket, _api.AntispamWebSocketUri(_challenge.Id), _lifetime.Token);
             var sending = SendLoop();
             var heartbeat = Heartbeats();
             var buffer = new byte[8192];

@@ -11,6 +11,7 @@
   <StreamGeometry x:Key="IcLogout">M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17 L21 12 L16 7 M21 12 L9 12</StreamGeometry>
   <StreamGeometry x:Key="IcInfo">M2.0 12.0 a10.0 10.0 0 1 0 20.0 0 a10.0 10.0 0 1 0 -20.0 0 M12 16v-4 M12 8h.01</StreamGeometry>
   <StreamGeometry x:Key="IcSend">M5 12 l7-7 7 7 M12 19V5</StreamGeometry>
+  <StreamGeometry x:Key="IcZap">M13 2L3 14h9l-1 8 10-12h-9l1-8Z</StreamGeometry>
   <StreamGeometry x:Key="IcClose">M18 6 6 18 M6 6 l12 12</StreamGeometry>
   <StreamGeometry x:Key="IcSearch">M3.0 11.0 a8.0 8.0 0 1 0 16.0 0 a8.0 8.0 0 1 0 -16.0 0 M21 21 l-4.3-4.3</StreamGeometry>
   <StreamGeometry x:Key="IcReply">M9 17 L4 12 L9 7 M20 18v-2a4 4 0 0 0-4-4H4</StreamGeometry>

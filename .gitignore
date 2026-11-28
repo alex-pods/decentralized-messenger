@@ -434,6 +434,8 @@ FodyWeavers.xsd
 *.db
 *.db-wal
 *.db-shm
+*.identity.key
+*.identity.key.*.part
 localfiles/
 publish.tar.gz
 local_run.log

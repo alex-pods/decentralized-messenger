@@ -21,6 +21,7 @@ public static class SessionStore
     {
         public string Server { get; set; } = "";
         public string Token { get; set; } = "";
+        public string? ServerFingerprint { get; set; }
     }
 
     public static Saved? Load()
@@ -36,10 +37,27 @@ public static class SessionStore
         catch { return null; }
     }
 
-    public static void Save(string server, string token)
+    internal static string? GetFingerprint(Saved saved) => saved.ServerFingerprint
+        ?? ServerTrustStore.Lookup(MessengerClient.NormalizeServerAddress(saved.Server));
+
+    internal static MessengerClient ConnectSaved(Saved saved, string address)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(new Saved { Server = server, Token = token }));
+        address = MessengerClient.NormalizeServerAddress(address);
+        var original = MessengerClient.NormalizeServerAddress(saved.Server);
+        var fingerprint = GetFingerprint(saved);
+        if (fingerprint == null && !string.Equals(original, address, StringComparison.Ordinal))
+            throw new ServerIdentityException("Сначала подтвердите ключ по прежнему адресу, чтобы перенести сохранённый аккаунт.");
+        return new MessengerClient(address, saved.Token, expectedFingerprint: fingerprint);
+    }
+
+    public static void Save(MessengerClient api)
+    {
+        ServerTrustStore.WriteJson(FilePath, new Saved
+        {
+            Server = api.ServerBase,
+            Token = api.Token ?? throw new InvalidOperationException("Missing session token."),
+            ServerFingerprint = api.ServerFingerprint ?? throw new InvalidOperationException("Missing server identity.")
+        });
     }
 
     public static void Clear()

@@ -25,7 +25,7 @@ public sealed partial class AppearanceEditor : UserControl
     Avalonia.Platform.Storage.IStorageProvider StorageProvider => TopLevel.GetTopLevel(this)!.StorageProvider;
     Avalonia.Input.Platform.IClipboard? Clipboard => TopLevel.GetTopLevel(this)?.Clipboard;
 
-    public AppearanceEditor(MessengerClient? api = null, long? owner = null, bool standalone = false)
+    public AppearanceEditor(MessengerClient? api = null, string? owner = null, bool standalone = false)
     {
         _api = api; _owner = owner;
         var layout = new DockPanel { Margin = standalone ? new Thickness(24) : default };

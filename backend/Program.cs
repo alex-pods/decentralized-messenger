@@ -37,7 +37,11 @@ builder.Services.AddCors(options =>
     }));
 
 // Database
-builder.Services.AddSingleton(new DbConnectionFactory(builder.Configuration["Db"] ?? "messenger.db"));
+var dbPath = builder.Configuration["Db"] ?? "messenger.db";
+builder.Services.AddSingleton(new DbConnectionFactory(dbPath));
+var identityPath = builder.Configuration["MESSENGER_SERVER_IDENTITY_KEY_FILE"] ?? Path.GetFullPath(dbPath) + ".identity.key";
+using var serverIdentity = new ServerIdentity(identityPath);
+builder.Services.AddSingleton(serverIdentity);
 
 builder.Services.AddSingleton<ThemesRepository>();
 
@@ -58,6 +62,8 @@ builder.Services.AddSingleton<WsConnectionRegistry>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<IMessagesService, MessagesService>();
+builder.Services.AddScoped<MessageRelayService>();
+builder.Services.AddSingleton<RelayReceiptsRepository>();
 builder.Services.AddScoped<IChatsService, ChatsService>();
 builder.Services.AddScoped<IReactionsService, ReactionsService>();
 builder.Services.AddScoped<IAvatarsService, AvatarsService>();
@@ -130,11 +136,14 @@ app.MapReactionsEndpoints();
 app.MapWsEndpoints();
 app.MapUsersEndpoints();
 app.MapMessagesEndpoints();
+app.MapMessageRelayEndpoints();
 app.MapPinsEndpoints();
 app.MapAttachmentsEndpoints();
 app.MapChatsEndpoints();
 app.MapAuthEndpoints();
+app.MapServerIdentityEndpoints();
 app.MapThemesEndpoints();
+app.MapCapabilitiesEndpoints();
 app.MapAntispamEndpoints();
 
 app.Run();

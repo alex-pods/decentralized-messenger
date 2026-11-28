@@ -3,7 +3,7 @@ using Messenger.Api.Realtime;
 
 var timeout = TimeSpan.FromSeconds(2);
 using var socket = new RecordingSocket();
-using var connection = new WsConnection(1, socket, "test");
+using var connection = new WsConnection("fixture-user", socket, "test");
 var writer = connection.RunWriterAsync(CancellationToken.None);
 if (!connection.TryEnqueue([1])) throw new Exception("First frame was rejected");
 await socket.FirstStarted.Task.WaitAsync(timeout);

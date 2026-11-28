@@ -8,9 +8,9 @@ namespace Messenger.Api.Services;
 
 public interface IReactionsService
 {
-    Task<IReadOnlyList<ReactionRow>> GetAsync(long messageId, long viewerId, CancellationToken ct = default);
-    Task AddAsync(long messageId, long userId, string emoji, CancellationToken ct = default);
-    Task RemoveAsync(long messageId, long userId, string emoji, CancellationToken ct = default);
+    Task<IReadOnlyList<ReactionRow>> GetAsync(string messageId, string viewerId, CancellationToken ct = default);
+    Task AddAsync(string messageId, string userId, string emoji, CancellationToken ct = default);
+    Task RemoveAsync(string messageId, string userId, string emoji, CancellationToken ct = default);
 }
 
 public sealed class ReactionsService(
@@ -21,7 +21,7 @@ public sealed class ReactionsService(
 {
     private const int MaxEmojiLength = 32;
 
-    public async Task<IReadOnlyList<ReactionRow>> GetAsync(long messageId, long viewerId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ReactionRow>> GetAsync(string messageId, string viewerId, CancellationToken ct = default)
     {
         var message = await RequireMessageAsync(messageId, ct);
         await RequireAccessAsync(message.ChatId, viewerId, ct);
@@ -31,8 +31,8 @@ public sealed class ReactionsService(
     }
 
     public async Task AddAsync(
-        long messageId,
-        long userId,
+        string messageId,
+        string userId,
         string emoji,
         CancellationToken ct = default)
     {
@@ -69,8 +69,8 @@ public sealed class ReactionsService(
     }
 
     public async Task RemoveAsync(
-        long messageId,
-        long userId,
+        string messageId,
+        string userId,
         string emoji,
         CancellationToken ct = default)
     {
@@ -103,16 +103,14 @@ public sealed class ReactionsService(
             throw new ValidationException($"Emoji must be 1..{MaxEmojiLength} characters");
     }
 
-    private async Task<MessageRow> RequireMessageAsync(long messageId, CancellationToken ct)
+    private async Task<MessageRow> RequireMessageAsync(string messageId, CancellationToken ct)
         => await messages.GetByIdAsync(messageId, ct)
             ?? throw new NotFoundException("Message not found");
 
-    private async Task<ChatAccess> RequireAccessAsync(long chatId, long userId, CancellationToken ct)
+    private async Task<ChatAccess> RequireAccessAsync(string chatId, string userId, CancellationToken ct)
     {
         var access = await chats.GetAccessAsync(chatId, userId, ct);
         if (access is not null) return access;
-        if (!await chats.ExistsAsync(chatId, ct))
-            throw new NotFoundException("Chat not found");
-        throw new ForbiddenException("User is not a chat member");
+        throw new NotFoundException("Chat not found");
     }
 }

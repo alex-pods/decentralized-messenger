@@ -324,7 +324,7 @@ public static partial class Preview
                           (send.CommandParameter as ChatItem)?.Id == target.Id && send.IsEnabled,
             "Tag selection did not bind to the send action");
         await OnUiAsync(() => vm.ForwardToCommand.ExecuteAsync(send.CommandParameter));
-        var forwarded = (await api.GetMessages(target.Id)).Where(item => item.Id > before.Last().Id).ToArray();
+        var forwarded = (await api.GetMessages(target.Id)).Where(item => item.Sequence > before.Last().Sequence).ToArray();
         Expect(forwarded is [{ ForwardedFrom: not null }], "Expected one forwarded message with attribution");
         await Until(() => !vm.OverlayOpen, "Forward picker stayed open after confirmation");
 

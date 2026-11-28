@@ -5,7 +5,7 @@ using Messenger.Api.Infrastructure;
 namespace Messenger.Api.Contracts.Responses;
 
 public sealed record ProfileResponse(
-    [property: JsonPropertyName("id")] long Id,
+    [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("tag")] string Tag,
     [property: JsonPropertyName("display_name")] string DisplayName,
     [property: JsonPropertyName("path_to_avatar_file")] string? AvatarPath,

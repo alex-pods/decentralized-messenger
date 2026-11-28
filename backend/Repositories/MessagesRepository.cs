@@ -1,5 +1,6 @@
 using System.Data;
 using Dapper;
+using Messenger.Api.Common.Errors;
 using Messenger.Api.Database;
 using Messenger.Api.Infrastructure;
 using Messenger.Api.Repositories.Models;
@@ -9,38 +10,39 @@ namespace Messenger.Api.Repositories;
 
 public interface IMessagesRepository
 {
-    Task<MessageRow?> GetByIdAsync(long messageId, CancellationToken cancellationToken = default);
+    Task<MessageRow?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<MessageRow>> GetByIdsAsync(
-        IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default);
+        IReadOnlyCollection<string> messageIds, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<MessageRow>> GetHistoryAsync(
-        long chatId, long viewerId, HistoryQuery query, CancellationToken cancellationToken = default);
+        string chatId, string viewerId, HistoryQuery query, CancellationToken cancellationToken = default);
     Task<AddMessageResult> AddAsync(NewMessage message, CancellationToken cancellationToken = default);
     Task<MessageRow?> ForwardAsync(
-        long sourceMessageId,
-        long targetChatId,
-        long senderId,
+        string sourceMessageId,
+        string targetChatId,
+        string id,
+        string senderId,
         CancellationToken cancellationToken = default);
     Task<MessageRow?> EditAsync(
-        long messageId,
+        string messageId,
         Secret newText,
         CancellationToken cancellationToken = default);
 
     Task<DeleteMessageResult?> DeleteAsync(
-        long messageId,
+        string messageId,
         CancellationToken cancellationToken = default);
-    Task HideAsync(long messageId, long userId, CancellationToken cancellationToken = default);
-    Task MarkDeliveredAsync(long messageId, CancellationToken ct = default);
-    Task<IReadOnlyList<PinRow>> ListPinsAsync(long chatId, long viewerId, CancellationToken ct = default);
-    Task<bool> PinAsync(long chatId, long messageId, long userId, DateTimeOffset pinnedAt, CancellationToken ct = default);
-    Task<bool> UnpinAsync(long chatId, long messageId, CancellationToken ct = default);
-    Task<int> CountPinsAsync(long chatId, CancellationToken ct = default);
-    Task<bool> IsPinnedAsync(long chatId, long messageId, CancellationToken ct = default);
+    Task HideAsync(string messageId, string userId, CancellationToken cancellationToken = default);
+    Task MarkDeliveredAsync(string messageId, CancellationToken ct = default);
+    Task<IReadOnlyList<PinRow>> ListPinsAsync(string chatId, string viewerId, CancellationToken ct = default);
+    Task<bool> PinAsync(string chatId, string messageId, string userId, DateTimeOffset pinnedAt, CancellationToken ct = default);
+    Task<bool> UnpinAsync(string chatId, string messageId, CancellationToken ct = default);
+    Task<int> CountPinsAsync(string chatId, CancellationToken ct = default);
+    Task<bool> IsPinnedAsync(string chatId, string messageId, CancellationToken ct = default);
 }
 
 public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesRepository
 {
     private const string RowSelect = """
-        SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id,
+        SELECT m.id, m.sequence, m.chat_id, m.sender_id, m.reply_to_id,
             m.text, m.content_state,
             m.sent_at, m.delivered_at, m.edited_at, m.deleted_at,
             m.client_ref_payload, v.read_at,
@@ -51,14 +53,14 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         LEFT JOIN message_forwards f ON f.message_id = m.id
         """;
 
-    public async Task<MessageRow?> GetByIdAsync(long messageId, CancellationToken cancellationToken = default)
+    public async Task<MessageRow?> GetByIdAsync(string messageId, CancellationToken cancellationToken = default)
     {
         using var connection = db.Open();
         return await LoadRow(connection, messageId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<MessageRow>> GetByIdsAsync(
-        IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default)
+        IReadOnlyCollection<string> messageIds, CancellationToken cancellationToken = default)
     {
         if (messageIds.Count == 0) return Array.Empty<MessageRow>();
 
@@ -70,7 +72,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     }
 
     public async Task<IReadOnlyList<MessageRow>> GetHistoryAsync(
-        long chatId, long viewerId, HistoryQuery query, CancellationToken cancellationToken = default)
+        string chatId, string viewerId, HistoryQuery query, CancellationToken cancellationToken = default)
     {
         var limit = query.Limit <= 0 ? 50 : Math.Min(query.Limit, 100);
         var sql = $"""
@@ -81,28 +83,30 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
                   WHERE h.message_id = m.id AND h.user_id = @viewerId)
             """;
 
-        var reverse = query.AfterId is null;
-        if (query.AfterId is { } afterId)
-        {
-            sql += " AND m.id > @afterId";
-            if (query.BeforeId is not null) sql += " AND m.id < @beforeId";
-            sql += " ORDER BY m.id ASC LIMIT @limit";
-        }
-        else
-        {
-            if (query.BeforeId is not null) sql += " AND m.id < @beforeId";
-            sql += " ORDER BY m.id DESC LIMIT @limit";
-        }
-
         using var connection = db.Open();
+        async Task<long?> ResolveCursor(string? id, long? sequence)
+        {
+            if (id is null) return sequence;
+            // Legacy ID cursors identify a row; they are never compared numerically.
+            return await connection.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
+                "SELECT sequence FROM messages WHERE id = @id AND chat_id = @chatId",
+                new { id, chatId }, cancellationToken: cancellationToken))
+                ?? throw new Messenger.Api.Common.Errors.ValidationException("History cursor does not belong to this chat");
+        }
+        var beforeSequence = await ResolveCursor(query.BeforeId, query.BeforeSequence);
+        var afterSequence = await ResolveCursor(query.AfterId, query.AfterSequence);
+        var reverse = afterSequence is null;
+        if (afterSequence != null) sql += " AND m.sequence > @afterSequence";
+        if (beforeSequence != null) sql += " AND m.sequence < @beforeSequence";
+        sql += reverse ? " ORDER BY m.sequence DESC LIMIT @limit" : " ORDER BY m.sequence ASC LIMIT @limit";
         var rows = await connection.QueryAsync<MessageRowRaw>(new CommandDefinition(
             sql,
             new
             {
                 chatId,
                 viewerId,
-                beforeId = query.BeforeId,
-                afterId = query.AfterId,
+                beforeSequence,
+                afterSequence,
                 limit
             },
             cancellationToken: cancellationToken));
@@ -137,19 +141,20 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
 
         try
         {
-            var id = await connection.ExecuteScalarAsync<long>(
+            var id = await connection.ExecuteScalarAsync<string>(
                 new CommandDefinition(
                     """
                     INSERT INTO messages(
-                        chat_id, sender_id, text,
+                        id, chat_id, sender_id, text,
                         reply_to_id, client_ref, client_ref_payload, sent_at)
                     VALUES (
-                        @ChatId, @SenderId, @Text,
+                        @Id, @ChatId, @SenderId, @Text,
                         @ReplyToId, @ClientRef, @fingerprint, strftime('%Y-%m-%d %H:%M:%f', 'now'))
                     RETURNING id
                     """,
                     new
                     {
+                        message.Id,
                         message.ChatId,
                         message.SenderId,
                         message.Text,
@@ -162,39 +167,41 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
                     cancellationToken: cancellationToken));
 
             return new AddMessageResult(
-                (await LoadRow(connection, id, cancellationToken))!,
+                (await LoadRow(connection, id!, cancellationToken))!,
                 true);
         }
-        catch (SqliteException exception) when (
-            message.ClientRef is not null &&
-            IsUniqueViolation(exception))
+        catch (SqliteException exception) when (IsUniqueViolation(exception) || RelayReceiptsRepository.IsIdConflict(exception))
         {
-            var existing = await FindDuplicateAsync(
+            var existing = message.ClientRef == null ? null : await FindDuplicateAsync(
                 connection,
                 message,
                 fingerprint,
                 cancellationToken);
 
             if (existing is null)
-                throw;
+                throw AppException.Conflict("message_id_conflict", "Message ID already used");
 
             return existing;
         }
     }
 
     public async Task<MessageRow?> ForwardAsync(
-        long sourceMessageId,
-        long targetChatId,
-        long senderId,
+        string sourceMessageId,
+        string targetChatId,
+        string id,
+        string senderId,
         CancellationToken cancellationToken = default)
     {
         using var connection = db.Open();
         using var transaction = connection.BeginTransaction();
 
-        var newId = await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
+        string? newId;
+        try
+        {
+            newId = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             """
-            INSERT INTO messages(chat_id, sender_id, text, sent_at)
-            SELECT @targetChatId, @senderId, src.text, strftime('%Y-%m-%d %H:%M:%f', 'now')
+            INSERT INTO messages(id, chat_id, sender_id, text, sent_at)
+            SELECT @id, @targetChatId, @senderId, src.text, strftime('%Y-%m-%d %H:%M:%f', 'now')
             FROM messages src
             WHERE src.id = @sourceMessageId
               AND src.content_state = 'stored'
@@ -204,14 +211,25 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
               AND NOT EXISTS (
                   SELECT 1 FROM message_hidden h
                   WHERE h.message_id = src.id AND h.user_id = @senderId)
+            ON CONFLICT(id) DO NOTHING
             RETURNING id
             """,
-            new { targetChatId, senderId, sourceMessageId },
+            new { id, targetChatId, senderId, sourceMessageId },
             transaction,
             cancellationToken: cancellationToken));
+        }
+        catch (SqliteException exception) when (RelayReceiptsRepository.IsIdConflict(exception))
+        {
+            throw AppException.Conflict("message_id_conflict", "Message ID already used");
+        }
 
         if (newId is null)
+        {
+            if (await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT EXISTS(SELECT 1 FROM messages WHERE id = @id)", new { id }, transaction, cancellationToken: cancellationToken)) != 0)
+                throw AppException.Conflict("message_id_conflict", "Message ID already used");
             return null;
+        }
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
@@ -229,13 +247,13 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
             transaction,
             cancellationToken: cancellationToken));
 
-        var row = await LoadRow(connection, newId.Value, cancellationToken, transaction);
+        var row = await LoadRow(connection, newId, cancellationToken, transaction);
         transaction.Commit();
         return row;
     }
 
     public async Task<MessageRow?> EditAsync(
-        long messageId,
+        string messageId,
         Secret newText,
         CancellationToken cancellationToken = default)
     {
@@ -272,7 +290,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     }
 
     public async Task<DeleteMessageResult?> DeleteAsync(
-        long messageId,
+        string messageId,
         CancellationToken cancellationToken = default)
     {
         using var connection = db.Open();
@@ -321,7 +339,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
             : new DeleteMessageResult(row, changed > 0, paths);
     }
 
-    public async Task HideAsync(long messageId, long userId, CancellationToken cancellationToken = default)
+    public async Task HideAsync(string messageId, string userId, CancellationToken cancellationToken = default)
     {
         using var connection = db.Open();
         await connection.ExecuteAsync(new CommandDefinition(
@@ -329,7 +347,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
             new { userId, messageId }, cancellationToken: cancellationToken));
     }
 
-    public async Task MarkDeliveredAsync(long messageId, CancellationToken ct = default)
+    public async Task MarkDeliveredAsync(string messageId, CancellationToken ct = default)
     {
         using var connection = db.Open();
 
@@ -366,11 +384,15 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         if (row is null)
             return null;
 
-        var matches = row.ClientRefPayload is not null
-            ? row.ClientRefPayload == fingerprint
-            : row.ChatId == message.ChatId &&
-            row.ReplyToId == message.ReplyToId &&
-            (row.ContentState == "deleted" || row.Text == message.Text);
+        var matches = row.ClientRefPayload switch
+        {
+            null => row.ChatId == message.ChatId && row.ReplyToId == message.ReplyToId &&
+                (row.ContentState == "deleted" || row.Text == message.Text),
+            var migrated when migrated.StartsWith("legacy:", StringComparison.Ordinal) =>
+                row.ChatId == message.ChatId && row.ReplyToId == message.ReplyToId &&
+                MessageFingerprint.MatchesMigrated(migrated, message.Text, message.ReplyToId != null),
+            var payload => payload == fingerprint
+        };
 
         return new AddMessageResult(
             MapRow(row),
@@ -380,7 +402,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
 
     private static async Task PreserveLegacyFingerprint(
         IDbConnection connection,
-        long messageId,
+        string messageId,
         IDbTransaction transaction,
         CancellationToken ct)
     {
@@ -419,12 +441,12 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     }
 
     public async Task<IReadOnlyList<PinRow>> ListPinsAsync(
-        long chatId, long viewerId, CancellationToken ct = default)
+        string chatId, string viewerId, CancellationToken ct = default)
     {
         using var connection = db.Open();
         var rows = await connection.QueryAsync<PinRowRaw>(new CommandDefinition(
             """
-            SELECT m.id, m.chat_id, m.sender_id, m.reply_to_id,
+            SELECT m.id, m.sequence, m.chat_id, m.sender_id, m.reply_to_id,
                 m.text, m.content_state,
                 m.sent_at, m.delivered_at, m.edited_at, m.deleted_at,
                 m.client_ref_payload, v.read_at,
@@ -436,7 +458,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
               AND NOT EXISTS (
                   SELECT 1 FROM message_hidden h
                   WHERE h.message_id = m.id AND h.user_id = @viewerId)
-            ORDER BY m.id DESC
+            ORDER BY m.sequence DESC
             """,
             new { chatId, viewerId },
             cancellationToken: ct));
@@ -448,7 +470,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     }
 
     public async Task<bool> PinAsync(
-        long chatId, long messageId, long userId, DateTimeOffset pinnedAt, CancellationToken ct = default)
+        string chatId, string messageId, string userId, DateTimeOffset pinnedAt, CancellationToken ct = default)
     {
         using var connection = db.Open();
         var inserted = await connection.ExecuteAsync(new CommandDefinition(
@@ -462,7 +484,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         return inserted > 0;
     }
 
-    public async Task<bool> UnpinAsync(long chatId, long messageId, CancellationToken ct = default)
+    public async Task<bool> UnpinAsync(string chatId, string messageId, CancellationToken ct = default)
     {
         using var connection = db.Open();
         var removed = await connection.ExecuteAsync(new CommandDefinition(
@@ -472,7 +494,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         return removed > 0;
     }
 
-    public async Task<int> CountPinsAsync(long chatId, CancellationToken ct = default)
+    public async Task<int> CountPinsAsync(string chatId, CancellationToken ct = default)
     {
         using var connection = db.Open();
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition(
@@ -481,7 +503,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
             cancellationToken: ct));
     }
 
-    public async Task<bool> IsPinnedAsync(long chatId, long messageId, CancellationToken ct = default)
+    public async Task<bool> IsPinnedAsync(string chatId, string messageId, CancellationToken ct = default)
     {
         using var connection = db.Open();
         var count = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
@@ -496,7 +518,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
 
     private static async Task<MessageRow?> LoadRow(
         IDbConnection connection,
-        long messageId,
+        string messageId,
         CancellationToken cancellationToken,
         IDbTransaction? transaction = null)
     {
@@ -522,7 +544,8 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         SqliteTime.ParseOrNull(row.EditedAt),
         SqliteTime.ParseOrNull(row.ReadAt),
         SqliteTime.ParseOrNull(row.DeletedAt),
-        MapForward(row));
+        MapForward(row),
+        row.Sequence);
 
     private static ForwardInfo? MapForward(MessageRowRaw row) =>
         row.ForwardAuthorName is { } name
@@ -538,21 +561,21 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
     };
 
     private static bool IsUniqueViolation(SqliteException exception) =>
-        exception.SqliteErrorCode == 19 &&
-        exception.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
+        exception.SqliteExtendedErrorCode is 1555 or 2067;
 
     private sealed class PinRowRaw : MessageRowRaw
     {
-        public long PinnedBy { get; set; }
+        public string PinnedBy { get; set; } = "";
         public string PinnedAt { get; set; } = "";
     }
 
     private class MessageRowRaw
     {
-        public long Id { get; set; }
-        public long ChatId { get; set; }
-        public long SenderId { get; set; }
-        public long? ReplyToId { get; set; }
+        public string Id { get; set; } = "";
+        public long Sequence { get; set; }
+        public string ChatId { get; set; } = "";
+        public string SenderId { get; set; } = "";
+        public string? ReplyToId { get; set; }
         public Secret? Text { get; set; }
         public string ContentState { get; set; } = "";
         public string SentAt { get; set; } = "";
@@ -561,7 +584,7 @@ public sealed class MessagesRepository(DbConnectionFactory db) : IMessagesReposi
         public string? DeletedAt { get; set; }
         public string? ReadAt { get; set; }
         public string? ClientRefPayload { get; set; }
-        public long? ForwardAuthorId { get; set; }
+        public string? ForwardAuthorId { get; set; }
         public Secret? ForwardAuthorName { get; set; }
         public string? ForwardSentAt { get; set; }
     }

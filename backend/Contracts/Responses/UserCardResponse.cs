@@ -4,7 +4,7 @@ using Messenger.Api.Models;
 namespace Messenger.Api.Contracts.Responses;
 
 public sealed record UserCardResponse(
-    [property: JsonPropertyName("id")] long Id,
+    [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("tag")] string Tag,
     [property: JsonPropertyName("display_name")] string DisplayName)
 {

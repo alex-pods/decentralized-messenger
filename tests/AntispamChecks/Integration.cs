@@ -18,7 +18,9 @@ static class Integration
         await alice.DiscoverAntispam();
         Check(alice.AntispamSupported&&!alice.AntispamBlocked,"Capability negotiation failed");
         var chat=await alice.CreateDirect((await bob.GetMe()).Id);
-        long first=0;
+        var first="";
+        string MessageId() => chat + "." + Guid.NewGuid().ToString("N");
+        var relayId = MessageId();
         for(var i=0;i<5;i++)first=await alice.SendMessage(chat,"a",clientRef:"integration"+i);
         try{await alice.SendMessage(chat,"a");throw new Exception("Burst was accepted");}catch(ApiException ex)when(ex.Code=="antispam_required"){}
         Check((await alice.GetMessages(chat)).Count==5,"Blocked message was stored");
@@ -46,7 +48,7 @@ static class Integration
             Check(response.StatusCode==HttpStatusCode.PartialContent&&(await response.Content.ReadAsByteArrayAsync()).Length==100,"Media range request failed");
         }
         Console.WriteLine("PASS authenticated media catalog/files, fixed allowlist, download checksum and byte ranges");
-        foreach(var (method,path,body) in new[]{(HttpMethod.Post,$"chats/{chat}/messages","{\"text\":\"blocked\"}"),(HttpMethod.Post,$"messages/{first}/forward",$"{{\"chat_id\":{chat}}}"),(HttpMethod.Patch,$"messages/{first}","{\"text\":\"blocked edit\"}")})
+        foreach(var (method,path,body) in new[]{(HttpMethod.Post,$"chats/{chat}/messages","{\"text\":\"blocked\",\"message_id\":\"" + MessageId() + "\"}"),(HttpMethod.Post,$"chats/{chat}/messages/relay",$"{{\"text\":\"blocked\",\"message_id\":\"{relayId}\"}}"),(HttpMethod.Post,$"messages/{first}/forward",$"{{\"chat_id\":\"{chat}\",\"message_id\":\"{MessageId()}\"}}"),(HttpMethod.Patch,$"messages/{first}","{\"text\":\"blocked edit\"}")})
         {
             using var request=new HttpRequestMessage(method,path){Content=new StringContent(body,Encoding.UTF8,"application/json")};
             using var response=await raw.SendAsync(request);Check(response.StatusCode==HttpStatusCode.TooManyRequests,"Raw request bypassed server gate");
@@ -84,14 +86,25 @@ static class Integration
             state=await Exchange(socket,new("finish",++sequence));Check(state.Phase=="passed","Server did not pass valid run");
         }
         await alice.RefreshAntispam();Check(!alice.AntispamBlocked,"Client remained blocked after pass");
+        try { await alice.RelayMessage(chat, relayId, "retry after verification"); throw new Exception("Offline relay was accepted"); }
+        catch (ApiException ex) when (ex.Code == "relay_no_recipient") { }
         await alice.SendMessage(chat,"after verification");
         Check((await alice.GetMessages(chat)).Count==6,"Sending did not resume");
         Console.WriteLine("PASS HTTP/WS anti-spam: advertised flag, burst, blocked storage/edit/forward, user binding, fake finish, disconnect/retry, real 6000 run and resumed sending");
     }
     static async Task<ClientWebSocket> Connect(MessengerClient api,string id)
     {
-        var ws=new ClientWebSocket();ws.Options.SetRequestHeader("Authorization","Bearer "+api.Token);
-        await ws.ConnectAsync(api.AntispamWebSocketUri(id),CancellationToken.None);return ws;
+        var ws = new ClientWebSocket();
+        try
+        {
+            await api.ConnectAuthenticatedSocket(ws, api.AntispamWebSocketUri(id), CancellationToken.None);
+            return ws;
+        }
+        catch
+        {
+            ws.Dispose();
+            throw;
+        }
     }
     static async Task<AimState> Exchange(ClientWebSocket ws,AimInput input)
     {

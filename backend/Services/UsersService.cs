@@ -7,25 +7,25 @@ namespace Messenger.Api.Services;
 
 public interface IUsersService
 {
-    Task<ProfileResponse> GetProfile(long userId);
-    Task<ProfileResponse> GetProfileById(long userId);
-    Task<List<UserCardResponse>> Search(long viewerId, string query, bool prefix);
-    Task UpdateProfile(long userId, UpdateProfileRequest request);
-    Task UpdateProfileWithAvatar(long userId, UpdateProfileRequest request, IFormFile file, CancellationToken cancellation);
+    Task<ProfileResponse> GetProfile(string userId);
+    Task<ProfileResponse> GetProfileById(string userId);
+    Task<List<UserCardResponse>> Search(string viewerId, string query, bool prefix);
+    Task UpdateProfile(string userId, UpdateProfileRequest request);
+    Task UpdateProfileWithAvatar(string userId, UpdateProfileRequest request, IFormFile file, CancellationToken cancellation);
 }
 
 public sealed class UsersService(IUsersRepository users, IAvatarsRepository avatars, IAvatarsService avatarStorage) : IUsersService
 {
-    public Task<ProfileResponse> GetProfile(long userId) => GetProfileById(userId);
+    public Task<ProfileResponse> GetProfile(string userId) => GetProfileById(userId);
 
-    public async Task<ProfileResponse> GetProfileById(long userId)
+    public async Task<ProfileResponse> GetProfileById(string userId)
     {
         var user = await users.GetById(userId) ?? throw AppException.NotFound("user not found");
         var avatar = (await avatars.GetByUserIds([userId])).GetValueOrDefault(userId);
         return ProfileResponse.From(user, avatar?.Path);
     }
 
-    public async Task<List<UserCardResponse>> Search(long viewerId, string query, bool prefix)
+    public async Task<List<UserCardResponse>> Search(string viewerId, string query, bool prefix)
     {
         var normalized = query.Trim();
         if (normalized.Length == 0) throw AppException.BadRequest("query is required");
@@ -33,14 +33,14 @@ public sealed class UsersService(IUsersRepository users, IAvatarsRepository avat
         return (await users.Search(viewerId, normalized, 20, prefix)).Select(UserCardResponse.From).ToList();
     }
 
-    public Task UpdateProfile(long userId, UpdateProfileRequest request)
+    public Task UpdateProfile(string userId, UpdateProfileRequest request)
     {
         var name = ValidateProfile(request);
         return users.UpdateProfile(userId, name, request.Bio is not null,
             request.Bio is { Length: 0 } ? null : request.Bio, request.AllowTagSearch);
     }
 
-    public Task UpdateProfileWithAvatar(long userId, UpdateProfileRequest request, IFormFile file, CancellationToken cancellation)
+    public Task UpdateProfileWithAvatar(string userId, UpdateProfileRequest request, IFormFile file, CancellationToken cancellation)
     {
         var name = ValidateProfile(request);
         return avatarStorage.Upload(userId, file, cancellation, transaction =>

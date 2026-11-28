@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Avalonia.Threading;
 using MessengerDesktop.Views;
 
 namespace MessengerDesktop;
@@ -19,7 +18,9 @@ public partial class App : Application
                 Appearance.ThemeSettings.FilePath = Path.Combine(Preview.OutDir, "test-appearance.json");
                 Settings.AppPreferences.FilePath = Path.Combine(Preview.OutDir, "test-settings.json");
                 LocalPinStore.DirectoryPath = Path.Combine(Preview.OutDir, "test-pins");
+                LocalHistoryStore.DirectoryPath = Path.Combine(Preview.OutDir, "test-history");
                 Appearance.WallpaperSettings.DirectoryPath = Path.Combine(Preview.OutDir, "test-wallpapers");
+                ServerTrustStore.TestFilePath = Path.Combine(Preview.OutDir, "test-server-trust.json");
             }
             Appearance.ThemeSettings.Restore();
             Settings.AppPreferences.Load();
@@ -27,40 +28,19 @@ public partial class App : Application
             var window = new MainWindow();
             var nav = new Navigator(window);
             desktop.MainWindow = window;
-            window.DataContext = new LoginViewModel(nav, Program.ServerOverride);
+            var saved = Preview.Server == null ? SessionStore.Load() : null;
+            var login = new LoginViewModel(nav, Program.ServerOverride ?? saved?.Server, saved: saved);
+            window.DataContext = login;
             if (Preview.Server != null)
                 _ = Preview.Run(window, nav).ContinueWith(t =>
                 {
                     Console.Error.WriteLine("PREVIEW FAIL " + t.Exception);
                     Environment.Exit(1);
                 }, TaskContinuationOptions.OnlyOnFaulted);
-            else
-                _ = RestoreSession(nav, window);
+            else if (saved != null)
+                _ = login.RestoreSaved();
         }
         base.OnFrameworkInitializationCompleted();
     }
 
-    static async Task RestoreSession(Navigator nav, Avalonia.Controls.Window window)
-    {
-        var saved = SessionStore.Load();
-        if (saved == null) return;
-        if (Program.ServerOverride != null && !string.Equals(Program.ServerOverride, saved.Server.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return;
-        var api = new MessengerClient(saved.Server, saved.Token);
-        try
-        {
-            var me = await api.GetMe();
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (window.DataContext is LoginViewModel)
-                    nav.Go(new ShellViewModel(nav, api, me));
-                else
-                    api.Dispose();
-            });
-        }
-        catch
-        {
-            api.Dispose();
-            SessionStore.Clear();
-        }
-    }
 }

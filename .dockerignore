@@ -12,3 +12,4 @@ backend/Media/Training/*.mp4
 backend/**/keys/
 backend/**/*.env
 backend/**/*.key
+backend/**/*.identity.key.*.part

@@ -42,7 +42,8 @@ public static class WsEndpoints
             var tokenHash = SessionTokenHash.Compute(CurrentUser.GetToken(context));
 
             using var socket = await context.WebSockets.AcceptWebSocketAsync();
-            using var connection = registry.Register(userId, socket, tokenHash);
+            using var connection = registry.Register(userId, socket, tokenHash,
+                supportsRelay: context.Request.Headers["Messenger-Message-Relay"] == "1");
 
             using var receiveLifetime = CancellationTokenSource.CreateLinkedTokenSource(
                 context.RequestAborted,
@@ -129,13 +130,13 @@ public static class WsEndpoints
                             reply = new WsEventResponse("pong");
                             break;
                         
-                        case "follow" when command?.ChatId is long chatId && chatId > 0:
+                        case "follow" when command?.ChatId is string chatId:
                             if(!await memberships.IsMember(chatId, userId))
                             {
                                 reply = new WsEventResponse(
                                     "error",
                                     ChatId: chatId,
-                                    Detail: "not a member of this chat"
+                                    Detail: "Chat not found"
                                 );
 
                                 break;

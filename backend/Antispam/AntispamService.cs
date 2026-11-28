@@ -8,15 +8,15 @@ public sealed record ChallengeInput(string Type, int Seq, double X = 0, double Y
 public sealed class AntispamService(AntispamOptions options, AntispamRepository repository, TimeProvider clock)
 {
     readonly object _gate = new();
-    readonly Dictionary<long, Attempt> _attempts = [];
+    readonly Dictionary<string, Attempt> _attempts = [];
     public bool Enabled => options.Enabled;
-    public bool Required(long userId) => Enabled && repository.BlockId(userId) != null;
-    public void RequireUnblocked(long userId)
+    public bool Required(string userId) => Enabled && repository.BlockId(userId) != null;
+    public void RequireUnblocked(string userId)
     {
         if (Required(userId)) throw new AppException(429, "antispam_required", "Подтвердите, что вы человек");
     }
 
-    public void CheckSend(long userId, long chatId, string? clientRef)
+    public void CheckSend(string userId, string chatId, string? clientRef)
     {
         if (!Enabled) return;
         var key = clientRef == null ? "new:" + Guid.NewGuid().ToString("N") : $"send:{chatId}:{clientRef}";
@@ -24,7 +24,7 @@ public sealed class AntispamService(AntispamOptions options, AntispamRepository 
             throw new AppException(429, "antispam_required", "Подтвердите, что вы человек");
     }
 
-    public string Create(long userId)
+    public string Create(string userId)
     {
         var blockId = Enabled ? repository.BlockId(userId) : null;
         if (blockId == null) throw AppException.Conflict("antispam_not_required", "Проверка не требуется");
@@ -40,7 +40,7 @@ public sealed class AntispamService(AntispamOptions options, AntispamRepository 
         }
     }
 
-    public ChallengeState Start(long userId, string id)
+    public ChallengeState Start(string userId, string id)
     {
         lock (_gate)
         {
@@ -52,7 +52,7 @@ public sealed class AntispamService(AntispamOptions options, AntispamRepository 
         }
     }
 
-    public ChallengeState Input(long userId, string id, ChallengeInput input)
+    public ChallengeState Input(string userId, string id, ChallengeInput input)
     {
         lock (_gate)
         {
@@ -90,14 +90,14 @@ public sealed class AntispamService(AntispamOptions options, AntispamRepository 
         }
     }
 
-    public void Abort(long userId, string id)
+    public void Abort(string userId, string id)
     {
         lock (_gate)
             if (_attempts.TryGetValue(userId, out var a) && a.Id == id && !a.Terminal) Fail(a, "interrupted");
     }
 
     double Elapsed(long timestamp) => clock.GetElapsedTime(timestamp).TotalMilliseconds;
-    Attempt Get(long userId, string id) => _attempts.TryGetValue(userId, out var a) && a.Id == id
+    Attempt Get(string userId, string id) => _attempts.TryGetValue(userId, out var a) && a.Id == id
         ? a : throw AppException.NotFound("Проверка не найдена");
     ChallengeState Fail(Attempt a, string reason) { a.Phase = "failed"; a.Reason = reason; return State(a); }
     ChallengeState State(Attempt a)

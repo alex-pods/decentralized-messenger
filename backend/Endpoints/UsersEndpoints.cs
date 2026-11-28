@@ -32,7 +32,7 @@ public static class UsersEndpoints
         .WithSummary("Поиск по тегу. Скрытые теги доступны собеседникам и участникам общих групп, включая историю доступных групп.")
         .Produces<List<UserCardResponse>>();
 
-        group.MapGet("/{user_id:long}", async (long user_id, IUsersService service) =>
+        group.MapGet("/{user_id}", async (string user_id, IUsersService service) =>
             Results.Ok(await service.GetProfileById(user_id)))
         .WithName("GetUserProfile")
         .WithSummary("Профиль пользователя")
@@ -64,7 +64,7 @@ public static class UsersEndpoints
         .DisableAntiforgery()
         .Produces(StatusCodes.Status201Created);
 
-        group.MapGet("/{user_id:long}/avatar", async (long user_id, IAvatarsService service) =>
+        group.MapGet("/{user_id}/avatar", async (string user_id, IAvatarsService service) =>
         {
             var avatar = await service.GetDownload(user_id);
             return Results.File(avatar.Path, avatar.ContentType);

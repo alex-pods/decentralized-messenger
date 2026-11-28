@@ -9,6 +9,7 @@ public partial class LoginViewModel : ObservableObject
     static readonly Regex LoginRe = new(@"^[A-Za-z0-9_.\-]{3,16}$", RegexOptions.CultureInvariant);
 
     private readonly Navigator _nav;
+    private SessionStore.Saved? _saved;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ServerAddress))]
     private string _server = "http://127.0.0.1:5080/messenger";
@@ -21,9 +22,10 @@ public partial class LoginViewModel : ObservableObject
     private bool _busy;
     [ObservableProperty] private bool _showConnection;
 
-    public LoginViewModel(Navigator nav, string? server = null, string? error = null)
+    public LoginViewModel(Navigator nav, string? server = null, string? error = null, SessionStore.Saved? saved = null)
     {
         _nav = nav;
+        _saved = saved;
         if (!string.IsNullOrWhiteSpace(server)) Server = server;
         Error = error;
     }
@@ -42,6 +44,7 @@ public partial class LoginViewModel : ObservableObject
     public string AuthAction => Busy ? "Подождите…" : IsRegistration ? "Создать аккаунт" : "Войти";
     public string ModePrompt => IsRegistration ? "Уже есть аккаунт?" : "Нет аккаунта?";
     public string ModeAction => IsRegistration ? "Войти" : "Создать аккаунт";
+    public bool CanRestoreSaved => _saved != null;
 
     [RelayCommand] void SwitchMode() { IsRegistration = !IsRegistration; Error = null; }
     [RelayCommand] Task Submit() => Auth(IsRegistration);
@@ -55,21 +58,46 @@ public partial class LoginViewModel : ObservableObject
     [RelayCommand]
     void ToggleConnection() => ShowConnection = !ShowConnection;
 
+    [RelayCommand]
+    internal async Task RestoreSaved()
+    {
+        if (Busy || _saved is not { } saved) return;
+        Busy = true;
+        Error = null;
+        ConnectionError = null;
+        MessengerClient? api = null;
+        try
+        {
+            api = SessionStore.ConnectSaved(saved, Server);
+            await OpenAccount(api);
+            api = null;
+        }
+        catch (ApiException ex) when (ex.Status == 401)
+        {
+            SessionStore.Clear();
+            _saved = null;
+            OnPropertyChanged(nameof(CanRestoreSaved));
+            Error = "Сессия завершена. Войдите снова.";
+        }
+        catch (Exception ex)
+        {
+            ShowConnection = true;
+            ConnectionError = Friendly(ex);
+        }
+        finally
+        {
+            api?.Dispose();
+            Busy = false;
+        }
+    }
+
     async Task Auth(bool register)
     {
         if (Busy) return;
         Error = null;
         ConnectionError = null;
-        var server = Server.Trim().TrimEnd('/');
         var login = Login.Trim();
         var password = Password;
-        if (!Uri.TryCreate(server, UriKind.Absolute, out var serverUri) ||
-            serverUri.Scheme is not ("http" or "https") || string.IsNullOrEmpty(serverUri.Host))
-        {
-            ShowConnection = true;
-            ConnectionError = "Укажите адрес сервера, начиная с http:// или https://";
-            return;
-        }
         if (!LoginRe.IsMatch(login))
         {
             Error = "Логин: 3–16 символов, буквы, цифры, _ . -";
@@ -83,27 +111,34 @@ public partial class LoginViewModel : ObservableObject
 
         Busy = true;
         Error = null;
-        var api = new MessengerClient(server);
+        MessengerClient? api = null;
         try
         {
+            var expected = _saved == null ? null : SessionStore.GetFingerprint(_saved);
+            api = new MessengerClient(Server, expectedFingerprint: expected);
             if (register)
                 await api.Register(login, password);
             await api.Login(login, password);
-            var me = await api.GetMe();
-            SessionStore.Save(api.ServerBase, api.Token!);
-            _nav.Go(new ShellViewModel(_nav, api, me));
+            await OpenAccount(api);
+            api = null;
         }
         catch (Exception ex)
         {
-            if (ex is HttpRequestException or TaskCanceledException)
+            if (ex is ServerIdentityException or HttpRequestException or TaskCanceledException)
             {
                 ShowConnection = true;
                 ConnectionError = Friendly(ex);
             }
             else Error = Friendly(ex);
-            api.Dispose();
         }
-        finally { Busy = false; }
+        finally { api?.Dispose(); Busy = false; }
+    }
+
+    async Task OpenAccount(MessengerClient api)
+    {
+        var me = await api.GetMe();
+        SessionStore.Save(api);
+        _nav.Go(new ShellViewModel(_nav, api, me, _saved?.Server ?? Server));
     }
 
     partial void OnServerChanged(string value) => ConnectionError = null;

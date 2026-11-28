@@ -6,20 +6,21 @@ using Messenger.Api.Infrastructure;
 using Messenger.Api.Contracts.Responses;
 using Messenger.Api.Realtime;
 using Messenger.Api.Antispam;
+using Messenger.Identifiers;
 
 namespace Messenger.Api.Services;
 
 public interface IMessagesService
 {
-    Task<IReadOnlyList<MessageRow>> GetHistoryAsync(long chatId, long viewerId, HistoryQuery query, CancellationToken ct = default);
-    Task<MessageRow> GetMessageAsync(long messageId, long viewerId, CancellationToken ct = default);
-    Task<AddMessageResult> SendAsync(long chatId, long senderId, SendMessageRequest request, CancellationToken ct = default);
-    Task<MessageRow> ForwardAsync(long messageId, long userId, ForwardMessageRequest request, CancellationToken ct = default);
-    Task<MessageRow> EditAsync(long messageId, long editorId, EditMessageRequest request, CancellationToken ct = default);
-    Task<MessageRow> DeleteAsync(long messageId, long deleterId, bool forEveryone, CancellationToken ct = default);
-    Task<IReadOnlyList<PinRow>> ListPinsAsync(long chatId, long viewerId, CancellationToken ct = default);
-    Task PinAsync(long chatId, long userId, long messageId, CancellationToken ct = default);
-    Task UnpinAsync(long chatId, long userId, long messageId, CancellationToken ct = default);
+    Task<IReadOnlyList<MessageRow>> GetHistoryAsync(string chatId, string viewerId, HistoryQuery query, CancellationToken ct = default);
+    Task<MessageRow> GetMessageAsync(string messageId, string viewerId, CancellationToken ct = default);
+    Task<AddMessageResult> SendAsync(string chatId, string senderId, SendMessageRequest request, CancellationToken ct = default);
+    Task<MessageRow> ForwardAsync(string messageId, string userId, ForwardMessageRequest request, CancellationToken ct = default);
+    Task<MessageRow> EditAsync(string messageId, string editorId, EditMessageRequest request, CancellationToken ct = default);
+    Task<MessageRow> DeleteAsync(string messageId, string deleterId, bool forEveryone, CancellationToken ct = default);
+    Task<IReadOnlyList<PinRow>> ListPinsAsync(string chatId, string viewerId, CancellationToken ct = default);
+    Task PinAsync(string chatId, string userId, string messageId, CancellationToken ct = default);
+    Task UnpinAsync(string chatId, string userId, string messageId, CancellationToken ct = default);
 }
 
 public sealed class MessagesService(
@@ -35,19 +36,22 @@ public sealed class MessagesService(
     private const int MaxTextLength = 4096;
 
     public async Task<IReadOnlyList<MessageRow>> GetHistoryAsync(
-        long chatId, long viewerId, HistoryQuery query, CancellationToken ct = default)
+        string chatId, string viewerId, HistoryQuery query, CancellationToken ct = default)
     {
         await RequireAccessAsync(chatId, viewerId, ct);
         if (query.Limit is < 1 or > 100 ||
-            query.BeforeId is < 1 ||
-            query.AfterId is < 1)
+            (query.BeforeId != null && !EntityIds.IsMessage(query.BeforeId)) ||
+            (query.AfterId != null && !EntityIds.IsMessage(query.AfterId)) ||
+            query.BeforeSequence is < 1 || query.AfterSequence is < 0 ||
+            ((query.BeforeId != null || query.AfterId != null) &&
+             (query.BeforeSequence != null || query.AfterSequence != null)))
         {
             throw new ValidationException("Invalid history limit or cursor");
         }
         return await messages.GetHistoryAsync(chatId, viewerId, query, ct);
     }
 
-    public async Task<MessageRow> GetMessageAsync(long messageId, long viewerId, CancellationToken ct = default)
+    public async Task<MessageRow> GetMessageAsync(string messageId, string viewerId, CancellationToken ct = default)
     {
         var message = await RequireMessageAsync(messageId, ct);
         await RequireAccessAsync(message.ChatId, viewerId, ct);
@@ -55,9 +59,11 @@ public sealed class MessagesService(
     }
 
     public async Task<AddMessageResult> SendAsync(
-        long chatId, long senderId, SendMessageRequest request, CancellationToken ct = default)
+        string chatId, string senderId, SendMessageRequest request, CancellationToken ct = default)
     {
         await RequireAccessAsync(chatId, senderId, ct);
+        if (!EntityIds.IsMessageInChat(request.MessageId, chatId))
+            throw new ValidationException("Invalid message ID for this chat");
 
         var text = request.Text;
         if (string.IsNullOrWhiteSpace(text) || text.Length > MaxTextLength)
@@ -67,10 +73,10 @@ public sealed class MessagesService(
         if (request.ClientRef is { Length: > 64 })
             throw new ValidationException("ClientRef must be at most 64 characters");
 
-        if (request.ReplyToId is < 1)
-            throw new ValidationException("ReplyToId must be positive");
+        if (request.ReplyToId != null && !EntityIds.IsMessage(request.ReplyToId))
+            throw new ValidationException("Invalid reply ID");
 
-        if (request.ReplyToId is long replyToId)
+        if (request.ReplyToId is string replyToId)
         {
             var parent = await RequireMessageAsync(replyToId, ct);
 
@@ -81,7 +87,7 @@ public sealed class MessagesService(
 
         antispam.CheckSend(senderId, chatId, request.ClientRef);
         var result = await messages.AddAsync(
-            new NewMessage(chatId, senderId, text, request.ReplyToId, request.ClientRef), ct);
+            new NewMessage(request.MessageId, chatId, senderId, text, request.ReplyToId, request.ClientRef), ct);
         if (!result.ContentMatches)
             throw AppException.Conflict(
                 "client_ref_conflict",
@@ -93,10 +99,10 @@ public sealed class MessagesService(
     }
 
     public async Task<MessageRow> ForwardAsync(
-        long messageId, long userId, ForwardMessageRequest request, CancellationToken ct = default)
+        string messageId, string userId, ForwardMessageRequest request, CancellationToken ct = default)
     {
-        if (request.ChatId is not long targetChatId || targetChatId < 1)
-            throw new ValidationException("chat_id is required");
+        if (request.ChatId is not { } targetChatId || !EntityIds.IsMessageInChat(request.MessageId, targetChatId))
+            throw new ValidationException("Invalid target chat or message ID");
 
         var source = await RequireMessageAsync(messageId, ct);
         await RequireAccessAsync(source.ChatId, userId, ct);
@@ -106,7 +112,7 @@ public sealed class MessagesService(
             throw AppException.Conflict("message_not_forwardable", "Only stored messages can be forwarded");
 
         antispam.CheckSend(userId, targetChatId, null);
-        var forwarded = await messages.ForwardAsync(messageId, targetChatId, userId, ct)
+        var forwarded = await messages.ForwardAsync(messageId, targetChatId, request.MessageId, userId, ct)
             ?? throw new NotFoundException("Message not found");
 
         await PublishCreatedAsync(forwarded, userId);
@@ -114,7 +120,7 @@ public sealed class MessagesService(
     }
 
     public async Task<MessageRow> EditAsync(
-        long messageId, long editorId, EditMessageRequest request, CancellationToken ct = default)
+        string messageId, string editorId, EditMessageRequest request, CancellationToken ct = default)
     {
         var message = await RequireMessageAsync(messageId, ct);
         await RequireAccessAsync(message.ChatId, editorId, ct);
@@ -145,7 +151,7 @@ public sealed class MessagesService(
     }
 
     public async Task<MessageRow> DeleteAsync(
-        long messageId, long deleterId, bool forEveryone, CancellationToken ct = default)
+        string messageId, string deleterId, bool forEveryone, CancellationToken ct = default)
     {
         var message = await RequireMessageAsync(messageId, ct);
         var access = await RequireAccessAsync(message.ChatId, deleterId, ct);
@@ -231,13 +237,13 @@ public sealed class MessagesService(
     }
 
     public async Task<IReadOnlyList<PinRow>> ListPinsAsync(
-        long chatId, long viewerId, CancellationToken ct = default)
+        string chatId, string viewerId, CancellationToken ct = default)
     {
         await RequireAccessAsync(chatId, viewerId, ct);
         return await messages.ListPinsAsync(chatId, viewerId, ct);
     }
 
-    public async Task PinAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
+    public async Task PinAsync(string chatId, string userId, string messageId, CancellationToken ct = default)
     {
         var access = await RequireAccessAsync(chatId, userId, ct);
         RequirePinRight(access);
@@ -255,7 +261,7 @@ public sealed class MessagesService(
             await PublishPinChangeAsync("message_pinned", message, userId);
     }
 
-    public async Task UnpinAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
+    public async Task UnpinAsync(string chatId, string userId, string messageId, CancellationToken ct = default)
     {
         var access = await RequireAccessAsync(chatId, userId, ct);
         RequirePinRight(access);
@@ -273,7 +279,7 @@ public sealed class MessagesService(
             throw new ForbiddenException("Only admins can pin messages");
     }
 
-    private async Task PublishPinChangeAsync(string eventType, MessageRow message, long actorId)
+    private async Task PublishPinChangeAsync(string eventType, MessageRow message, string actorId)
     {
         try
         {
@@ -301,7 +307,7 @@ public sealed class MessagesService(
         }
     }
 
-    private async Task PublishCreatedAsync(MessageRow message, long senderId)
+    private async Task PublishCreatedAsync(MessageRow message, string senderId)
     {
         try
         {
@@ -339,7 +345,7 @@ public sealed class MessagesService(
     private async Task PublishMessageChangeAsync(
         string eventType,
         MessageRow message,
-        long actorId,
+        string actorId,
         bool? forEveryone = null)
     {
         try
@@ -375,16 +381,14 @@ public sealed class MessagesService(
         }
     }
 
-    private async Task<MessageRow> RequireMessageAsync(long messageId, CancellationToken ct)
+    private async Task<MessageRow> RequireMessageAsync(string messageId, CancellationToken ct)
         => await messages.GetByIdAsync(messageId, ct)
             ?? throw new NotFoundException("Message not found");
 
-    private async Task<ChatAccess> RequireAccessAsync(long chatId, long userId, CancellationToken ct)
+    private async Task<ChatAccess> RequireAccessAsync(string chatId, string userId, CancellationToken ct)
     {
         var access = await chats.GetAccessAsync(chatId, userId, ct);
         if (access is not null) return access;
-        if (!await chats.ExistsAsync(chatId, ct))
-            throw new NotFoundException("Chat not found");
-        throw new ForbiddenException("User is not a chat member");
+        throw new NotFoundException("Chat not found");
     }
 }

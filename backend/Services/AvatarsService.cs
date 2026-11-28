@@ -11,9 +11,9 @@ namespace Messenger.Api.Services;
 
 public interface IAvatarsService
 {
-    Task<string> Upload(long userId, IFormFile file, CancellationToken cancellationToken,
+    Task<string> Upload(string userId, IFormFile file, CancellationToken cancellationToken,
         Func<IDbTransaction, Task>? updateProfile = null);
-    Task<AvatarDownload> GetDownload(long userId);
+    Task<AvatarDownload> GetDownload(string userId);
 }
 
 public sealed record AvatarDownload(string Path, string ContentType);
@@ -28,7 +28,7 @@ public sealed class AvatarsService(
     private const long MaxAvatarBytes = 5 * 1024 * 1024;
 
     public async Task<string> Upload(
-        long userId,
+        string userId,
         IFormFile file,
         CancellationToken cancellationToken,
         Func<IDbTransaction, Task>? updateProfile = null)
@@ -76,7 +76,7 @@ public sealed class AvatarsService(
         return relativePath;
     }
 
-    public async Task<AvatarDownload> GetDownload(long userId)
+    public async Task<AvatarDownload> GetDownload(string userId)
     {
         var avatar = (await avatars.GetByUserIds([userId])).GetValueOrDefault(userId)
             ?? throw AppException.NotFound("avatar not found");

@@ -9,9 +9,9 @@ public static class ReactionsEndpoints
     public static void MapReactionsEndpoints(this WebApplication app)
     {
         app.MapPost(
-            "/messages/{messageId:long}/reactions",
+            "/messages/{messageId}/reactions",
             async (
-                long messageId,
+                string messageId,
                 ReactionRequest request,
                 HttpContext context,
                 IReactionsService service,
@@ -27,9 +27,9 @@ public static class ReactionsEndpoints
             });
 
         app.MapDelete(
-            "/messages/{messageId:long}/reactions/{emoji}",
+            "/messages/{messageId}/reactions/{emoji}",
             async (
-                long messageId,
+                string messageId,
                 string emoji,
                 HttpContext context,
                 IReactionsService service,

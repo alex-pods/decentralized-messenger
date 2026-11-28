@@ -5,11 +5,12 @@ using System.Threading.Channels;
 namespace Messenger.Api.Realtime;
 
 public sealed class WsConnection(
-    long userId,
+    string userId,
     WebSocket socket,
-    string tokenHash) : IDisposable
+    string tokenHash,
+    bool supportsRelay = false) : IDisposable
 {
-    private readonly ConcurrentDictionary<long, byte> followedChats = new();
+    private readonly ConcurrentDictionary<string, byte> followedChats = new();
 
     private readonly Channel<byte[]> outgoing =
         Channel.CreateBounded<byte[]>(new BoundedChannelOptions(256)
@@ -23,15 +24,16 @@ public sealed class WsConnection(
     private CloseRequest? closeRequest;
 
     public Guid Id { get; } = Guid.NewGuid();
-    public long UserId { get; } = userId;
+    public string UserId { get; } = userId;
     public WebSocket Socket { get; } = socket;
     public string TokenHash { get; } = tokenHash;
+    public bool SupportsRelay { get; } = supportsRelay;
     public CancellationToken Closed => closed.Token;
 
-    public void Follow(long chatId) =>
+    public void Follow(string chatId) =>
         followedChats.TryAdd(chatId, 0);
 
-    public bool IsFollowing(long chatId) =>
+    public bool IsFollowing(string chatId) =>
         followedChats.ContainsKey(chatId);
 
     public bool TryEnqueue(byte[] payload)

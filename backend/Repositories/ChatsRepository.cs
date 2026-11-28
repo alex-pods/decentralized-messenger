@@ -1,4 +1,5 @@
 using Dapper;
+using Messenger.Api.Common.Errors;
 using Messenger.Api.Database;
 using Messenger.Api.Infrastructure;
 using Messenger.Api.Repositories.Models;
@@ -8,28 +9,28 @@ namespace Messenger.Api.Repositories;
 
 public interface IChatsRepository
 {
-    Task<bool> ExistsAsync(long chatId, CancellationToken ct = default);
-    Task<ChatAccess?> GetAccessAsync(long chatId, long userId, CancellationToken ct = default);
-    Task<ChatSummary?> GetSummaryAsync(long chatId, long viewerId, CancellationToken ct = default);
-    Task<IReadOnlyList<ChatSummary>> GetVisibleChatsAsync(long userId, CancellationToken ct = default);
-    Task<DirectChatResult> GetOrCreateDirectAsync(long callerId, long anotherUserId, CancellationToken ct = default);
-    Task<long> CreateGroupAsync(long creatorId, Secret title, IReadOnlyCollection<long> otherMemberIds, CancellationToken ct = default);
-    Task HideAsync(long chatId, long userId, CancellationToken ct = default);
-    Task<IReadOnlyList<MemberRow>> GetMembersAsync(long chatId, CancellationToken ct = default);
-    Task<IReadOnlyList<GroupActivity>> GetGroupActivityAsync(long chatId, long viewerId, long? beforeId = null, CancellationToken ct = default);
-    Task<bool> AddMemberAsync(long chatId, long userId, CancellationToken ct = default);
-    Task RemoveMemberAsync(long chatId, long userId, CancellationToken ct = default);
-    Task SetRoleAsync(long chatId, long userId, MemberRole role, CancellationToken ct = default);
-    Task TransferOwnerAsync(long chatId, long currentOwnerId, long newOwnerId, CancellationToken ct = default);
-    Task<LeaveGroupResult> LeaveGroupAsync(long chatId, long userId, CancellationToken ct = default);
-    Task<MarkReadResult> MarkReadAsync(long chatId, long userId, long messageId, CancellationToken ct = default);
-    Task ShowAsync(long chatId, long userId, CancellationToken ct = default);
-    Task<IReadOnlyList<long>> GetPeerUserIdsAsync(long userId,CancellationToken ct = default);
+    Task<bool> ExistsAsync(string chatId, CancellationToken ct = default);
+    Task<ChatAccess?> GetAccessAsync(string chatId, string userId, CancellationToken ct = default);
+    Task<ChatSummary?> GetSummaryAsync(string chatId, string viewerId, CancellationToken ct = default);
+    Task<IReadOnlyList<ChatSummary>> GetVisibleChatsAsync(string userId, CancellationToken ct = default);
+    Task<DirectChatResult> GetOrCreateDirectAsync(string chatId, string callerId, string anotherUserId, CancellationToken ct = default);
+    Task<string> CreateGroupAsync(string chatId, string creatorId, Secret title, IReadOnlyCollection<string> otherMemberIds, CancellationToken ct = default);
+    Task HideAsync(string chatId, string userId, CancellationToken ct = default);
+    Task<IReadOnlyList<MemberRow>> GetMembersAsync(string chatId, CancellationToken ct = default);
+    Task<IReadOnlyList<GroupActivity>> GetGroupActivityAsync(string chatId, string viewerId, long? beforeId = null, CancellationToken ct = default);
+    Task<bool> AddMemberAsync(string chatId, string userId, CancellationToken ct = default);
+    Task RemoveMemberAsync(string chatId, string userId, CancellationToken ct = default);
+    Task SetRoleAsync(string chatId, string userId, MemberRole role, CancellationToken ct = default);
+    Task TransferOwnerAsync(string chatId, string currentOwnerId, string newOwnerId, CancellationToken ct = default);
+    Task<LeaveGroupResult> LeaveGroupAsync(string chatId, string userId, CancellationToken ct = default);
+    Task<MarkReadResult> MarkReadAsync(string chatId, string userId, string messageId, CancellationToken ct = default);
+    Task ShowAsync(string chatId, string userId, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> GetPeerUserIdsAsync(string userId,CancellationToken ct = default);
 }
 
 public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepository
 {
-    public async Task<bool> ExistsAsync(long chatId, CancellationToken ct = default)
+    public async Task<bool> ExistsAsync(string chatId, CancellationToken ct = default)
     {
         using var c = db.Open();
         return await c.ExecuteScalarAsync<long>(new CommandDefinition(
@@ -37,7 +38,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
             new { chatId }, cancellationToken: ct)) > 0;
     }
 
-    public async Task<ChatAccess?> GetAccessAsync(long chatId, long userId, CancellationToken ct = default)
+    public async Task<ChatAccess?> GetAccessAsync(string chatId, string userId, CancellationToken ct = default)
     {
         using var c = db.Open();
         var raw = await c.QuerySingleOrDefaultAsync<AccessRow>(new CommandDefinition(
@@ -52,7 +53,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         return raw is null ? null : MapAccess(raw);
     }
 
-    public async Task<ChatSummary?> GetSummaryAsync(long chatId, long viewerId, CancellationToken ct = default)
+    public async Task<ChatSummary?> GetSummaryAsync(string chatId, string viewerId, CancellationToken ct = default)
     {
         using var c = db.Open();
         var rows = await c.QueryAsync<SummaryRow>(new CommandDefinition(
@@ -62,11 +63,11 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
                        CASE WHEN c.type = 'direct'
                             THEN CASE WHEN c.user_a_id = @viewerId THEN c.user_b_id ELSE c.user_a_id END
                        END AS other_user_id,
-                       CAST((SELECT MAX(m.id) FROM messages m
+                       (SELECT m.id FROM messages m
                         WHERE m.chat_id = c.id
                           AND NOT EXISTS (SELECT 1 FROM message_hidden h
                                           WHERE h.message_id = m.id AND h.user_id = @viewerId)
-                       ) AS INTEGER) AS last_message_id
+                        ORDER BY m.sequence DESC LIMIT 1) AS last_message_id
                 FROM chats c
                 JOIN users_chats uc ON uc.chat_id = c.id AND uc.user_id = @viewerId
                 WHERE c.id = @chatId
@@ -83,7 +84,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         return row is null ? null : MapSummary(row);
     }
 
-    public async Task<IReadOnlyList<ChatSummary>> GetVisibleChatsAsync(long userId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ChatSummary>> GetVisibleChatsAsync(string userId, CancellationToken ct = default)
     {
         using var c = db.Open();
         var rows = await c.QueryAsync<SummaryRow>(new CommandDefinition(
@@ -93,11 +94,11 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
                        CASE WHEN c.type = 'direct'
                             THEN CASE WHEN c.user_a_id = @userId THEN c.user_b_id ELSE c.user_a_id END
                        END AS other_user_id,
-                       CAST((SELECT MAX(m.id) FROM messages m
+                       (SELECT m.id FROM messages m
                         WHERE m.chat_id = c.id
                           AND NOT EXISTS (SELECT 1 FROM message_hidden h
                                           WHERE h.message_id = m.id AND h.user_id = @userId)
-                       ) AS INTEGER) AS last_message_id
+                        ORDER BY m.sequence DESC LIMIT 1) AS last_message_id
                 FROM chats c
                 JOIN users_chats uc ON uc.chat_id = c.id AND uc.user_id = @userId
                 WHERE uc.hidden_at IS NULL
@@ -108,47 +109,50 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
                    ou.name AS other_user_name
             FROM base b
             LEFT JOIN users ou ON ou.id = b.other_user_id
-            ORDER BY COALESCE(b.last_message_id, 0) DESC, b.id DESC
+            LEFT JOIN messages last ON last.id = b.last_message_id
+            ORDER BY COALESCE(julianday(last.sent_at), 0) DESC, julianday(b.created_at) DESC, b.id DESC
             """,
             new { userId }, cancellationToken: ct));
         return rows.Select(MapSummary).ToList();
     }
 
-    public async Task<DirectChatResult> GetOrCreateDirectAsync(long callerId, long anotherUserId, CancellationToken ct = default)
+    public async Task<DirectChatResult> GetOrCreateDirectAsync(string chatId, string callerId, string anotherUserId, CancellationToken ct = default)
     {
         if (callerId == anotherUserId)
             throw new ArgumentException("Direct chat with self is not allowed", nameof(anotherUserId));
 
-        var a = Math.Min(callerId, anotherUserId);
-        var b = Math.Max(callerId, anotherUserId);
+        var (a, b) = string.CompareOrdinal(callerId, anotherUserId) < 0
+            ? (callerId, anotherUserId) : (anotherUserId, callerId);
 
         using var c = db.Open();
-        var existing = await c.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
+        var existing = await c.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
             "SELECT id FROM chats WHERE type = 'direct' AND user_a_id = @a AND user_b_id = @b",
             new { a, b }, cancellationToken: ct));
-        if (existing.HasValue)
-            return new DirectChatResult(existing.Value, false);
+        if (existing != null)
+            return new DirectChatResult(existing, false);
 
         try
         {
-            var newId = await c.ExecuteScalarAsync<long>(new CommandDefinition(
-                "INSERT INTO chats(type, user_a_id, user_b_id) VALUES ('direct', @a, @b) RETURNING id",
-                new { a, b }, cancellationToken: ct));
-            return new DirectChatResult(newId, true);
+            await c.ExecuteAsync(new CommandDefinition(
+                "INSERT INTO chats(id, type, user_a_id, user_b_id) VALUES (@chatId, 'direct', @a, @b)",
+                new { chatId, a, b }, cancellationToken: ct));
+            return new DirectChatResult(chatId, true);
         }
         catch (SqliteException ex) when (IsUniqueViolation(ex))
         {
-            var id = await c.ExecuteScalarAsync<long>(new CommandDefinition(
+            var id = await c.QuerySingleOrDefaultAsync<string>(new CommandDefinition(
                 "SELECT id FROM chats WHERE type = 'direct' AND user_a_id = @a AND user_b_id = @b",
                 new { a, b }, cancellationToken: ct));
-            return new DirectChatResult(id, false);
+            return id == null ? throw AppException.Conflict("chat_id_conflict", "Chat ID already used")
+                : new DirectChatResult(id, false);
         }
     }
 
-    public async Task<long> CreateGroupAsync(
-        long creatorId,
+    public async Task<string> CreateGroupAsync(
+        string chatId,
+        string creatorId,
         Secret title,
-        IReadOnlyCollection<long> otherMemberIds,
+        IReadOnlyCollection<string> otherMemberIds,
         CancellationToken ct = default)
     {
         var members = otherMemberIds.Where(id => id != creatorId).Distinct().ToList();
@@ -156,9 +160,16 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         using var c = db.Open();
         using var tx = c.BeginTransaction();
 
-        var chatId = await c.ExecuteScalarAsync<long>(new CommandDefinition(
-            "INSERT INTO chats(type, title, created_by) VALUES ('group', @title, @creatorId) RETURNING id",
-            new { title, creatorId }, tx, cancellationToken: ct));
+        try
+        {
+            await c.ExecuteAsync(new CommandDefinition(
+                "INSERT INTO chats(id, type, title, created_by) VALUES (@chatId, 'group', @title, @creatorId)",
+                new { chatId, title, creatorId }, tx, cancellationToken: ct));
+        }
+        catch (SqliteException ex) when (IsUniqueViolation(ex))
+        {
+            throw AppException.Conflict("chat_id_conflict", "Chat ID already used");
+        }
 
         await c.ExecuteAsync(new CommandDefinition(
             "INSERT INTO users_chats(user_id, chat_id, role) VALUES (@creatorId, @chatId, 'owner')",
@@ -173,7 +184,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         return chatId;
     }
 
-    public async Task HideAsync(long chatId, long userId, CancellationToken ct = default)
+    public async Task HideAsync(string chatId, string userId, CancellationToken ct = default)
     {
         using var c = db.Open();
         await c.ExecuteAsync(new CommandDefinition(
@@ -181,7 +192,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
             new { chatId, userId }, cancellationToken: ct));
     }
 
-    public async Task<IReadOnlyList<MemberRow>> GetMembersAsync(long chatId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<MemberRow>> GetMembersAsync(string chatId, CancellationToken ct = default)
     {
         using var c = db.Open();
         var rows = await c.QueryAsync<MemberRowRaw>(new CommandDefinition(
@@ -196,7 +207,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         return rows.Select(MapMember).ToList();
     }
 
-    public async Task<bool> AddMemberAsync(long chatId, long userId, CancellationToken ct = default)
+    public async Task<bool> AddMemberAsync(string chatId, string userId, CancellationToken ct = default)
     {
         using var c = db.Open();
         using var tx = c.BeginTransaction();
@@ -208,7 +219,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         return rows > 0;
     }
 
-    public async Task RemoveMemberAsync(long chatId, long userId, CancellationToken ct = default)
+    public async Task RemoveMemberAsync(string chatId, string userId, CancellationToken ct = default)
     {
         using var c = db.Open();
         using var tx = c.BeginTransaction();
@@ -219,7 +230,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         tx.Commit();
     }
 
-    public async Task SetRoleAsync(long chatId, long userId, MemberRole role, CancellationToken ct = default)
+    public async Task SetRoleAsync(string chatId, string userId, MemberRole role, CancellationToken ct = default)
     {
         using var c = db.Open();
         await c.ExecuteAsync(new CommandDefinition(
@@ -227,7 +238,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
             new { chatId, userId, role = RoleToString(role) }, cancellationToken: ct));
     }
 
-    public async Task TransferOwnerAsync(long chatId, long currentOwnerId, long newOwnerId, CancellationToken ct = default)
+    public async Task TransferOwnerAsync(string chatId, string currentOwnerId, string newOwnerId, CancellationToken ct = default)
     {
         using var c = db.Open();
         using var tx = c.BeginTransaction();
@@ -246,7 +257,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         tx.Commit();
     }
 
-    public async Task<LeaveGroupResult> LeaveGroupAsync(long chatId, long userId, CancellationToken ct = default)
+    public async Task<LeaveGroupResult> LeaveGroupAsync(string chatId, string userId, CancellationToken ct = default)
     {
         using var c = db.Open();
         using var tx = c.BeginTransaction();
@@ -312,30 +323,38 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         return new LeaveGroupResult(LeaveResult.OwnerTransferRequired, Array.Empty<string>());
     }
 
-    public async Task<MarkReadResult> MarkReadAsync(long chatId, long userId, long messageId, CancellationToken ct = default)
+    public async Task<MarkReadResult> MarkReadAsync(string chatId, string userId, string messageId, CancellationToken ct = default)
     {
         using var c = db.Open();
-        var updated = await c.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
+        var updated = await c.QuerySingleOrDefaultAsync<ReadCursor>(new CommandDefinition(
             """
             UPDATE users_chats
             SET last_read_message_id = @messageId,
+                last_read_sequence = (SELECT sequence FROM messages WHERE id = @messageId AND chat_id = @chatId),
                 last_read_at = CURRENT_TIMESTAMP
-            WHERE chat_id = @chatId AND user_id = @userId AND last_read_message_id < @messageId
-            RETURNING last_read_message_id
+            WHERE chat_id = @chatId AND user_id = @userId
+              AND last_read_sequence < (SELECT sequence FROM messages WHERE id = @messageId AND chat_id = @chatId)
+            RETURNING last_read_message_id, last_read_sequence
             """,
             new { chatId, userId, messageId }, cancellationToken: ct));
-        if (updated.HasValue)
-            return new MarkReadResult(updated.Value, true);
+        if (updated != null)
+            return new MarkReadResult(updated.LastReadMessageId, true, updated.LastReadSequence);
 
-        var current = await c.QuerySingleOrDefaultAsync<long?>(new CommandDefinition(
-            "SELECT last_read_message_id FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
+        var current = await c.QuerySingleOrDefaultAsync<ReadCursor>(new CommandDefinition(
+            "SELECT last_read_message_id, last_read_sequence FROM users_chats WHERE chat_id = @chatId AND user_id = @userId",
             new { chatId, userId }, cancellationToken: ct));
         if (current is null)
-            throw new InvalidOperationException("User is not a member of this chat");
-        return new MarkReadResult(current.Value, false);
+            throw new NotFoundException("Chat not found");
+        return new MarkReadResult(current.LastReadMessageId, false, current.LastReadSequence);
     }
 
-    public async Task ShowAsync(long chatId, long userId, CancellationToken ct = default)
+    private sealed class ReadCursor
+    {
+        public string? LastReadMessageId { get; set; }
+        public long LastReadSequence { get; set; }
+    }
+
+    public async Task ShowAsync(string chatId, string userId, CancellationToken ct = default)
     {
         using var c = db.Open();
 
@@ -348,13 +367,13 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
             new { chatId, userId },
             cancellationToken: ct));
     }
-    public async Task<IReadOnlyList<long>> GetPeerUserIdsAsync(
-        long userId,
+    public async Task<IReadOnlyList<string>> GetPeerUserIdsAsync(
+        string userId,
         CancellationToken ct = default)
     {
         using var c = db.Open();
 
-        var ids = await c.QueryAsync<long>(new CommandDefinition(
+        var ids = await c.QueryAsync<string>(new CommandDefinition(
             """
             SELECT peer.user_id
             FROM users_chats mine
@@ -379,7 +398,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
         r.Title,
         r.CreatedBy,
         SqliteTime.Parse(r.CreatedAt),
-        r.OtherUserId is long uid && r.OtherUserTag is not null && r.OtherUserName is not null
+        r.OtherUserId is string uid && r.OtherUserTag is not null && r.OtherUserName is not null
             ? new UserCardRow(uid, r.OtherUserTag, r.OtherUserName.Value)
             : null,
         r.LastMessageId);
@@ -400,7 +419,7 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
     };
 
     private static bool IsUniqueViolation(SqliteException ex)
-        => ex.SqliteErrorCode == 19 && ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
+        => ex.SqliteExtendedErrorCode is 1555 or 2067;
 
     private sealed class AccessRow
     {
@@ -410,19 +429,19 @@ public sealed partial class ChatsRepository(DbConnectionFactory db) : IChatsRepo
 
     private sealed class SummaryRow
     {
-        public long Id { get; set; }
+        public string Id { get; set; } = "";
         public string Type { get; set; } = "";
         public Secret? Title { get; set; }
-        public long? CreatedBy { get; set; }
+        public string? CreatedBy { get; set; }
         public string CreatedAt { get; set; } = "";
-        public long? OtherUserId { get; set; }
-        public long? LastMessageId { get; set; }
+        public string? OtherUserId { get; set; }
+        public string? LastMessageId { get; set; }
         public string? OtherUserTag { get; set; }
         public Secret? OtherUserName { get; set; }
     }
 
     private sealed record MemberRowRaw(
-        long UserId, string Tag, Secret DisplayName, string Role, string JoinedAt);
+        string UserId, string Tag, Secret DisplayName, string Role, string JoinedAt);
 
 private sealed record LeaveInfoRow(string Role, string Type, long MemberCount);
 

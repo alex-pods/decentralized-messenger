@@ -7,6 +7,7 @@ public partial class ShellViewModel
     partial void OnSelectedChatChanged(ChatItem? oldValue, ChatItem? newValue)
     {
         if (oldValue?.Id == newValue?.Id) return;
+        if (Overlay == "images") CloseOverlay();
         ClearGroupActivity();
         HasMore = false;
         if (HasWorkspacePage(WorkspacePage.Members)) ResetWorkspace();
@@ -29,9 +30,32 @@ public partial class ShellViewModel
     async Task ReloadChats()
     {
         List<ChatDto> list;
+        var listVersion = _chatListVersion;
+        var offline = false;
         try
         {
             list = await LoadChatList();
+            if (listVersion == _chatListVersion)
+            {
+                var visible = list.Select(chat => chat.Id).ToHashSet();
+                foreach (var lost in Chats.Where(chat => !visible.Contains(chat.Id)))
+                {
+                    InvalidateHistoryPage(lost.Id);
+                    ClearRelays(lost.Id);
+                }
+                CacheHistory(store => store.SaveChats(list));
+            }
+        }
+        catch (Exception ex) when (CanUseLocalHistory(ex))
+        {
+            var cached = await ReadLocalHistory(store => store.ReadChats());
+            if (cached == null || Chats.Count != 0)
+            {
+                Error = Friendly(ex);
+                return;
+            }
+            list = cached;
+            offline = true;
         }
         catch (Exception ex)
         {
@@ -53,7 +77,7 @@ public partial class ShellViewModel
                     var item = MessageMapper.MapChat(c, _me.Id, NameOf);
                     item.Unread = unread.Contains(item.Id) && item.Id != selected;
                     Chats.Add(item);
-                    if (item.AvatarUserId is { } avatarUserId)
+                    if (!offline && item.AvatarUserId is { } avatarUserId)
                         _ = LoadAvatar(avatarUserId, image =>
                         {
                             if (Chats.Contains(item)) item.Avatar = CreateAvatar(image);
@@ -63,7 +87,8 @@ public partial class ShellViewModel
                 _suppress = false;
                 SelectedChat = selected is { } sid ? Chats.FirstOrDefault(c => c.Id == sid) : null;
             });
-            if (Chats.Count > 0) Error = null;
+            if (offline) Error = "Нет соединения. Показаны чаты с устройства.";
+            else if (Chats.Count > 0) Error = null;
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }
@@ -170,7 +195,7 @@ public partial class ShellViewModel
         catch (Exception ex) { Error = Friendly(ex); }
     }
 
-    internal async Task<ChatItem> FindOrCreateDirect(long userId)
+    internal async Task<ChatItem> FindOrCreateDirect(string userId)
     {
         if (Chats.FirstOrDefault(chat => chat.AvatarUserId == userId) is { } existing) return existing;
         var id = await _api.CreateDirect(userId);
@@ -238,18 +263,16 @@ public partial class ShellViewModel
             Overlay = "";
             await Ui(() =>
             {
-                _suppress = true;
-                DisposeRemoved(Chats, chat);
-                SelectedChat = null;
-                _suppress = false;
-                Messages.Clear();
+                DropChat(chat.Id);
             });
         }
         catch (Exception ex) { Error = Friendly(ex); }
     }
 
-    void DropChat(long id)
+    void DropChat(string id, bool purgePins = false)
     {
+        RemoveCachedChat(id, purgePins);
+        ClearRelays(id);
         var chat = Chats.FirstOrDefault(c => c.Id == id);
         if (chat == null) return;
         _suppress = true;
@@ -258,6 +281,7 @@ public partial class ShellViewModel
         {
             SelectedChat = null;
             Messages.Clear();
+            ClearPins();
             Overlay = "";
         }
         _suppress = false;

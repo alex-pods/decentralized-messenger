@@ -13,12 +13,12 @@ public sealed class WsEventPublisher(
     ILogger<WsEventPublisher> logger)
 {
     public async Task<int> PublishToChatAsync(
-        long chatId,
-        long senderId,
+        string chatId,
+        string senderId,
         WsEventResponse evt,
         CancellationToken ct,
         bool requireFollow = true,
-        long? departedUserId = null)
+        string? departedUserId = null)
     {
         // Обойти проверку членства можно только для последнего
         // уведомления вышедшему или исключённому участнику.
@@ -32,10 +32,10 @@ public sealed class WsEventPublisher(
         }
 
         var members = await chats.GetMembersAsync(chatId, ct);
-        IEnumerable<long> recipients =
+        IEnumerable<string> recipients =
             members.Select(member => member.UserId);
 
-        if (departedUserId is long departed)
+        if (departedUserId is string departed)
             recipients = recipients.Append(departed);
 
         var payload = JsonSerializer.SerializeToUtf8Bytes(evt);
@@ -58,7 +58,7 @@ public sealed class WsEventPublisher(
     }
 
     public async Task PublishToUserAsync(
-        long userId,
+        string userId,
         WsEventResponse evt,
         CancellationToken ct)
     {
@@ -68,12 +68,25 @@ public sealed class WsEventPublisher(
             ct);
     }
 
+    internal async Task<int> RelayToChatAsync(string chatId, string senderId, MessageResponse message, CancellationToken ct)
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new WsEventResponse("message_relayed", ChatId: chatId, Message: message));
+        var delivered = 0;
+        foreach (var member in await chats.GetMembersAsync(chatId, ct))
+        {
+            if (member.UserId != senderId)
+                delivered += await SendAsync(member.UserId, payload, ct, followChatId: chatId,
+                    memberOfChatId: chatId, requireRelaySupport: true);
+        }
+        return delivered;
+    }
+
     public Task PublishToChatSafelyAsync(
-        long chatId,
-        long actorId,
+        string chatId,
+        string actorId,
         WsEventResponse evt,
         bool requireFollow = true,
-        long? departedUserId = null)
+        string? departedUserId = null)
         => SafelyAsync(
             evt.Type,
             ct => PublishToChatAsync(
@@ -81,15 +94,15 @@ public sealed class WsEventPublisher(
                 requireFollow, departedUserId));
 
     public Task PublishToUserSafelyAsync(
-        long userId,
+        string userId,
         WsEventResponse evt)
         => SafelyAsync(
             evt.Type,
             ct => PublishToUserAsync(userId, evt, ct));
 
     public async Task PublishChatCreatedSafelyAsync(
-        long chatId,
-        IEnumerable<long> userIds)
+        string chatId,
+        IEnumerable<string> userIds)
     {
         foreach (var userId in userIds.Distinct())
         {
@@ -115,7 +128,7 @@ public sealed class WsEventPublisher(
             });
         }
     }
-    public Task PublishAvatarChangedSafelyAsync(long userId)
+    public Task PublishAvatarChangedSafelyAsync(string userId)
     => SafelyAsync("avatar_changed", async ct =>
     {
         var recipients = await chats.GetPeerUserIdsAsync(userId, ct);
@@ -129,19 +142,21 @@ public sealed class WsEventPublisher(
             await SendAsync(recipient, payload, ct);
     });
     private async Task<int> SendAsync(
-        long userId,
+        string userId,
         byte[] payload,
         CancellationToken ct,
-        long? followChatId = null,
-        long? memberOfChatId = null)
+        string? followChatId = null,
+        string? memberOfChatId = null,
+        bool requireRelaySupport = false)
     {
         var delivered = 0;
 
         foreach (var connection in registry.GetByUser(userId))
         {
             ct.ThrowIfCancellationRequested();
+            if (requireRelaySupport && !connection.SupportsRelay) continue;
 
-            if (followChatId is long followed &&
+            if (followChatId is string followed &&
                 !connection.IsFollowing(followed))
                 continue;
 
@@ -152,7 +167,7 @@ public sealed class WsEventPublisher(
                 continue;
             }
 
-            if (memberOfChatId is long chatId &&
+            if (memberOfChatId is string chatId &&
                 !await memberships.IsMember(chatId, userId))
                 continue;
 

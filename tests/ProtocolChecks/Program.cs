@@ -4,9 +4,12 @@ using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Text.Json;
 
+string ChatId() => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+string MessageId(string chatId) => chatId + "." + Guid.NewGuid().ToString("N");
+
 var url = args[0].TrimEnd('/');
 var clients = new List<HttpClient>();
-async Task<(HttpClient Http, string Token, long Id, string Login)> User()
+async Task<(HttpClient Http, string Token, string Id, string Login)> User()
 {
     var h = new HttpClient { BaseAddress = new Uri(url + "/") };
     clients.Add(h);
@@ -16,7 +19,7 @@ async Task<(HttpClient Http, string Token, long Id, string Login)> User()
     var token = login.GetProperty("user_session_token").GetString()!;
     h.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     var me = await h.GetFromJsonAsync<JsonElement>("users/me");
-    return (h, token, me.GetProperty("id").GetInt64(), credentials.login);
+    return (h, token, me.GetProperty("id").GetString()!, credentials.login);
 }
 async Task<ClientWebSocket> Connect(string token)
 {
@@ -43,7 +46,7 @@ async Task<JsonElement> Receive(ClientWebSocket ws)
 }
 async Task Send(ClientWebSocket ws, object value) => await ws.SendAsync(
     new ArraySegment<byte>(JsonSerializer.SerializeToUtf8Bytes(value)), WebSocketMessageType.Text, true, CancellationToken.None);
-async Task Follow(ClientWebSocket ws, long group)
+async Task Follow(ClientWebSocket ws, string group)
 {
     await Send(ws, new { action = "follow", chat_id = group });
     Check((await Receive(ws)).GetProperty("type").GetString() == "followed", "follow");
@@ -55,22 +58,22 @@ void Check(bool condition, string message)
 
 var a = await User();
 var b = await User();
-var groupReply = await a.Http.PostAsJsonAsync("chats/group", new { title = "WS checks", member_ids = new[] { b.Id } });
+var groupReply = await a.Http.PostAsJsonAsync("chats/group", new { title = "WS checks", member_ids = new[] { b.Id }, chat_id = ChatId() });
 groupReply.EnsureSuccessStatusCode();
-var group = (await groupReply.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("chat_id").GetInt64();
+var group = (await groupReply.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("chat_id").GetString()!;
 using var ws = await Connect(b.Token);
 await Follow(ws, group);
-(await a.Http.PostAsJsonAsync("chats", new { another_user_id = b.Id })).EnsureSuccessStatusCode();
+(await a.Http.PostAsJsonAsync("chats", new { another_user_id = b.Id, chat_id = ChatId() })).EnsureSuccessStatusCode();
 var createdDirect = await Receive(ws);
 Check(createdDirect.GetProperty("type").GetString() == "chat_created" &&
-      createdDirect.GetProperty("chat").GetProperty("other_user").GetProperty("id").GetInt64() == a.Id,
+      createdDirect.GetProperty("chat").GetProperty("other_user").GetProperty("id").GetString()! == a.Id,
       "direct chat event must name the other user for each recipient");
 Console.WriteLine("PASS WS direct chat contains the recipient-specific peer");
 
 // Removed member keeps an open connection, but cannot follow or receive new chat messages.
 (await a.Http.DeleteAsync($"chats/{group}/members/{b.Id}")).EnsureSuccessStatusCode();
 Check((await Receive(ws)).GetProperty("type").GetString() == "member_removed", "removed event");
-(await a.Http.PostAsJsonAsync($"chats/{group}/messages", new { text = "must not leak" })).EnsureSuccessStatusCode();
+(await a.Http.PostAsJsonAsync($"chats/{group}/messages", new { text = "must not leak", message_id = MessageId(group) })).EnsureSuccessStatusCode();
 await Send(ws, new { action = "follow", chat_id = group });
 Check((await Receive(ws)).GetProperty("type").GetString() == "error", "removed member cannot follow");
 await Send(ws, new { action = "ping" });
@@ -107,17 +110,17 @@ Console.WriteLine("PASS WS normal close handshake");
 
 // Eight subscribers and concurrent HTTP traffic, measuring actual event delivery.
 var c = await User();
-var chatReply = await c.Http.PostAsJsonAsync("chats/group", new { title = "WS load", member_ids = new[] { b.Id } });
-var chat = (await chatReply.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("chat_id").GetInt64();
+var chatReply = await c.Http.PostAsJsonAsync("chats/group", new { title = "WS load", member_ids = new[] { b.Id }, chat_id = ChatId() });
+var chat = (await chatReply.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("chat_id").GetString()!;
 var sockets = new List<ClientWebSocket>();
 for (var i = 0; i < 8; i++) { var socket = await Connect(b.Token); sockets.Add(socket); await Follow(socket, chat); }
 var readers = sockets.Select(async socket =>
 {
-    var seen = new HashSet<long>();
+    var seen = new HashSet<string>();
     while (seen.Count < 40)
     {
         var e = await Receive(socket);
-        if (e.GetProperty("type").GetString() == "message") seen.Add(e.GetProperty("message").GetProperty("id").GetInt64());
+        if (e.GetProperty("type").GetString() == "message") seen.Add(e.GetProperty("message").GetProperty("id").GetString()!);
     }
 }).ToArray();
 var watch = Stopwatch.StartNew();
@@ -127,7 +130,7 @@ var latencies = new System.Collections.Concurrent.ConcurrentBag<double>();
 await Parallel.ForEachAsync(Enumerable.Range(0, 40), new ParallelOptions { MaxDegreeOfParallelism = 8 }, async (i, ct) =>
 {
     var request = Stopwatch.StartNew();
-    (await c.Http.PostAsJsonAsync($"chats/{chat}/messages", new { text = "load " + i, client_ref = "load-" + i }, ct)).EnsureSuccessStatusCode();
+    (await c.Http.PostAsJsonAsync($"chats/{chat}/messages", new { text = "load " + i, message_id = MessageId(chat), client_ref = "load-" + i }, ct)).EnsureSuccessStatusCode();
     (await b.Http.GetAsync($"chats/{chat}/messages?limit=10", ct)).EnsureSuccessStatusCode();
     latencies.Add(request.Elapsed.TotalMilliseconds);
 });

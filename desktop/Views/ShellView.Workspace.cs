@@ -26,7 +26,7 @@ public partial class ShellView
         public ViewportPosition? Position { get; set; }
     }
 
-    sealed record ChatPosition(long Id, string Draft, int Caret, int Start, int End,
+    sealed record ChatPosition(string Id, string Draft, int Caret, int Start, int End,
         ViewportPosition? Position, Control? Focus);
 
     sealed record ViewportPosition(Vector Offset, object? ItemKey, double ItemTop);
@@ -104,7 +104,7 @@ public partial class ShellView
             Content = new ProfileEditor()
         },
         WorkspacePage.Members => new ConversationDetails(),
-        WorkspacePage.Contact => new UserProfilePage(vm, route.UserId!.Value),
+        WorkspacePage.Contact => new UserProfilePage(vm, route.UserId!),
         WorkspacePage.Settings => new SettingsPage(vm, route.Section),
         WorkspacePage.Appearance => CreateAppearance(vm, route),
         _ => throw new ArgumentOutOfRangeException(nameof(route))

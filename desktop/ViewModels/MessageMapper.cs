@@ -86,6 +86,8 @@ public static class MessageMapper
             IsDeleted = m.ContentState == "deleted",
             IsNotStored = m.ContentState == "not_stored"
         };
+        item.Images = m.ContentState is "deleted" or "not_stored" ? [] :
+            m.Attachments?.Where(a => a.IsImage).DistinctBy(a => a.Id).ToArray() ?? [];
         item.SetReactions(ReactionMap(m.Reactions));
         return item;
     }

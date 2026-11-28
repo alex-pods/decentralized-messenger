@@ -45,6 +45,7 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string? _error;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendDraft))]
+    [NotifyPropertyChangedFor(nameof(CanOpenImageComposer))]
     private bool _busy;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSendDraft))]
@@ -79,6 +80,7 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsGroup))]
     [NotifyPropertyChangedFor(nameof(HasChat))]
     [NotifyPropertyChangedFor(nameof(CanSendDraft))]
+    [NotifyPropertyChangedFor(nameof(CanOpenImageComposer))]
     [NotifyPropertyChangedFor(nameof(ChatTitle))]
     [NotifyPropertyChangedFor(nameof(WorkspaceTitle))]
     [NotifyPropertyChangedFor(nameof(CanManagePins))]
@@ -108,6 +110,7 @@ public partial class ShellViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ComposeHint))]
     [NotifyPropertyChangedFor(nameof(ComposeDetail))]
     [NotifyPropertyChangedFor(nameof(HasComposeHint))]
+    [NotifyPropertyChangedFor(nameof(CanOpenImageComposer))]
     private MessageItem? _editing;
 
     [ObservableProperty]
@@ -119,8 +122,12 @@ public partial class ShellViewModel : ObservableObject
 
     [ObservableProperty] private MessageItem? _forwardSource;
 
-    partial void OnOverlayChanged(string value) =>
+    partial void OnOverlayChanged(string value)
+    {
+        if (value != "images") ClearImagePreviews();
+        if (value != ImageComposerOverlay) CloseImageComposer();
         ForwardSource = value == "forward" && CanForward ? SelectedMessage : null;
+    }
 
     [ObservableProperty] private bool _showMoreReactions;
     public IReadOnlyList<string> QuickReactions => ReactionCatalog.Main;
@@ -137,12 +144,14 @@ public partial class ShellViewModel : ObservableObject
     public string ChatTitle => SelectedChat?.Title ?? "";
     public bool OverlayOpen => Overlay.Length > 0;
     public bool IsOpeningDirectChat => Overlay == "direct";
-    public bool HasDedicatedOverlayLayout => Overlay == "forward";
+    public bool HasDedicatedOverlayLayout => Overlay is "forward" or ImageComposerOverlay;
     public string OverlayTitle => Overlay switch
     {
         "direct" => "Новый личный чат",
         "group" => "Новая группа",
         "forward" => "Переслать сообщение",
+        "images" => "Картинки в сообщении",
+        ImageComposerOverlay => "Прикрепить фото",
         _ => ""
     };
     public bool HasMessageActions => SelectedMessage != null;
@@ -217,6 +226,10 @@ public partial class ShellViewModel : ObservableObject
     {
         if (_closed) return;
         _closed = true;
+        ClearImagePreviews();
+        CloseImageComposer();
+        foreach (var composer in _pendingImageSends.Values) composer.Dispose();
+        _pendingImageSends.Clear();
         _live.Dispose();
         _api.AntispamChanged -= OnAntispamChanged;
         _api.Dispose();

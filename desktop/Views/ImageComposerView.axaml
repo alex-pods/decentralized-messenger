@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:MessengerDesktop" xmlns:conv="using:Avalonia.Data.Converters"
+             x:Class="MessengerDesktop.Views.ImageComposerView" x:Name="ImageComposerRoot">
+  <Grid RowDefinitions="*,Auto,Auto">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="12">
+        <Border Background="{DynamicResource FieldFill}" CornerRadius="10" Padding="12">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel VerticalAlignment="Center" Spacing="4" Margin="0,0,10,0">
+              <TextBlock Text="{Binding ImageComposer.SelectionCount}" FontWeight="SemiBold"
+                         IsVisible="{Binding ImageComposer.HasImages}"/>
+              <TextBlock Text="До 10 фото по 10&#160;МБ" Classes="caption" TextWrapping="Wrap"/>
+            </StackPanel>
+            <Button x:Name="ChooseImageFiles" Grid.Column="1" Classes="secondaryAction" VerticalAlignment="Center"
+                    IsEnabled="{Binding ImageComposer.CanChoose}" Click="OnChooseImageFiles"
+                    AutomationProperties.Name="{Binding ImageComposer.ChooseLabel}">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <local:Glyph Data="{StaticResource IcPhoto}" Width="16" Height="16"/>
+                <TextBlock Text="{Binding ImageComposer.ChooseLabel}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+          </Grid>
+        </Border>
+        <TextBlock Text="Загружаем предпросмотр…" Classes="caption" TextWrapping="Wrap"
+                   IsVisible="{Binding ImageComposer.IsSelecting}"/>
+        <ItemsControl ItemsSource="{Binding ImageComposer.Images}" IsVisible="{Binding ImageComposer.HasImages}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid RowDefinitions="104,Auto" Margin="0,0,6,8">
+                <Border CornerRadius="8" ClipToBounds="True" Background="{DynamicResource FieldFill}">
+                  <Image Source="{Binding Preview}" Stretch="UniformToFill" AutomationProperties.Name="{Binding Name}"/>
+                </Border>
+                <local:DismissButton Classes="compact" Margin="5" CornerRadius="15" Background="{DynamicResource RaisedBrush}"
+                                     HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip.Tip="Убрать фото"
+                                     AutomationProperties.Name="{Binding Name, StringFormat='Убрать {0}'}"
+                                     Command="{Binding DataContext.ImageComposer.RemoveImageCommand, ElementName=ImageComposerRoot}"
+                                     CommandParameter="{Binding}" IsEnabled="{Binding DataContext.ImageComposer.CanEdit, ElementName=ImageComposerRoot}"/>
+                <TextBlock Grid.Row="1" Text="{Binding Name}" Classes="caption" TextTrimming="CharacterEllipsis" Margin="0,5,0,0"
+                           ToolTip.Tip="{Binding Name}"/>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+    <TextBlock Grid.Row="1" Text="{Binding ImageComposer.Error}" Foreground="{DynamicResource DangerBrush}" Margin="0,10,0,0"
+               TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ImageComposer.Error}"
+               IsVisible="{Binding ImageComposer.Error, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+    <StackPanel Grid.Row="2" Spacing="10" Margin="0,10,0,0" IsVisible="{Binding ImageComposer.HasImages}">
+      <TextBox x:Name="ImageCaption" Text="{Binding ImageComposer.Caption, UpdateSourceTrigger=PropertyChanged}"
+               Watermark="Подпись к фото (необязательно)" AutomationProperties.Name="Подпись к фото"
+               AcceptsReturn="True" TextWrapping="Wrap" MaxLength="4096" MaxHeight="85"
+               IsReadOnly="{Binding !ImageComposer.CanEdit}"/>
+      <TextBlock Text="Подпись длиннее 4096 символов" Classes="caption" Foreground="{DynamicResource DangerBrush}"
+                 IsVisible="{Binding ImageComposer.CaptionTooLong}"/>
+      <Button x:Name="SendImageBatch" Classes="primary large" HorizontalAlignment="Right" MinHeight="40"
+              Command="{Binding SendImagesCommand}" Content="{Binding ImageComposer.SendLabel}">
+        <Button.IsEnabled>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="ImageComposer.CanSend"/>
+            <Binding Path="!Busy"/>
+            <Binding Path="!AntispamRequired"/>
+          </MultiBinding>
+        </Button.IsEnabled>
+      </Button>
+    </StackPanel>
+  </Grid>
+</UserControl>

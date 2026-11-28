@@ -7,6 +7,7 @@ public partial class ShellViewModel
     partial void OnSelectedChatChanged(ChatItem? oldValue, ChatItem? newValue)
     {
         if (oldValue?.Id == newValue?.Id) return;
+        if (Overlay is "images" or ImageComposerOverlay) CloseOverlay();
         ClearGroupActivity();
         HasMore = false;
         if (HasWorkspacePage(WorkspacePage.Members)) ResetWorkspace();

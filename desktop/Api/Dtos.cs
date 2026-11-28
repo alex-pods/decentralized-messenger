@@ -82,6 +82,20 @@ public sealed class MessageDto
     [JsonPropertyName("deleted_at")] public string? DeletedAt { get; set; }
     [JsonPropertyName("reactions")] public List<ReactionDto>? Reactions { get; set; }
     [JsonPropertyName("forwarded_from")] public ForwardedFromDto? ForwardedFrom { get; set; }
+    [JsonPropertyName("attachments")] public List<AttachmentDto>? Attachments { get; set; }
+}
+
+public sealed class AttachmentDto
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("message_id")] public long MessageId { get; set; }
+    [JsonPropertyName("file_name")] public string? FileName { get; set; }
+    [JsonPropertyName("file_type")] public string? FileType { get; set; }
+    [JsonPropertyName("file_size_bytes")] public long FileSizeBytes { get; set; }
+
+    // Some clients upload images as application/octet-stream.
+    [JsonIgnore] public bool IsImage => FileType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true ||
+        Path.GetExtension(FileName ?? "").ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".webp" or ".gif" or ".bmp";
 }
 
 public sealed class ForwardedFromDto
@@ -125,6 +139,7 @@ public sealed class WsEventDto
     [JsonPropertyName("chat_id")] public long? ChatId { get; set; }
     [JsonPropertyName("message")] public MessageDto? Message { get; set; }
     [JsonPropertyName("message_id")] public long? MessageId { get; set; }
+    [JsonPropertyName("attachment")] public AttachmentDto? Attachment { get; set; }
     [JsonPropertyName("for_everyone")] public bool? ForEveryone { get; set; }
     [JsonPropertyName("user_id")] public long? UserId { get; set; }
     [JsonPropertyName("user")] public UserCardDto? User { get; set; }

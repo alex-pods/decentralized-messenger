@@ -129,12 +129,15 @@ public partial class ShellView : UserControl
         OverlaySheet.Margin = new Thickness(inset, upperInset, inset, inset);
         OverlaySheet.Padding = new Thickness(compactSheet ? 16 : 20);
         OverlaySheet.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-        OverlaySheet.VerticalAlignment = forwarding ? Avalonia.Layout.VerticalAlignment.Top : Avalonia.Layout.VerticalAlignment.Center;
+        OverlaySheet.VerticalAlignment = _vm?.Overlay is "images" or ShellViewModel.ImageComposerOverlay ? Avalonia.Layout.VerticalAlignment.Bottom :
+            forwarding ? Avalonia.Layout.VerticalAlignment.Top : Avalonia.Layout.VerticalAlignment.Center;
         OverlaySheet.MaxWidth = _vm?.Overlay switch
         {
             "direct" => 384,
             "group" => 428,
             "forward" => 442,
+            "images" => 560,
+            ShellViewModel.ImageComposerOverlay => 560,
             _ => 420
         };
         OverlaySheet.MaxHeight = Math.Clamp(Bounds.Height - OverlaySheet.Margin.Top - OverlaySheet.Margin.Bottom, 100, 680);
@@ -218,6 +221,7 @@ public partial class ShellView : UserControl
             {
                 if (_vm?.OverlayOpen == true)
                 {
+                    if (_vm.Overlay == ShellViewModel.ImageComposerOverlay && PhotoComposerPanel.FocusFirstAction()) return;
                     var target = _vm.Overlay is "direct" or "group" or "forward"
                         ? OverlaySheet.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(c => c.IsEffectivelyVisible && c.IsEffectivelyEnabled)
                         : null;

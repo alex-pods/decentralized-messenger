@@ -142,6 +142,29 @@ public sealed partial class MessengerClient : IDisposable
         return bytes.ToArray();
     }
 
+    public async Task<List<AttachmentDto>> UploadImages(
+        long messageId, IReadOnlyList<(string FileName, string ContentType, byte[] Bytes)> images,
+        CancellationToken ct = default)
+    {
+        using var content = new MultipartFormDataContent();
+        foreach (var image in images)
+        {
+            var file = new ByteArrayContent(image.Bytes);
+            file.Headers.ContentType = new MediaTypeHeaderValue(image.ContentType);
+            content.Add(file, "file", image.FileName);
+        }
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"messages/{messageId}/attachments")
+        {
+            Content = content
+        };
+        using var res = await _http.SendAsync(req, ct);
+        var text = await res.Content.ReadAsStringAsync(ct);
+        if (!res.IsSuccessStatusCode)
+            throw ReadApiError(text, res.StatusCode);
+        return JsonSerializer.Deserialize<List<AttachmentDto>>(text, Json) ?? new();
+    }
+
     public async Task<long> CreateDirect(long otherUserId, CancellationToken ct = default)
     {
         var dto = await Send<ChatIdDto>(HttpMethod.Post, "chats", new Dictionary<string, object?>
@@ -275,11 +298,7 @@ public sealed partial class MessengerClient : IDisposable
         using var res = await _http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
-        {
-            var error = ParseError(text, res.StatusCode);
-            if (error.Code == "antispam_required") { AntispamSupported = true; SetAntispamBlocked(true); }
-            throw error;
-        }
+            throw ReadApiError(text, res.StatusCode);
         if (res.StatusCode == HttpStatusCode.NoContent || string.IsNullOrWhiteSpace(text))
             return default;
         return JsonSerializer.Deserialize<T>(text, Json);
@@ -287,6 +306,17 @@ public sealed partial class MessengerClient : IDisposable
 
     public async Task Send(HttpMethod method, string path, object? body, CancellationToken ct) =>
         await Send<object>(method, path, body, ct);
+
+    ApiException ReadApiError(string body, HttpStatusCode status)
+    {
+        var error = ParseError(body, status);
+        if (error.Code == "antispam_required")
+        {
+            AntispamSupported = true;
+            SetAntispamBlocked(true);
+        }
+        return error;
+    }
 
     static string? Localized(string? code) => code switch
     {

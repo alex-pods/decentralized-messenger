@@ -202,7 +202,7 @@ public partial class ShellViewModel
         var gen = _openGen;
         try
         {
-            var page = await _api.GetMessages(chat.Id, 50, afterId: afterId);
+            var page = await _api.GetMessages(chat.Id, 50, afterId: afterId > 0 ? afterId : null);
             if (gen != _openGen || SelectedChat?.Id != chat.Id) return;
             await Ui(() => MergePage(chat, page));
             if (Messages.Count > 0)
@@ -229,6 +229,8 @@ public partial class ShellViewModel
             {
                 var fresh = MessageMapper.ToItem(m, _me.Id, NameOf);
                 existing.Text = fresh.Text;
+                if (m.Attachments != null || fresh.IsDeleted || fresh.IsNotStored)
+                    existing.Images = fresh.Images;
                 existing.Meta = fresh.Meta;
                 existing.Forwarded = fresh.Forwarded;
                 existing.ForwardedTip = fresh.ForwardedTip;

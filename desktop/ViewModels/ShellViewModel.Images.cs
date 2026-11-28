@@ -81,13 +81,17 @@ public partial class ImagePreviewItem(AttachmentDto attachment) : ObservableObje
     [ObservableProperty] private Bitmap? _bitmap;
     [ObservableProperty] private string? _status = "Загрузка картинки…";
 
-    internal static Bitmap Decode(byte[] bytes, int maxDimension = 1200)
+    internal static Bitmap Decode(byte[] bytes, int maxDimension = 1200) =>
+        Decode(bytes, maxDimension, out _);
+
+    internal static Bitmap Decode(byte[] bytes, int maxDimension, out SKEncodedImageFormat format)
     {
         using var data = SKData.CreateCopy(bytes);
         using var codec = SKCodec.Create(data);
         if (codec == null || codec.Info.Width <= 0 || codec.Info.Height <= 0 ||
             (long)codec.Info.Width * codec.Info.Height > 32_000_000)
             throw new InvalidDataException("Изображение повреждено или превышает 32 мегапикселя");
+        format = codec.EncodedFormat;
         using var stream = new MemoryStream(bytes);
         return codec.Info.Width >= codec.Info.Height
             ? Bitmap.DecodeToWidth(stream, Math.Min(codec.Info.Width, maxDimension))
